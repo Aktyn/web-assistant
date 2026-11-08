@@ -1,17 +1,15 @@
 pub mod cdp;
-pub mod chrome;
-pub mod dom;
+mod dom;
 pub mod watchdogs;
 
 use anyhow::{Context, Result, anyhow};
 use cdp::{BrowserProcess, CdpClient};
-pub use chrome::Chrome;
-pub use dom::{BrowserState, ElementRect, EnhancedElement};
+use dom::{BrowserState, ElementRect, EnhancedElement};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, warn};
-pub use watchdogs::BrowserWatchdogs;
+use watchdogs::BrowserWatchdogs;
 
 #[derive(Debug, Clone, Default)]
 pub struct BrowserConfig {
@@ -31,9 +29,9 @@ pub struct Browser {
 }
 
 impl Browser {
-    pub fn new() -> Self {
+    pub fn new(conf: Option<BrowserConfig>) -> Self {
         Self {
-            config: BrowserConfig::default(),
+            config: conf.unwrap_or_default(),
             process: None,
             client: None,
             watchdogs: None,
@@ -683,7 +681,7 @@ impl Browser {
 
 impl Default for Browser {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 
@@ -728,9 +726,6 @@ impl BrowserBuilder {
         }
     }
 }
-
-/// Compatibility alias matching python browser_use
-pub type BrowserSession = Browser;
 
 #[cfg(test)]
 mod tests {

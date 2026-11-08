@@ -1,5 +1,5 @@
 use tempfile::tempdir;
-use web_assistant::browser::chrome::Chrome;
+use web_assistant::browser::cdp::chrome::Chrome;
 
 #[test]
 fn test_find_executable() {

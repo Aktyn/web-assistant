@@ -2,8 +2,11 @@
 //! These exercise the public types exported through `web_assistant::browser::watchdogs`.
 
 use std::path::PathBuf;
-use web_assistant::{
-    CaptchaResultType, CaptchaWaitResult, DownloadItem, DownloadState, SecurityWatchdog,
+
+use web_assistant::browser::watchdogs::{
+    captcha::{CaptchaResultType, CaptchaWaitResult},
+    downloads::{DownloadItem, DownloadState},
+    security::SecurityWatchdog,
 };
 
 // ---------------------------------------------------------------------------

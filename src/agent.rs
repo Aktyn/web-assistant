@@ -1,8 +1,10 @@
 pub mod judge;
 pub mod prompts;
-pub mod variable_detector;
+mod variable_detector;
 pub mod views;
 
+use crate::browser::Browser;
+use crate::llm::openai::{ChatMessage, ChatOpenAI};
 use anyhow::{Context, Result, anyhow};
 use std::collections::HashMap;
 use std::path::Path;
@@ -15,9 +17,6 @@ pub use views::{
     Action, ActionResult, AgentHistory, AgentHistoryList, AgentOutput, AgentStepState,
     DetectedVariable, InteractedElementMetadata,
 };
-
-use crate::browser::Browser;
-use crate::llm::{ChatMessage, ChatOpenAI};
 
 pub struct Agent {
     pub task: String,
@@ -33,7 +32,7 @@ impl Agent {
         Self {
             task: task.into(),
             llm,
-            browser: Browser::new(),
+            browser: Browser::new(None),
             system_prompt: SystemPrompt::default(),
             max_steps: 20,
             history: AgentHistoryList::new(),

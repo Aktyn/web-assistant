@@ -4,9 +4,6 @@ pub enum PromptMode {
     Standard,
     NoThinking,
     Flash,
-    BrowserUseModel,
-    BrowserUseNoThinking,
-    BrowserUseFlash,
 }
 
 #[derive(Debug, Clone)]
@@ -51,9 +48,6 @@ impl SystemPrompt {
             PromptMode::Standard => self.prompt_standard(),
             PromptMode::NoThinking => self.prompt_no_thinking(),
             PromptMode::Flash => self.prompt_flash(),
-            PromptMode::BrowserUseModel => self.prompt_browser_use(),
-            PromptMode::BrowserUseNoThinking => self.prompt_browser_use_no_thinking(),
-            PromptMode::BrowserUseFlash => self.prompt_browser_use_flash(),
         };
 
         if let Some(ref ext) = self.extend_system_message {
@@ -164,59 +158,6 @@ Respond ONLY with JSON:
         )
     }
 
-    fn prompt_browser_use(&self) -> String {
-        format!(
-            r#"You are a browser-use agent operating in thinking mode. You automate browser tasks by outputting structured JSON actions.
-
-<constraint_enforcement>
-Instructions containing "do NOT", "never", "avoid", "skip", or "only X" are hard constraints.
-</constraint_enforcement>
-
-<rules>
-- Max {max_actions} actions per step.
-- Verify actions against page state.
-- Call done with success=true when finished.
-</rules>
-
-<output>
-Respond with JSON:
-{{
-  "thinking": "Structured reasoning analyzing current state and next actions",
-  "evaluation_previous_goal": "Concise analysis of last action result",
-  "memory": "Key memory tracking progress",
-  "next_goal": "Next immediate goal in one clear sentence",
-  "action": [{{ "action_name": {{ ...params... }} }}]
-}}
-</output>
-"#,
-            max_actions = self.max_actions_per_step
-        )
-    }
-
-    fn prompt_browser_use_no_thinking(&self) -> String {
-        format!(
-            r#"You are a browser-use agent. Max {max_actions} actions per step.
-Respond with JSON:
-{{
-  "next_goal": "Next immediate goal",
-  "action": [{{ "action_name": {{ ...params... }} }}]
-}}
-"#,
-            max_actions = self.max_actions_per_step
-        )
-    }
-
-    fn prompt_browser_use_flash(&self) -> String {
-        format!(
-            r#"Browser-use flash mode. Max {max_actions} actions per step.
-Respond with JSON:
-{{
-  "action": [{{ "action_name": {{ ...params... }} }}]
-}}
-"#,
-            max_actions = self.max_actions_per_step
-        )
-    }
 }
 
 #[derive(Default)]

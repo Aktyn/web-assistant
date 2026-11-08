@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use super::views::AgentHistoryList;
-use crate::llm::{ChatMessage, ChatOpenAI};
+use crate::llm::openai::{ChatMessage, ChatOpenAI};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct JudgementResult {

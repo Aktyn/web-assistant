@@ -1,3 +1,5 @@
+pub mod chrome;
+
 use anyhow::{Context, Result, anyhow};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -15,11 +17,7 @@ use tokio::time::sleep;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
-use super::chrome::Chrome;
-
-pub fn find_chrome_executable() -> Result<PathBuf> {
-    Chrome::find_executable()
-}
+use chrome::Chrome;
 
 pub fn get_available_port() -> Result<u16> {
     let listener = TcpListener::bind("127.0.0.1:0").context("Failed to bind to random port")?;
@@ -351,7 +349,7 @@ impl BrowserProcess {
     ) -> Result<Self> {
         let executable = match user_executable {
             Some(p) => p.to_path_buf(),
-            None => find_chrome_executable()?,
+            None => Chrome::find_executable()?,
         };
 
         let port = get_available_port()?;

@@ -11,12 +11,12 @@ use serde_json::Value;
 use std::path::PathBuf;
 use std::time::Duration;
 
-pub use captcha::{CaptchaInfo, CaptchaResultType, CaptchaWaitResult, CaptchaWatchdog};
+pub use captcha::CaptchaWatchdog;
 pub use crash::CrashWatchdog;
-pub use downloads::{DownloadItem, DownloadState, DownloadsWatchdog};
+pub use downloads::DownloadsWatchdog;
 pub use permissions::PermissionsWatchdog;
 pub use popups::PopupsWatchdog;
-pub use security::SecurityWatchdog;
+use security::SecurityWatchdog;
 pub use storage::StorageStateWatchdog;
 
 use crate::browser::cdp::CdpClient;
