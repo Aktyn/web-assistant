@@ -22,7 +22,8 @@ async fn main() -> Result<()> {
     let llm = ChatOpenAI::new("auto");
     let mut agent = Agent::new(task, llm)
         .prompt_mode(PromptMode::Standard)
-        .max_steps(10);
+        .max_steps(16);
+    agent.browser.config.headless = true;
 
     let history = agent.run().await?;
 

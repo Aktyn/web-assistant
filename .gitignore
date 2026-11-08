@@ -1,5 +1,6 @@
 /target
 /.opencode
+/graphify-out
 AGENTS.md
 .env
 agent_history.json

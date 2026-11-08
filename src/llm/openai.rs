@@ -173,6 +173,3 @@ impl ChatOpenAIBuilder {
         })
     }
 }
-
-/// Compatibility alias matching python browser_use
-pub type ChatBrowserUse = ChatOpenAI;

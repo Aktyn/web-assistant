@@ -18,4 +18,4 @@ pub use browser::watchdogs::{
 pub use browser::{
     Browser, BrowserBuilder, BrowserConfig, BrowserSession, BrowserState, EnhancedElement,
 };
-pub use llm::{ChatBrowserUse, ChatMessage, ChatOpenAI, ChatOpenAIBuilder};
+pub use llm::{ChatMessage, ChatOpenAI, ChatOpenAIBuilder};

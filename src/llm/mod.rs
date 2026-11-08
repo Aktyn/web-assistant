@@ -1,3 +1,3 @@
 pub mod openai;
 
-pub use openai::{ChatBrowserUse, ChatMessage, ChatOpenAI, ChatOpenAIBuilder};
+pub use openai::{ChatMessage, ChatOpenAI, ChatOpenAIBuilder};

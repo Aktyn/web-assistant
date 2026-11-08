@@ -12,7 +12,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 pub use watchdogs::BrowserWatchdogs;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct BrowserConfig {
     pub headless: bool,
     pub executable_path: Option<PathBuf>,
@@ -21,20 +21,8 @@ pub struct BrowserConfig {
     pub cdp_url: Option<String>,
 }
 
-impl Default for BrowserConfig {
-    fn default() -> Self {
-        Self {
-            headless: true,
-            executable_path: None,
-            user_data_dir: None,
-            downloads_dir: None,
-            cdp_url: None,
-        }
-    }
-}
-
 pub struct Browser {
-    config: BrowserConfig,
+    pub config: BrowserConfig,
     process: Option<BrowserProcess>,
     client: Option<CdpClient>,
     watchdogs: Option<BrowserWatchdogs>,
