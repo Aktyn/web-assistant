@@ -4,7 +4,6 @@
 AGENTS.md
 .env
 agent_history.json
-parameterized_history.json
 
 # Temp
 browser-use-main/

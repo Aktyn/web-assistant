@@ -222,6 +222,117 @@ impl CdpClient {
 
         Ok(data.to_string())
     }
+
+    /// Get element content quads via DOM.getContentQuads
+    pub async fn get_content_quads(&self, backend_node_id: u64) -> Result<Vec<Vec<f64>>> {
+        let resp = self
+            .send_command(
+                "DOM.getContentQuads",
+                serde_json::json!({
+                    "backendNodeId": backend_node_id
+                }),
+            )
+            .await?;
+
+        // Response format: {"quads": [[x1,y1,x2,y2,...], ...]}
+        if let Some(quads) = resp.get("quads").and_then(|q| q.as_array()) {
+            let mut result = Vec::new();
+            for quad in quads {
+                if let Some(q) = quad.as_array() {
+                    let coords: Vec<f64> = q.iter().filter_map(|v| v.as_f64()).collect();
+                    if coords.len() == 8 {
+                        result.push(coords);
+                    }
+                }
+            }
+            return Ok(result);
+        }
+
+        Err(anyhow!("No quads returned from DOM.getContentQuads"))
+    }
+
+    /// Get element box model via DOM.getBoxModel
+    pub async fn get_box_model(&self, backend_node_id: u64) -> Result<Value> {
+        self.send_command(
+            "DOM.getBoxModel",
+            serde_json::json!({
+                "backendNodeId": backend_node_id
+            }),
+        )
+        .await
+        .map_err(|e| anyhow!("Failed to get box model: {e}"))
+    }
+
+    /// Execute a JavaScript function on an element by object ID
+    pub async fn call_function_on(
+        &self,
+        function_declaration: &str,
+        object_id: &str,
+    ) -> Result<Value> {
+        self.send_command(
+            "Runtime.callFunctionOn",
+            serde_json::json!({
+                "functionDeclaration": function_declaration,
+                "objectId": object_id,
+                "returnByValue": true
+            }),
+        )
+        .await
+        .map_err(|e| anyhow!("Failed to call function: {e}"))
+    }
+
+    /// Scroll element into view using DOM.scrollIntoViewIfNeeded
+    pub async fn scroll_into_view_if_needed(&self, backend_node_id: u64) -> Result<()> {
+        self.send_command(
+            "DOM.scrollIntoViewIfNeeded",
+            serde_json::json!({
+                "backendNodeId": backend_node_id
+            }),
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Get page layout metrics (viewport dimensions)
+    pub async fn get_layout_metrics(&self) -> Result<(f64, f64)> {
+        let resp = self
+            .send_command("Page.getLayoutMetrics", serde_json::json!({}))
+            .await?;
+
+        if let Some(layout) = resp.get("layoutViewport") {
+            let width = layout
+                .get("clientWidth")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            let height = layout
+                .get("clientHeight")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            return Ok((width, height));
+        }
+
+        Err(anyhow!("Failed to get layout metrics"))
+    }
+
+    /// Resolve a DOM node to get its object ID
+    pub async fn resolve_node(&self, backend_node_id: u64) -> Result<String> {
+        let resp = self
+            .send_command(
+                "DOM.resolveNode",
+                serde_json::json!({
+                    "backendNodeId": backend_node_id
+                }),
+            )
+            .await?;
+
+        if let Some(object) = resp.get("object")
+            && let Some(object_id) = object.get("objectId").and_then(|v| v.as_str())
+        {
+            return Ok(object_id.to_string());
+        }
+
+        Err(anyhow!("Failed to resolve node to object ID"))
+    }
 }
 
 pub struct BrowserProcess {
