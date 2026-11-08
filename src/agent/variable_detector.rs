@@ -98,12 +98,11 @@ pub fn detect_variable_type(
     value: &str,
     element: Option<&InteractedElementMetadata>,
 ) -> Option<(String, Option<String>)> {
-    if let Some(elem) = element {
-        if !elem.attributes.is_empty() {
-            if let Some(res) = detect_from_attributes(&elem.attributes) {
-                return Some(res);
-            }
-        }
+    if let Some(elem) = element
+        && !elem.attributes.is_empty()
+        && let Some(res) = detect_from_attributes(&elem.attributes)
+    {
+        return Some(res);
     }
 
     detect_from_value_pattern(value)
@@ -231,7 +230,7 @@ pub fn detect_from_value_pattern(value: &str) -> Option<(String, Option<String>)
     }
 
     if !value.is_empty()
-        && value.chars().next().map_or(false, |c| c.is_uppercase())
+        && value.chars().next().is_some_and(|c| c.is_uppercase())
         && value
             .chars()
             .all(|c| c.is_alphabetic() || c == ' ' || c == '-')

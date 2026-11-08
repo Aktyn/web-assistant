@@ -9,53 +9,16 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use tempfile::TempDir;
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::sleep;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
+use super::chrome::Chrome;
+
 pub fn find_chrome_executable() -> Result<PathBuf> {
-    if let Ok(path) = std::env::var("CHROME_PATH") {
-        let p = PathBuf::from(path);
-        if p.exists() {
-            return Ok(p);
-        }
-    }
-
-    let candidates = [
-        "/usr/bin/chromium",
-        "/usr/bin/google-chrome",
-        "/usr/bin/google-chrome-stable",
-        "/usr/bin/chromium-browser",
-        "/snap/bin/chromium",
-        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    ];
-
-    for candidate in candidates {
-        let path = PathBuf::from(candidate);
-        if path.exists() {
-            return Ok(path);
-        }
-    }
-
-    // Try `which chromium` or `which google-chrome`
-    for cmd in ["chromium", "google-chrome", "google-chrome-stable"] {
-        if let Ok(output) = std::process::Command::new("which").arg(cmd).output() {
-            if output.status.success() {
-                let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !s.is_empty() && Path::new(&s).exists() {
-                    return Ok(PathBuf::from(s));
-                }
-            }
-        }
-    }
-
-    Err(anyhow!(
-        "No Chrome or Chromium executable found. Please set CHROME_PATH or install Chromium."
-    ))
+    Chrome::find_executable()
 }
 
 pub fn get_available_port() -> Result<u16> {
@@ -122,17 +85,15 @@ impl CdpClient {
                     msg_opt = read.next() => {
                         match msg_opt {
                             Some(Ok(Message::Text(text))) => {
-                                if let Ok(resp) = serde_json::from_str::<CdpResponse>(&text) {
-                                    if let Some(id) = resp.id {
-                                        if let Some(tx) = pending.remove(&id) {
+                                if let Ok(resp) = serde_json::from_str::<CdpResponse>(&text)
+                                    && let Some(id) = resp.id
+                                        && let Some(tx) = pending.remove(&id) {
                                             if let Some(err) = resp.error {
                                                 let _ = tx.send(Err(anyhow!("CDP error: {err}")));
                                             } else {
                                                 let _ = tx.send(Ok(resp.result.unwrap_or(Value::Null)));
                                             }
                                         }
-                                    }
-                                }
                             }
                             Some(Ok(Message::Close(_))) | None => {
                                 break;
@@ -185,6 +146,18 @@ impl CdpClient {
         resp_rx.await.map_err(|_| anyhow!("CDP response dropped"))?
     }
 
+    /// Test-only placeholder constructor — the client will reject all commands.
+    #[cfg(test)]
+    pub(crate) fn new_test_client() -> Self {
+        use tokio::sync::mpsc;
+        // Drop the sender immediately so any send will fail gracefully.
+        let (_tx, _rx) = mpsc::channel::<(CdpRequest, oneshot::Sender<Result<Value>>)>(1);
+        Self {
+            next_id: Arc::new(AtomicU64::new(1)),
+            tx_cmd: _tx,
+        }
+    }
+
     pub async fn navigate(&self, url: &str) -> Result<()> {
         self.send_command(
             "Page.navigate",
@@ -197,12 +170,11 @@ impl CdpClient {
         // Wait for page to reach ready state
         for _ in 0..50 {
             sleep(Duration::from_millis(150)).await;
-            if let Ok(res) = self.evaluate("document.readyState").await {
-                if let Some(s) = res.as_str() {
-                    if s == "complete" || s == "interactive" {
-                        break;
-                    }
-                }
+            if let Ok(res) = self.evaluate("document.readyState").await
+                && let Some(s) = res.as_str()
+                && (s == "complete" || s == "interactive")
+            {
+                break;
             }
         }
         // Small extra settle time
@@ -255,58 +227,35 @@ impl CdpClient {
 pub struct BrowserProcess {
     pub child: Child,
     pub port: u16,
-    pub temp_dir: TempDir,
+    pub user_data_dir: PathBuf,
+    pub is_temp: bool,
     pub cdp_client: CdpClient,
 }
 
 impl BrowserProcess {
-    pub async fn launch(headless: bool, user_executable: Option<&Path>) -> Result<Self> {
+    pub async fn launch(
+        headless: bool,
+        user_executable: Option<&Path>,
+        user_data_dir: Option<&Path>,
+    ) -> Result<Self> {
         let executable = match user_executable {
             Some(p) => p.to_path_buf(),
             None => find_chrome_executable()?,
         };
 
         let port = get_available_port()?;
-        let temp_dir = tempfile::Builder::new()
-            .prefix("browseruse-rust-")
-            .tempdir()
-            .context("Failed to create temporary user data directory")?;
-
-        let headless_arg = if headless {
-            "--headless=new"
-        } else {
-            "--headed"
+        let (resolved_data_dir, is_temp) = match user_data_dir {
+            Some(dir) => (dir.to_path_buf(), false),
+            None => {
+                let dir = Chrome::resolve_user_data_dir(Some(&executable), None)?;
+                (dir, false)
+            }
         };
 
-        let args = [
-            headless_arg,
-            &format!("--remote-debugging-port={port}"),
-            &format!("--user-data-dir={}", temp_dir.path().display()),
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-background-networking",
-            "--disable-background-timer-throttling",
-            "--disable-backgrounding-occluded-windows",
-            "--disable-breakpad",
-            "--disable-client-side-phishing-detection",
-            "--disable-default-apps",
-            "--disable-dev-shm-usage",
-            "--disable-extensions",
-            "--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints",
-            "--disable-hang-monitor",
-            "--disable-ipc-flooding-protection",
-            "--disable-popup-blocking",
-            "--disable-prompt-on-repost",
-            "--disable-renderer-backgrounding",
-            "--disable-sync",
-            "--force-color-profile=srgb",
-            "--metrics-recording-only",
-            "--no-sandbox",
-            "about:blank",
-        ];
+        let args = Chrome::default_args(port, &resolved_data_dir, headless);
 
         let child = Command::new(&executable)
-            .args(&args)
+            .args(args)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -319,7 +268,9 @@ impl BrowserProcess {
         let mut ready = false;
         for _ in 0..60 {
             sleep(Duration::from_millis(100)).await;
-            if let Ok(resp) = client.get(&version_url).send().await && resp.status().is_success() {
+            if let Ok(resp) = client.get(&version_url).send().await
+                && resp.status().is_success()
+            {
                 ready = true;
                 break;
             }
@@ -350,13 +301,17 @@ impl BrowserProcess {
         Ok(Self {
             child,
             port,
-            temp_dir,
+            user_data_dir: resolved_data_dir,
+            is_temp,
             cdp_client,
         })
     }
 
     pub async fn kill(&mut self) -> Result<()> {
         let _ = self.child.kill().await;
+        if self.is_temp && self.user_data_dir.exists() {
+            let _ = std::fs::remove_dir_all(&self.user_data_dir);
+        }
         Ok(())
     }
 }
@@ -364,5 +319,8 @@ impl BrowserProcess {
 impl Drop for BrowserProcess {
     fn drop(&mut self) {
         let _ = self.child.start_kill();
+        if self.is_temp && self.user_data_dir.exists() {
+            let _ = std::fs::remove_dir_all(&self.user_data_dir);
+        }
     }
 }

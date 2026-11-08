@@ -1,3 +1,4 @@
+pub mod judge;
 pub mod prompts;
 pub mod variable_detector;
 pub mod views;
@@ -7,6 +8,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use tracing::{debug, info, warn};
 
+pub use judge::{Judge, JudgementResult};
+pub use prompts::{PromptMode, SystemPrompt};
 pub use variable_detector::{detect_variables_in_history, substitute_variables_in_history};
 pub use views::{
     Action, ActionResult, AgentHistory, AgentHistoryList, AgentOutput, AgentStepState,
@@ -20,6 +23,7 @@ pub struct Agent {
     pub task: String,
     pub llm: ChatOpenAI,
     pub browser: Browser,
+    pub system_prompt: SystemPrompt,
     pub max_steps: usize,
     pub history: AgentHistoryList,
 }
@@ -30,6 +34,7 @@ impl Agent {
             task: task.into(),
             llm,
             browser: Browser::new(),
+            system_prompt: SystemPrompt::default(),
             max_steps: 20,
             history: AgentHistoryList::new(),
         }
@@ -40,6 +45,7 @@ impl Agent {
             task: task.into(),
             llm,
             browser,
+            system_prompt: SystemPrompt::default(),
             max_steps: 20,
             history: AgentHistoryList::new(),
         }
@@ -50,13 +56,23 @@ impl Agent {
         self
     }
 
+    pub fn prompt_mode(mut self, mode: PromptMode) -> Self {
+        self.system_prompt.mode = mode;
+        self
+    }
+
+    pub fn system_prompt(mut self, prompt: SystemPrompt) -> Self {
+        self.system_prompt = prompt;
+        self
+    }
+
     pub async fn run(&mut self) -> Result<AgentHistoryList> {
         info!("Starting agent task: {}", self.task);
         self.browser.start().await?;
 
         let mut step = 0;
         let mut conversation: Vec<ChatMessage> = Vec::new();
-        conversation.push(ChatMessage::system(prompts::get_system_prompt()));
+        conversation.push(ChatMessage::system(self.system_prompt.get_system_message()));
 
         while step < self.max_steps {
             step += 1;
@@ -196,6 +212,14 @@ impl Agent {
         detect_variables_in_history(&self.history)
     }
 
+    pub async fn judge(&self, ground_truth: Option<&str>) -> Result<JudgementResult> {
+        let judge = Judge::new(self.llm.clone());
+        let final_res = self.history.final_result().unwrap_or_default();
+        judge
+            .judge(&self.task, &final_res, &self.history, ground_truth)
+            .await
+    }
+
     pub async fn rerun_history(&mut self, history: &AgentHistoryList) -> Result<Vec<ActionResult>> {
         self.browser.start().await?;
         let mut results = Vec::new();
@@ -310,7 +334,6 @@ pub fn parse_agent_output(raw_text: &str) -> Result<AgentOutput> {
             actions.push(serde_json::from_value::<Action>(action_val.clone())?);
         }
     } else {
-        // Fallback: check if the root object has action keys directly
         for key in [
             "navigate", "click", "input", "scroll", "wait", "done", "extract",
         ] {
@@ -339,7 +362,6 @@ pub fn parse_agent_output(raw_text: &str) -> Result<AgentOutput> {
 fn extract_json_str(raw: &str) -> Result<String> {
     let trimmed = raw.trim();
 
-    // Check for markdown code fences
     if let Some(start_idx) = trimmed.find("```json") {
         let after_start = &trimmed[start_idx + 7..];
         if let Some(end_idx) = after_start.find("```") {
@@ -352,8 +374,9 @@ fn extract_json_str(raw: &str) -> Result<String> {
         }
     }
 
-    // Try finding outer curly braces
-    if let (Some(first_brace), Some(last_brace)) = (trimmed.find('{'), trimmed.rfind('}')) && first_brace < last_brace {
+    if let (Some(first_brace), Some(last_brace)) = (trimmed.find('{'), trimmed.rfind('}'))
+        && first_brace < last_brace
+    {
         return Ok(trimmed[first_brace..=last_brace].to_string());
     }
 

@@ -150,43 +150,41 @@ impl AgentHistoryList {
     }
 
     pub fn final_result(&self) -> Option<String> {
-        if let Some(last_step) = self.history.last() {
-            if let Some(last_res) = last_step.result.last() {
-                if let Some(ref content) = last_res.extracted_content {
-                    return Some(content.clone());
-                }
-            }
+        if let Some(last_step) = self.history.last()
+            && let Some(last_res) = last_step.result.last()
+            && let Some(ref content) = last_res.extracted_content
+        {
+            return Some(content.clone());
         }
         None
     }
 
     pub fn is_done(&self) -> bool {
-        if let Some(last_step) = self.history.last() {
-            if let Some(last_res) = last_step.result.last() {
-                return last_res.is_done;
-            }
+        if let Some(last_step) = self.history.last()
+            && let Some(last_res) = last_step.result.last()
+        {
+            return last_res.is_done;
         }
         false
     }
 
     pub fn is_successful(&self) -> Option<bool> {
-        if let Some(last_step) = self.history.last() {
-            if let Some(last_res) = last_step.result.last() {
-                if last_res.is_done {
-                    return last_res.success;
-                }
-            }
+        if let Some(last_step) = self.history.last()
+            && let Some(last_res) = last_step.result.last()
+            && last_res.is_done
+        {
+            return last_res.success;
         }
         None
     }
 
     pub fn save_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
         let p = path.as_ref();
-        if let Some(parent) = p.parent() {
-            if !parent.as_os_str().is_empty() {
-                fs::create_dir_all(parent)
-                    .with_context(|| format!("Failed to create directory {}", parent.display()))?;
-            }
+        if let Some(parent) = p.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory {}", parent.display()))?;
         }
         let json_str = serde_json::to_string_pretty(self)
             .context("Failed to serialize AgentHistoryList to JSON")?;

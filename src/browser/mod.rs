@@ -1,17 +1,23 @@
 pub mod cdp;
+pub mod chrome;
 pub mod dom;
+pub mod watchdogs;
 
 use anyhow::{Context, Result, anyhow};
 use cdp::{BrowserProcess, CdpClient};
+pub use chrome::Chrome;
 pub use dom::{BrowserState, EnhancedElement};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::time::sleep;
+pub use watchdogs::BrowserWatchdogs;
 
 #[derive(Debug, Clone)]
 pub struct BrowserConfig {
     pub headless: bool,
     pub executable_path: Option<PathBuf>,
+    pub user_data_dir: Option<PathBuf>,
+    pub downloads_dir: Option<PathBuf>,
     pub cdp_url: Option<String>,
 }
 
@@ -20,6 +26,8 @@ impl Default for BrowserConfig {
         Self {
             headless: true,
             executable_path: None,
+            user_data_dir: None,
+            downloads_dir: None,
             cdp_url: None,
         }
     }
@@ -29,6 +37,7 @@ pub struct Browser {
     config: BrowserConfig,
     process: Option<BrowserProcess>,
     client: Option<CdpClient>,
+    watchdogs: Option<BrowserWatchdogs>,
     cached_state: Option<BrowserState>,
 }
 
@@ -38,6 +47,7 @@ impl Browser {
             config: BrowserConfig::default(),
             process: None,
             client: None,
+            watchdogs: None,
             cached_state: None,
         }
     }
@@ -53,18 +63,43 @@ impl Browser {
 
         if let Some(ref ws_url) = self.config.cdp_url {
             let client = CdpClient::connect(ws_url).await?;
+            let watchdogs =
+                BrowserWatchdogs::new(client.clone(), self.config.downloads_dir.clone());
+            watchdogs.setup_all().await?;
+            self.watchdogs = Some(watchdogs);
             self.client = Some(client);
             return Ok(());
         }
 
-        let process =
-            BrowserProcess::launch(self.config.headless, self.config.executable_path.as_deref())
-                .await?;
+        let process = BrowserProcess::launch(
+            self.config.headless,
+            self.config.executable_path.as_deref(),
+            self.config.user_data_dir.as_deref(),
+        )
+        .await?;
 
+        let watchdogs = BrowserWatchdogs::new(
+            process.cdp_client.clone(),
+            self.config.downloads_dir.clone(),
+        );
+        watchdogs.setup_all().await?;
+        self.watchdogs = Some(watchdogs);
         self.client = Some(process.cdp_client.clone());
         self.process = Some(process);
 
         Ok(())
+    }
+
+    pub fn user_data_dir(&self) -> Option<&Path> {
+        self.process.as_ref().map(|p| p.user_data_dir.as_path())
+    }
+
+    pub fn watchdogs(&self) -> Option<&BrowserWatchdogs> {
+        self.watchdogs.as_ref()
+    }
+
+    pub fn watchdogs_mut(&mut self) -> Option<&mut BrowserWatchdogs> {
+        self.watchdogs.as_mut()
     }
 
     fn client(&self) -> Result<&CdpClient> {
@@ -85,7 +120,18 @@ impl Browser {
             url.to_string()
         };
 
+        // Security watchdog check before navigation
+        if let Some(wd) = &self.watchdogs {
+            wd.on_before_navigate(&formatted_url)?;
+        }
+
         self.client()?.navigate(&formatted_url).await?;
+
+        // Watchdogs post-navigation checks
+        if let Some(wd) = &self.watchdogs {
+            wd.on_after_navigate(&formatted_url).await?;
+        }
+
         self.refresh_state().await?;
         Ok(())
     }
@@ -112,7 +158,6 @@ impl Browser {
     pub async fn click(&mut self, index: u32) -> Result<()> {
         self.start().await?;
 
-        // Click element via JS index execution
         let click_js = format!(
             r#"
             (() => {{
@@ -150,7 +195,6 @@ impl Browser {
             return Err(anyhow!("Element with index {index} not found to click"));
         }
 
-        // Wait a short moment for possible navigations/DOM updates
         sleep(Duration::from_millis(500)).await;
         self.refresh_state().await?;
         Ok(())
@@ -239,6 +283,7 @@ impl Browser {
             let _ = proc.kill().await;
         }
         self.client = None;
+        self.watchdogs = None;
         self.cached_state = None;
         Ok(())
     }
@@ -266,6 +311,16 @@ impl BrowserBuilder {
         self
     }
 
+    pub fn user_data_dir(mut self, path: impl Into<PathBuf>) -> Self {
+        self.config.user_data_dir = Some(path.into());
+        self
+    }
+
+    pub fn downloads_dir(mut self, path: impl Into<PathBuf>) -> Self {
+        self.config.downloads_dir = Some(path.into());
+        self
+    }
+
     pub fn cdp_url(mut self, url: impl Into<String>) -> Self {
         self.config.cdp_url = Some(url.into());
         self
@@ -276,6 +331,7 @@ impl BrowserBuilder {
             config: self.config,
             process: None,
             client: None,
+            watchdogs: None,
             cached_state: None,
         }
     }
