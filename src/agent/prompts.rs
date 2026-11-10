@@ -157,7 +157,6 @@ Respond ONLY with JSON:
             max_actions = self.max_actions_per_step
         )
     }
-
 }
 
 #[derive(Default)]

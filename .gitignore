@@ -3,6 +3,7 @@
 /graphify-out
 AGENTS.md
 .env
+/workflows
 agent_history.json
 
 # Temp

@@ -1,31 +1,60 @@
-//TODO: public modifier is only to suppress unused code warnings and should be removed in the future
 pub mod agent;
 pub mod browser;
+mod cli;
+mod core;
 pub mod llm;
+mod tui;
 
 use anyhow::Result;
-use dotenvy::dotenv;
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    dotenv().ok();
+// #[tokio::main]
+// async fn main() -> Result<()> {
+fn main() -> Result<()> {
+    dotenvy::dotenv().ok();
+    let cli = cli::get_cli();
 
-    let config = browser::BrowserConfig {
-        headless: false,
-        ..Default::default()
-    };
-    let mut browser = browser::Browser::new(Some(config));
-    match browser.start().await {
-        Ok(_) => println!("Browser started successfully"),
-        Err(e) => return Err(anyhow::anyhow!("Browser failed to start: \"{e}\"")),
-    };
+    // let config = browser::BrowserConfig {
+    //     headless: false,
+    //     ..Default::default()
+    // };
+    // let mut browser = browser::Browser::new(Some(config));
+    // match browser.start().await {
+    //     Ok(_) => println!("Browser started successfully"),
+    //     Err(e) => return Err(anyhow::anyhow!("Browser failed to start: \"{e}\"")),
+    // };
+    //
+    // match browser.navigate("https://example.com").await {
+    //     Ok(_) => println!("Navigation successful"),
+    //     Err(e) => println!("Navigation failed: {e}"),
+    // };
 
-    match browser.navigate("https://example.com").await {
-        Ok(_) => println!("Navigation successful"),
-        Err(e) => println!("Navigation failed: {e}"),
-    };
+    // You can check the value provided by positional arguments, or option arguments
+    // if let Some(name) = cli.name.as_deref() {
+    //     println!("Value for name: {name}");
+    // }
 
-    //TODO: create configurable scrapper logic
+    match &cli.command {
+        Some(cli::Commands::Foo { list }) => {
+            if *list {
+                log::info!("Printing testing lists...");
+            } else {
+                log::info!("Not printing testing lists...");
+            }
+        }
+        None => {
+            //NOTE: TUI logger is being initialized here to catch early core logs
+            tui_logger::init_logger(tui_logger::LevelFilter::Trace).unwrap();
+            tui_logger::set_default_level(tui_logger::LevelFilter::Trace);
+
+            let core = core::Core::new(cli);
+
+            for workflow in &core.workflows {
+                log::info!("Workflow: {:?}", workflow);
+            }
+
+            return tui::render_tui(core);
+        }
+    }
 
     Ok(())
 }
