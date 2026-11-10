@@ -1,21 +1,37 @@
-use std::sync::{Arc, RwLock};
-
+use crossterm::event::{Event, KeyCode};
 use ratatui::{
+    DefaultTerminal,
     buffer::Buffer,
-    layout::{Constraint, Rect},
+    layout::{
+        Constraint::{self, Fill, Length},
+        Layout, Rect,
+    },
     widgets::{Paragraph, Widget},
 };
+use std::sync::{Arc, RwLock};
 
 use super::palette;
+use super::panel;
+use super::panel::Panel;
 use crate::core::Core;
 
 pub(crate) struct Content {
     core: Arc<RwLock<Core>>,
 }
 
-impl Widget for &Content {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+impl Content {
+    pub(crate) fn new(core: Arc<RwLock<Core>>) -> Self {
+        Self { core }
+    }
+}
+
+impl Panel for Content {
+    fn draw(&mut self, area: Rect, buf: &mut Buffer, focused: bool) {
         buf.set_style(area, palette::BACKGROUND_STYLE);
+
+        let [header_area, content_area] = area.layout(&Layout::vertical([Length(2), Fill(1)]));
+
+        panel::Header::new("Panel", focused).render(header_area, buf);
 
         let directory_path = self
             .core
@@ -25,14 +41,27 @@ impl Widget for &Content {
             .display()
             .to_string();
 
-        Paragraph::new(format!("Workflows directory: {}", directory_path))
-            .centered()
-            .render(area.centered_vertically(Constraint::Length(1)), buf);
+        //TODO: add user option buttons as in the description
+        Paragraph::new(format!(
+            "Workflows directory: \"{}\"\nSelect another directory or run the workflow creator",
+            directory_path
+        ))
+        .centered()
+        .render(content_area.centered_vertically(Constraint::Length(2)), buf);
     }
-}
 
-impl Content {
-    pub(crate) fn new(core: Arc<RwLock<Core>>) -> Self {
-        Self { core }
+    fn handle_event(
+        &mut self,
+        _terminal: &mut DefaultTerminal,
+        event: &Event,
+    ) -> anyhow::Result<()> {
+        if let Some(key) = event.as_key_event() {
+            match key.code {
+                KeyCode::Up => log::info!("content up event"),
+                KeyCode::Down => log::info!("content down event"),
+                _ => {}
+            }
+        }
+        Ok(())
     }
 }

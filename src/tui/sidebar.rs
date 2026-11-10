@@ -1,50 +1,29 @@
+use crossterm::event::{Event, KeyCode};
 use ratatui::{
+    DefaultTerminal,
     buffer::Buffer,
     layout::{
         Constraint::{Fill, Length},
         Layout, Rect,
     },
-    style::{Modifier, Stylize as _},
-    widgets::{List, Paragraph, Widget},
+    style::{Modifier, Stylize},
+    widgets::{
+        Block, BorderType, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget,
+    },
 };
 use std::sync::{Arc, RwLock};
 
 use super::palette;
-use crate::core::Core;
+use super::panel::Panel;
+use crate::{
+    core::{Core, workflow::WorkflowState},
+    tui::panel,
+    workflows_count,
+};
 
 pub(crate) struct Sidebar {
     core: Arc<RwLock<Core>>,
-    pub(crate) show: bool,
-}
-
-impl Widget for &Sidebar {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        buf.set_style(area, palette::BACKGROUND_STYLE);
-
-        let workflows_len = self
-            .core
-            .read()
-            .map(|core| core.workflows.len())
-            .unwrap_or(0);
-
-        let [header_area, list_area] = area.layout(&Layout::vertical([Length(2), Fill(1)]));
-
-        Paragraph::new(format!("[ Workflows: {} ]", workflows_len))
-            .centered()
-            .bold()
-            .bg(palette::BACKGROUND)
-            .fg(palette::FOREGROUND)
-            .render(header_area, buf);
-
-        let items = ["Item 1", "Item 2", "Item 3", "Item 4"];
-        let list = List::new(items)
-            .style(palette::FOREGROUND_STYLE)
-            .highlight_style(Modifier::REVERSED)
-            .highlight_symbol("> ");
-
-        // list.s
-        list.render(list_area, buf);
-    }
+    list_state: ListState,
 }
 
 impl Sidebar {
@@ -53,19 +32,89 @@ impl Sidebar {
     pub(crate) fn new(core: Arc<RwLock<Core>>) -> Self {
         Self {
             core,
-            show: true,
+            list_state: ListState::default().with_selected(Some(0)),
         }
     }
+}
 
-    pub(crate) fn select_item(&mut self, arg: i16) {
-        log::info!("Selecting item: {}", arg);
-        // self.item = arg;
+impl Panel for Sidebar {
+    fn draw(&mut self, area: Rect, buf: &mut Buffer, focused: bool) {
+        buf.set_style(area, palette::BACKGROUND_STYLE);
+
+        let items = self
+            .core
+            .read()
+            .map(|core| {
+                core.workflows
+                    .iter()
+                    .map(|w| match &w.state {
+                        WorkflowState::Data(data) => ListItem::new(data.name.clone()).bold(),
+                        WorkflowState::Error(err) => ListItem::new(format!(
+                            "Invalid workflow\nFile: \"{}\"\nError: \"{}\"",
+                            w.file_path.display(),
+                            err
+                        ))
+                        .style(palette::ERROR_FOREGROUND),
+                    })
+                    .collect::<Vec<ListItem>>()
+            })
+            .unwrap_or(vec![]);
+
+        let [header_area, list_area, buttons_area] =
+            area.layout(&Layout::vertical([Length(2), Fill(1), Length(3)]));
+
+        panel::Header::new(format!("Workflows: {}", items.len()), focused).render(header_area, buf);
+
+        let list = List::new(items)
+            .style(palette::STYLE)
+            .highlight_style(Modifier::REVERSED)
+            .highlight_symbol("> ");
+
+        StatefulWidget::render(list, list_area, buf, &mut self.list_state);
+
+        //TODO: workflow creation wizard
+
+        let button_color = if self.list_state.selected().is_some() {
+            palette::FOREGROUND
+        } else {
+            palette::ACCENT
+        };
+
+        Paragraph::new("+ New workflow")
+            .bg(palette::BACKGROUND)
+            .fg(button_color)
+            .bold()
+            .centered()
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(button_color),
+            )
+            .render(buttons_area, buf);
     }
 
-    // const fn new(constraint: Constraint) -> Self {
-    // fn new() -> Self {
-    //     Self {
-    //         // constraint,
-    //     }
-    // }
+    fn handle_event(
+        &mut self,
+        _terminal: &mut DefaultTerminal,
+        event: &Event,
+    ) -> anyhow::Result<()> {
+        if let Some(key) = event.as_key_event() {
+            match key.code {
+                KeyCode::Up => self.list_state.select_previous(),
+                KeyCode::Down => match self.list_state.selected() {
+                    Some(selected) => {
+                        if selected < workflows_count!(self.core) - 1 {
+                            self.list_state.select_next()
+                        } else {
+                            self.list_state.select(None);
+                        }
+                    }
+                    None => self.list_state.select_first(),
+                },
+                _ => {}
+            }
+        }
+        Ok(())
+    }
 }

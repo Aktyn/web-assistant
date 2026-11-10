@@ -11,6 +11,7 @@ use anyhow::Result;
 // async fn main() -> Result<()> {
 fn main() -> Result<()> {
     dotenvy::dotenv().ok();
+
     let cli = cli::get_cli();
 
     // let config = browser::BrowserConfig {

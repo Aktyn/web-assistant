@@ -1,40 +1,47 @@
 mod content;
+mod macros;
 mod palette;
+mod panel;
 mod sidebar;
 
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode};
-use ratatui::DefaultTerminal;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint::{Fill, Length};
 use ratatui::layout::{Layout, Rect};
 use ratatui::widgets::{Block, Borders, Widget};
+use ratatui::{DefaultTerminal, Frame};
 use std::sync::{Arc, RwLock};
 use tui_logger::TuiLoggerWidget;
 
 use crate::core::Core;
+use crate::tui::content::Content;
+use crate::tui::panel::Panel;
 use crate::tui::sidebar::Sidebar;
+use crate::workflows_count;
 
 pub fn render_tui(core: Core) -> Result<()> {
-    let app = App::new(core);
+    let app = TuiApp::new(core);
     ratatui::run(|terminal| app.run(terminal))
 }
 
-struct App {
+#[derive(PartialEq, Debug)]
+enum PanelType {
+    Sidebar,
+    Content,
+}
+
+struct TuiApp {
     core: Arc<RwLock<Core>>,
     is_running: bool,
     show_logs: bool,
-    sidebar: sidebar::Sidebar,
-    content: content::Content,
+    focused_panel: PanelType,
+    content: Box<dyn Panel>,
+    sidebar: Box<dyn Panel>,
+    show_sidebar: bool,
 }
 
-impl Widget for &App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        self.render_layout(area, buf);
-    }
-}
-
-impl App {
+impl TuiApp {
     fn new(core: Core) -> Self {
         let core_arc = Arc::new(RwLock::new(core));
         let core_sidebar_arc = Arc::clone(&core_arc);
@@ -44,28 +51,32 @@ impl App {
             core: core_arc,
             is_running: false,
             show_logs: cfg!(debug_assertions),
-            sidebar: sidebar::Sidebar::new(core_sidebar_arc),
-            content: content::Content::new(core_content_arc),
+            focused_panel: PanelType::Content,
+            sidebar: Box::new(Sidebar::new(core_sidebar_arc)),
+            content: Box::new(Content::new(core_content_arc)),
+            show_sidebar: true,
         }
     }
 
     fn run(mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         self.is_running = true;
-        self.sidebar.show = self.core.read().map(|core| !core.workflows.is_empty()).unwrap_or(false);
+
+        if workflows_count!(self.core) > 0 {
+            self.show_sidebar = true;
+            self.focused_panel = PanelType::Sidebar;
+        } else {
+            self.show_sidebar = false;
+            self.focused_panel = PanelType::Content;
+        }
 
         self.clear(terminal)?;
 
         while self.is_running {
-            self.draw(terminal)?;
+            terminal
+                .draw(|frame| self.draw(frame))
+                .context("failed to draw frame")?;
             self.handle_events(terminal)?;
         }
-        Ok(())
-    }
-
-    fn draw(&self, terminal: &mut DefaultTerminal) -> Result<()> {
-        terminal
-            .draw(|frame| frame.render_widget(self, frame.area()))
-            .context("failed to draw frame")?;
         Ok(())
     }
 
@@ -81,39 +92,61 @@ impl App {
     }
 
     fn handle_events(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
-        match event::read()? {
-            Event::Key(key) => {
-                match key.code {
-                    KeyCode::Char('q') | KeyCode::Esc => self.exit(),
-                    KeyCode::Char('1') => self.sidebar.select_item(1),
-                    KeyCode::Char('l') => {
-                        self.show_logs = !self.show_logs;
-                    }
-                    KeyCode::Char('s') => {
-                        self.sidebar.show = !self.sidebar.show;
-                    }
-                    // KeyCode::Char('k') | KeyCode::Up => self.increment_value(),
-                    // KeyCode::Char('j') | KeyCode::Down => self.decrement_value(),
-                    // KeyCode::Char('h') | KeyCode::Left => self.prev_block(),
-                    // KeyCode::Char('l') | KeyCode::Right => self.next_block(),
-                    // self.sidebar.handle_events(key.code)?;
-                    _ => {}
+        let event = event::read()?;
+
+        match event {
+            Event::Key(key) => match key.code {
+                KeyCode::Char('q') | KeyCode::Esc => self.exit(),
+                KeyCode::Char('l') => {
+                    self.show_logs = !self.show_logs;
                 }
-            }
+                KeyCode::Tab => self.move_to_next_panel(),
+                KeyCode::Char('s') => {
+                    if workflows_count!(self.core) > 0 {
+                        self.show_sidebar = !self.show_sidebar;
+                    } else {
+                        self.show_sidebar = false;
+                    }
+                }
+                _ => {}
+            },
             Event::Resize(_width, _height) => {
                 terminal.autoresize()?;
             }
             _ => {}
         }
 
+        self.get_focused_panel().handle_event(terminal, &event)?;
+
         Ok(())
+    }
+
+    fn move_to_next_panel(&mut self) {
+        match self.focused_panel {
+            PanelType::Sidebar => self.focused_panel = PanelType::Content,
+            PanelType::Content => {
+                if workflows_count!(self.core) > 0 {
+                    self.focused_panel = PanelType::Sidebar
+                }
+            }
+        }
+    }
+
+    fn get_focused_panel(&mut self) -> &mut dyn panel::Panel {
+        match self.focused_panel {
+            PanelType::Sidebar => self.sidebar.as_mut(),
+            PanelType::Content => self.content.as_mut(),
+        }
     }
 
     const fn exit(&mut self) {
         self.is_running = false;
     }
 
-    fn render_layout(&self, area: Rect, buf: &mut Buffer) {
+    fn draw(&mut self, frame: &mut Frame) {
+        let area = frame.area();
+        let buf = frame.buffer_mut();
+
         let main_area = if self.show_logs {
             let [main_area, log_area] = area.layout(&Layout::vertical([Fill(1), Length(12)]));
             self.render_logs(log_area, buf);
@@ -123,11 +156,16 @@ impl App {
             area
         };
 
-        if self.sidebar.show {
+        if self.show_sidebar {
             let [sidebar_area, separator_area, content_area] =
-                main_area.layout(&Layout::horizontal([Length(Sidebar::WIDTH), Length(1), Fill(1)]));
+                main_area.layout(&Layout::horizontal([
+                    Length(Sidebar::WIDTH),
+                    Length(1),
+                    Fill(1),
+                ]));
 
-            self.sidebar.render(sidebar_area, buf);
+            self.sidebar
+                .draw(sidebar_area, buf, self.focused_panel == PanelType::Sidebar);
 
             for i in 0..separator_area.height {
                 buf.set_string(
@@ -138,13 +176,16 @@ impl App {
                 );
             }
 
-            self.content.render(content_area, buf);
+            self.content
+                .draw(content_area, buf, self.focused_panel == PanelType::Content);
         } else {
-            self.content.render(main_area, buf);
+            self.content
+                .draw(main_area, buf, self.focused_panel == PanelType::Content);
         }
     }
 
     fn render_logs(&self, area: Rect, buf: &mut Buffer) {
+        let title = "Logs (press L to toggle)";
         let log_widget = TuiLoggerWidget::default()
             .output_timestamp(None)
             // .output_level(None)
@@ -153,8 +194,12 @@ impl App {
             .output_target(false)
             .block(
                 Block::default()
-                    .title("Logs")
-                    .borders(Borders::ALL)
+                    .title(format!(
+                        "{} {} ",
+                        "—".repeat(((area.width as usize) - title.len() - 2) / 2),
+                        title
+                    ))
+                    .borders(Borders::TOP)
                     .border_style(palette::SEPARATOR_STYLE),
             )
             .style(palette::STYLE);

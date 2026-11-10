@@ -3,21 +3,20 @@ use serde_json;
 use std::{fs::DirEntry, path::PathBuf};
 
 #[derive(Debug, Deserialize)]
-struct WorkflowData {
-    name: String,
-    foo: u32,
+pub struct WorkflowData {
+    pub name: String,
 }
 
 #[derive(Debug)]
-enum WorkflowState {
+pub enum WorkflowState {
     Data(WorkflowData),
     Error(serde_json::Error),
 }
 
 #[derive(Debug)]
 pub struct Workflow {
-    state: WorkflowState,
-    filePath: PathBuf,
+    pub state: WorkflowState,
+    pub file_path: PathBuf,
 }
 
 impl Workflow {
@@ -25,11 +24,11 @@ impl Workflow {
         match serde_json::from_str(json.content.as_str()) {
             Ok(data) => Workflow {
                 state: WorkflowState::Data(data),
-                filePath: json.path,
+                file_path: json.path,
             },
             Err(e) => Workflow {
                 state: WorkflowState::Error(e),
-                filePath: json.path,
+                file_path: json.path,
             },
         }
     }
