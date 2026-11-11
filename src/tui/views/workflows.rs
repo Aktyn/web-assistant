@@ -3,10 +3,9 @@ pub(crate) mod workflows_sidebar;
 
 use std::sync::{Arc, RwLock};
 
-use crate::core::Core;
-
 use super::View;
-use super::common::{macros, panel, palette};
+use super::common::{macros, palette, panel};
+use crate::core::Core;
 use crossterm::event::KeyCode;
 use ratatui::layout::Constraint::{Fill, Length};
 use ratatui::layout::Layout;
@@ -63,12 +62,11 @@ impl WorkflowView {
 impl View for WorkflowView {
     fn draw(&mut self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
         if self.show_sidebar {
-            let [sidebar_area, separator_area, content_area] =
-                area.layout(&Layout::horizontal([
-                    Length(WorkflowsSidebar::WIDTH),
-                    Length(1),
-                    Fill(1),
-                ]));
+            let [sidebar_area, separator_area, content_area] = area.layout(&Layout::horizontal([
+                Length(WorkflowsSidebar::WIDTH),
+                Length(1),
+                Fill(1),
+            ]));
 
             self.sidebar
                 .draw(sidebar_area, buf, self.focused_panel == PanelType::Sidebar);
@@ -92,8 +90,8 @@ impl View for WorkflowView {
 
     fn handle_event(
         &mut self,
-        terminal: &mut ratatui::DefaultTerminal,
         event: &crossterm::event::Event,
+        terminal: &mut ratatui::DefaultTerminal,
     ) -> anyhow::Result<()> {
         if let Some(key) = event.as_key_event() {
             match key.code {
@@ -109,8 +107,12 @@ impl View for WorkflowView {
             }
         }
 
-        self.get_focused_panel().handle_event(terminal, event)?;
+        self.get_focused_panel().handle_event(event, terminal)?;
 
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

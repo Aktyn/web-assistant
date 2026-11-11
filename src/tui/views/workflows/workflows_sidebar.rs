@@ -7,13 +7,11 @@ use ratatui::{
         Layout, Rect,
     },
     style::{Modifier, Stylize},
-    widgets::{
-        Block, BorderType, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget,
-    },
+    widgets::{List, ListItem, ListState, StatefulWidget, Widget},
 };
 use std::sync::{Arc, RwLock};
 
-use super::super::super::common::{palette, panel, macros};
+use super::super::common::{button::Button, macros, palette, panel};
 use crate::core::{self, Core};
 
 pub(crate) struct WorkflowsSidebar {
@@ -71,30 +69,15 @@ impl panel::Panel for WorkflowsSidebar {
 
         //TODO: workflow creation wizard
 
-        let button_color = if self.list_state.selected().is_some() {
-            palette::FOREGROUND
-        } else {
-            palette::ACCENT
-        };
-
-        Paragraph::new("+ Create new workflow")
-            .bg(palette::BACKGROUND)
-            .fg(button_color)
-            .bold()
-            .centered()
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
-                    .border_style(button_color),
-            )
+        Button::new("+ Create new workflow")
+            .set_selected(!self.list_state.selected().is_some())
             .render(buttons_area, buf);
     }
 
     fn handle_event(
         &mut self,
-        _terminal: &mut DefaultTerminal,
         event: &Event,
+        _terminal: &mut DefaultTerminal,
     ) -> anyhow::Result<()> {
         if let Some(key) = event.as_key_event() {
             match key.code {

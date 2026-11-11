@@ -12,8 +12,10 @@ use std::sync::{Arc, RwLock};
 use tui_logger::TuiLoggerWidget;
 
 use crate::core::Core;
-use common::{consts, palette};
+use crate::tui::views::no_workflows::NoWorkflowsChoice;
+use common::{consts, macros, palette};
 use views::empty::EmptyView;
+use views::no_workflows::NoWorkflowsView;
 use views::workflows::WorkflowView;
 
 pub fn render_tui(core: Core) -> Result<()> {
@@ -43,15 +45,15 @@ impl TuiApp {
     fn run(mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         self.is_running = true;
 
-        self.view = Box::new(WorkflowView::new(self.core.clone()));
-
         self.clear(terminal)?;
 
         while self.is_running {
+            self.update();
             terminal
                 .draw(|frame| self.draw(frame))
                 .context("failed to draw frame")?;
             self.handle_events(terminal)?;
+            self.post_update();
         }
         Ok(())
     }
@@ -84,13 +86,37 @@ impl TuiApp {
             _ => {}
         }
 
-        self.view.handle_event(terminal, &event)?;
+        self.view.handle_event(&event, terminal)?;
 
         Ok(())
     }
 
     const fn exit(&mut self) {
         self.is_running = false;
+    }
+
+    /// Should run before pooling events
+    fn update(&mut self) {
+        //TODO: error view informing user that terminal is too small
+
+        if self.view.as_any().is::<EmptyView>() {
+            match macros::workflows_count!(self.core) {
+                0 => self.view = Box::new(NoWorkflowsView::new(self.core.clone())),
+                _ => self.view = Box::new(WorkflowView::new(self.core.clone())),
+            }
+        }
+    }
+
+    /// Should run after handling events
+    fn post_update(&mut self) {
+        if let Some(no_workflows_view) = self.view.as_any().downcast_ref::<NoWorkflowsView>() {
+            match no_workflows_view.pending_action {
+                NoWorkflowsChoice::Pending => {}
+                NoWorkflowsChoice::ChooseWorkflowsDirectory => todo!(),
+                NoWorkflowsChoice::CreateNewWorkflow => todo!(),
+                NoWorkflowsChoice::QuitApp => self.exit(),
+            }
+        }
     }
 
     fn draw(&mut self, frame: &mut Frame) {

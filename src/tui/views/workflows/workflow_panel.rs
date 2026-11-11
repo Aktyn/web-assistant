@@ -10,7 +10,7 @@ use ratatui::{
 };
 use std::sync::{Arc, RwLock};
 
-use super::super::common::{panel, palette};
+use super::super::common::{palette, panel};
 use crate::core::Core;
 
 pub(crate) struct WorkflowPanel {
@@ -50,8 +50,8 @@ impl panel::Panel for WorkflowPanel {
 
     fn handle_event(
         &mut self,
-        _terminal: &mut DefaultTerminal,
         event: &Event,
+        _terminal: &mut DefaultTerminal,
     ) -> anyhow::Result<()> {
         if let Some(key) = event.as_key_event() {
             match key.code {

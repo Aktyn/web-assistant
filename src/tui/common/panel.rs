@@ -11,7 +11,7 @@ use super::palette;
 
 pub(crate) trait Panel {
     fn draw(&mut self, area: Rect, buf: &mut Buffer, focused: bool);
-    fn handle_event(&mut self, terminal: &mut DefaultTerminal, event: &Event)
+    fn handle_event(&mut self, event: &Event, terminal: &mut DefaultTerminal)
     -> anyhow::Result<()>;
 }
 
