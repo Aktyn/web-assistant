@@ -49,3 +49,53 @@ impl Header {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+
+    use super::*;
+
+    #[test]
+    fn test_header_new_focused() {
+        let header = Header::new("Title", true);
+        assert!(header.focused);
+        assert_eq!(header.content, "Title");
+    }
+
+    #[test]
+    fn test_header_new_unfocused() {
+        let header = Header::new("Subtitle", false);
+        assert!(!header.focused);
+    }
+
+    #[test]
+    fn test_header_content_into_string() {
+        // &str implements Into<String>
+        let header = Header::new("works", true);
+        assert_eq!(header.content, "works");
+    }
+
+    #[test]
+    fn test_header_string_type() {
+        let s = String::from("dynamic");
+        let header = Header::new(s, true);
+        assert_eq!(header.content, "dynamic");
+    }
+
+    /// Verify render does not panic (integration-style widget test).
+    #[test]
+    fn test_header_render_focused_no_panic() {
+        let area = Rect::new(0, 0, 30, 2);
+        let mut buf = Buffer::empty(area);
+        Header::new("Focused", true).render(area, &mut buf);
+    }
+
+    #[test]
+    fn test_header_render_unfocused_no_panic() {
+        let area = Rect::new(0, 0, 30, 2);
+        let mut buf = Buffer::empty(area);
+        Header::new("Unfocused", false).render(area, &mut buf);
+    }
+}

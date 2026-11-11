@@ -3,7 +3,7 @@ use serde_json;
 use std::path::PathBuf;
 use tokio::fs::DirEntry;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct WorkflowData {
     pub name: String,
 }
@@ -51,5 +51,111 @@ impl WorkflowDataJson {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn test_workflow_data_json_valid_file() {
+        let json_content = "{\"name\": \"Test Workflow\"}";
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), json_content).unwrap();
+        let path = tmp.path().to_path_buf();
+        let json = WorkflowDataJson {
+            path: path.clone(),
+            content: json_content.to_string(),
+        };
+        let workflow = Workflow::new(json);
+        match &workflow.state {
+            WorkflowState::Data(data) => {
+                assert_eq!(data.name, "Test Workflow");
+            }
+            _ => panic!("Expected Data variant"),
+        }
+        assert_eq!(workflow.file_path, path);
+    }
+
+    #[tokio::test]
+    async fn test_workflow_data_json_invalid_json() {
+        let json = WorkflowDataJson {
+            path: PathBuf::from("/fake/path.json"),
+            content: "{invalid json".to_string(),
+        };
+        let workflow = Workflow::new(json);
+        match &workflow.state {
+            WorkflowState::Error(_) => {} // expected
+            _ => panic!("Expected Error variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_workflow_data_json_missing_name_field() {
+        let json = WorkflowDataJson {
+            path: PathBuf::from("/fake/path2.json"),
+            content: r#"{"other": "value"}"#.to_string(),
+        };
+        let workflow = Workflow::new(json);
+        match &workflow.state {
+            WorkflowState::Error(_) => {} // missing required `name` field → deserialize error
+            _ => panic!("Expected Error variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_workflow_data_json_empty_object() {
+        let json = WorkflowDataJson {
+            path: PathBuf::from("/fake/path3.json"),
+            content: "{}".to_string(),
+        };
+        let workflow = Workflow::new(json);
+        match &workflow.state {
+            WorkflowState::Error(_) => {}
+            _ => panic!("Expected Error variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_workflow_data_json_null_name() {
+        let json = WorkflowDataJson {
+            path: PathBuf::from("/fake/path4.json"),
+            content: r#"{"name": null}"#.to_string(),
+        };
+        let workflow = Workflow::new(json);
+        match &workflow.state {
+            WorkflowState::Error(_) => {}
+            _ => panic!("Expected Error variant"),
+        }
+    }
+
+    #[test]
+    fn test_workflow_state_debug() {
+        let data = WorkflowData {
+            name: "My Workflow".to_string(),
+        };
+        let state = WorkflowState::Data(data);
+        let debug_str = format!("{state:?}");
+        assert!(debug_str.contains("My Workflow"));
+    }
+
+    #[test]
+    fn test_workflow_state_variant_match() {
+        let state = WorkflowState::Data(WorkflowData {
+            name: "ok".to_string(),
+        });
+        match state {
+            WorkflowState::Data(d) => assert_eq!(d.name, "ok"),
+            _ => panic!("Expected Data"),
+        }
+    }
+
+    #[test]
+    fn test_workflow_data_clone() {
+        let data = WorkflowData {
+            name: "clone-test".to_string(),
+        };
+        let cloned = data.clone();
+        assert_eq!(data.name, cloned.name);
     }
 }

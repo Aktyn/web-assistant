@@ -77,3 +77,80 @@ impl<T> ButtonData<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_button_height_constant() {
+        assert_eq!(Button::<>::HEIGHT, 3);
+    }
+
+    #[test]
+    fn test_button_new_normal_state() {
+        let btn = Button::new("Click me");
+        // State should be Normal after construction
+        assert!(!matches!(btn.state, State::Selected));
+    }
+
+    #[test]
+    fn test_button_set_selected_true() {
+        let btn = Button::new("Click me").set_selected(true);
+        assert!(matches!(btn.state, State::Selected));
+    }
+
+    #[test]
+    fn test_button_set_selected_false() {
+        let btn = Button::new("Click me")
+            .set_selected(true)
+            .set_selected(false);
+        assert!(matches!(btn.state, State::Normal));
+    }
+
+    #[test]
+    fn test_button_color_normal() {
+        let btn = Button::new("Normal").set_selected(false);
+        assert_eq!(btn.color(), palette::FOREGROUND);
+    }
+
+    #[test]
+    fn test_button_color_selected() {
+        let btn = Button::new("Selected").set_selected(true);
+        assert_eq!(btn.color(), palette::ACCENT);
+    }
+
+    #[test]
+    fn test_button_data_construction() {
+        let data: ButtonData<i32> = ButtonData::new("label", 42);
+        assert_eq!(data.label, "label");
+        assert_eq!(data.action, 42);
+    }
+
+    #[test]
+    fn test_button_data_string_action() {
+        let data: ButtonData<String> = ButtonData::new("go", "action_value".to_string());
+        assert_eq!(data.label, "go");
+        assert_eq!(data.action, "action_value");
+    }
+
+    /// Verify render does not panic with a minimal buffer (unit test for widget impl).
+    #[test]
+    fn test_button_render_no_panic() {
+        let area = Rect::new(0, 0, 20, 3);
+        let mut buf = Buffer::empty(area);
+        Button::new("Test")
+            .set_selected(false)
+            .render(area, &mut buf);
+        // If we reach here without panicking, the widget rendered successfully.
+    }
+
+    #[test]
+    fn test_button_render_selected() {
+        let area = Rect::new(0, 0, 20, 3);
+        let mut buf = Buffer::empty(area);
+        Button::new("Selected")
+            .set_selected(true)
+            .render(area, &mut buf);
+    }
+}

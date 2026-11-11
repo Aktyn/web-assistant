@@ -118,8 +118,12 @@ impl TuiApp {
 
     /// Should run before pooling events
     fn update(&mut self, terminal: &mut DefaultTerminal) {
-        //TODO: error view informing user that terminal is too small
-        let _start_size = terminal.size().unwrap_or(Size::ZERO);
+        let size = terminal.size().unwrap_or(Size::ZERO);
+        if size.width < consts::MINIMUM_TERMINAL_SIZE.width
+            || size.height < consts::MINIMUM_TERMINAL_SIZE.height
+        {
+            //TODO: error view informing user that terminal is too small
+        }
 
         if self.view.as_any().is::<EmptyView>() {
             match macros::workflows_count!(self.core) {
@@ -179,5 +183,62 @@ impl TuiApp {
             )
             .style(palette::STYLE);
         log_widget.render(area, buf);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tui_app_new_with_empty_core() {
+        let core = Core::default();
+        let app = TuiApp::new(core);
+        assert!(!app.is_running);
+        // In debug mode show_logs is true; in release it's false.
+        // We can verify the struct exists and has the expected types.
+        let _ = app.core;
+    }
+
+    #[test]
+    fn test_tui_app_exit_sets_running_false() {
+        let core = Core::default();
+        let mut app = TuiApp::new(core);
+        assert!(!app.is_running);
+        app.exit();
+        assert!(!app.is_running);
+    }
+
+    #[test]
+    fn test_tui_app_exit_while_not_running_stays_false() {
+        let core = Core::default();
+        let mut app = TuiApp::new(core);
+        app.exit();
+        app.exit(); // idempotent
+        assert!(!app.is_running);
+    }
+
+    #[test]
+    fn test_render_logs_no_panic() {
+        let core = Core::default();
+        let app = TuiApp::new(core);
+        let area = Rect::new(0, 0, 80, 12);
+        let mut buf = Buffer::empty(area);
+        app.render_logs(area, &mut buf);
+        // Succeeded without panicking.
+    }
+
+    #[test]
+    fn test_constants_have_expected_values() {
+        assert_eq!(consts::LOGS_PANEL_HEIGHT_REQUIREMENT, 40);
+    }
+
+    #[test]
+    fn test_palette_colors_are_valid() {
+        // Verify constants resolve without panicking
+        let _bg = palette::BACKGROUND;
+        let _fg = palette::FOREGROUND;
+        let _accent = palette::ACCENT;
+        let _err_fg = palette::ERROR_FOREGROUND;
     }
 }

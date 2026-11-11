@@ -38,3 +38,23 @@ impl Widget for ErrorAlert<'_> {
             );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_alert_creation() {
+        let label = "Test error message";
+        let alert = ErrorAlert::new(label);
+        assert_eq!(alert.label, Line::from("Test error message"));
+    }
+
+    #[test]
+    fn test_error_alert_with_line() {
+        let line = Line::from("styled error");
+        let alert = ErrorAlert::new(line.clone());
+        // The label field stores the Line exactly as given
+        assert_eq!(format!("{}", alert.label), "styled error");
+    }
+}

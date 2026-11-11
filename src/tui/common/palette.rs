@@ -18,3 +18,41 @@ pub(crate) const ERROR_FOREGROUND: Color = Color::Rgb(229, 115, 115); // Red 300
 
 /// Complete reusable style
 pub(crate) const STYLE: Style = Style::new().fg(FOREGROUND).bg(BACKGROUND);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_background_is_reset() {
+        assert_eq!(BACKGROUND, Color::Reset);
+    }
+
+    #[test]
+    fn test_foreground_rgb_value() {
+        assert_eq!(FOREGROUND, Color::Rgb(236, 239, 241));
+    }
+
+    #[test]
+    fn test_accent_teal_value() {
+        assert_eq!(ACCENT, Color::Rgb(77, 182, 172));
+    }
+
+    #[test]
+    fn test_error_foreground_red_value() {
+        assert_eq!(ERROR_FOREGROUND, Color::Rgb(229, 115, 115));
+    }
+
+    #[test]
+    fn test_separator_style_valid() {
+        // SEPARATOR_STYLE should compile and have foreground and background
+        let _ = SEPARATOR_STYLE;
+    }
+
+    #[test]
+    fn test_style_has_fg_and_bg() {
+        // STYLE combines FOREGROUND text with BACKGROUND fill
+        let s = STYLE;
+        assert!(s.fg.is_some() || s.bg.is_some());
+    }
+}

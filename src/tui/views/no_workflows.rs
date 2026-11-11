@@ -137,3 +137,84 @@ impl View for NoWorkflowsView {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::views::View;
+
+    #[test]
+    fn test_no_workflows_choice_variants() {
+        assert_eq!(format!("{:?}", NoWorkflowsChoice::Pending), "Pending");
+        assert_eq!(format!("{:?}", NoWorkflowsChoice::QuitApp), "QuitApp");
+        assert_ne!(NoWorkflowsChoice::Pending, NoWorkflowsChoice::QuitApp);
+    }
+
+    #[test]
+    fn test_no_workflows_choice_clone_copy() {
+        let original = NoWorkflowsChoice::CreateNewWorkflow;
+        let copied = original;
+        assert_eq!(original, copied);
+    }
+
+    #[test]
+    fn test_no_workflows_view_new_pending_action() {
+        let core = Arc::new(RwLock::new(Core::default()));
+        let view = NoWorkflowsView::new(core);
+        assert_eq!(view.pending_action, NoWorkflowsChoice::Pending);
+        assert!(view.list_state.selected().is_none());
+    }
+
+    #[test]
+    fn test_run_button_action_sets_correct_choice() {
+        let core = Arc::new(RwLock::new(Core::default()));
+        let mut view = NoWorkflowsView::new(core);
+        view.run_button_action(0);
+        assert_eq!(
+            view.pending_action,
+            NoWorkflowsChoice::ChooseWorkflowsDirectory
+        );
+        view.run_button_action(1);
+        assert_eq!(view.pending_action, NoWorkflowsChoice::CreateNewWorkflow);
+        view.run_button_action(2);
+        assert_eq!(view.pending_action, NoWorkflowsChoice::QuitApp);
+    }
+
+    #[test]
+    #[should_panic(expected = "selected >= self.buttons.len()")]
+    fn test_run_button_action_out_of_bounds_panics() {
+        let core = Arc::new(RwLock::new(Core::default()));
+        let mut view = NoWorkflowsView::new(core);
+        view.run_button_action(5); // invalid index
+    }
+
+    #[test]
+    fn test_button_data_for_no_workflows() {
+        // Verify ButtonData construction works with NoWorkflowsChoice
+        let data = ButtonData::new("label", NoWorkflowsChoice::Pending);
+        assert_eq!(data.label, "label");
+        assert_eq!(data.action, NoWorkflowsChoice::Pending);
+    }
+
+    /// Render test with valid area - checks no panics during draw
+    #[test]
+    fn test_no_workflows_view_draw_with_valid_core() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let core = Arc::new(RwLock::new(Core {
+            workflows_directory: temp_dir.path().to_path_buf(),
+            workflows: vec![],
+        }));
+        let mut view = NoWorkflowsView::new(core);
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buf = Buffer::empty(area);
+        view.draw(area, &mut buf);
+        // If we get here without panicking, rendering succeeded.
+    }
+
+    #[test]
+    fn test_no_workflows_view_as_any() {
+        let core = Arc::new(RwLock::new(Core::default()));
+        let view = NoWorkflowsView::new(core);
+        assert!(view.as_any().is::<NoWorkflowsView>());
+    }
+}

@@ -969,8 +969,6 @@ mod tests {
 
         // Get initial state to find element indices
         let state = browser.get_state().await.unwrap();
-        println!("Initial elements: {:?}", state.elements);
-
         // Find the input element (should be first interactive element)
         let input_elem = state
             .elements
@@ -1246,15 +1244,6 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
 
         // Get state and find elements
         let state = browser.get_state().await.unwrap();
-        println!(
-            "Elements found: {:?}",
-            state
-                .elements
-                .iter()
-                .map(|e| (e.index, e.tag.clone()))
-                .collect::<Vec<_>>()
-        );
-
         // Find button element
         let btn_elem = state
             .elements
@@ -1487,14 +1476,6 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         browser.navigate(&file_url).await.unwrap();
 
         let state = browser.get_state().await.unwrap();
-        println!(
-            "Elements found: {:?}",
-            state
-                .elements
-                .iter()
-                .map(|e| (e.index, e.tag.clone()))
-                .collect::<Vec<_>>()
-        );
 
         // Click first button twice
         let btn1 = state
