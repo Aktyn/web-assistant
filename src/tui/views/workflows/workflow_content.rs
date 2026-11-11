@@ -10,22 +10,21 @@ use ratatui::{
 };
 use std::sync::{Arc, RwLock};
 
-use super::palette;
-use super::panel;
-use super::panel::Panel;
+use super::super::super::panel;
+use super::super::super::palette;
 use crate::core::Core;
 
-pub(crate) struct Content {
+pub(crate) struct WorkflowPanel {
     core: Arc<RwLock<Core>>,
 }
 
-impl Content {
+impl WorkflowPanel {
     pub(crate) fn new(core: Arc<RwLock<Core>>) -> Self {
         Self { core }
     }
 }
 
-impl Panel for Content {
+impl panel::Panel for WorkflowPanel {
     fn draw(&mut self, area: Rect, buf: &mut Buffer, focused: bool) {
         buf.set_style(area, palette::BACKGROUND_STYLE);
 

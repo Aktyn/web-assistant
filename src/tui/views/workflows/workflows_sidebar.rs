@@ -13,20 +13,15 @@ use ratatui::{
 };
 use std::sync::{Arc, RwLock};
 
-use super::palette;
-use super::panel::Panel;
-use crate::{
-    core::{Core, workflow::WorkflowState},
-    tui::panel,
-    workflows_count,
-};
+use super::super::super::common::{palette, panel, macros};
+use crate::core::{self, Core};
 
-pub(crate) struct Sidebar {
+pub(crate) struct WorkflowsSidebar {
     core: Arc<RwLock<Core>>,
     list_state: ListState,
 }
 
-impl Sidebar {
+impl WorkflowsSidebar {
     pub(crate) const WIDTH: u16 = 30;
 
     pub(crate) fn new(core: Arc<RwLock<Core>>) -> Self {
@@ -37,7 +32,7 @@ impl Sidebar {
     }
 }
 
-impl Panel for Sidebar {
+impl panel::Panel for WorkflowsSidebar {
     fn draw(&mut self, area: Rect, buf: &mut Buffer, focused: bool) {
         buf.set_style(area, palette::BACKGROUND_STYLE);
 
@@ -48,8 +43,10 @@ impl Panel for Sidebar {
                 core.workflows
                     .iter()
                     .map(|w| match &w.state {
-                        WorkflowState::Data(data) => ListItem::new(data.name.clone()).bold(),
-                        WorkflowState::Error(err) => ListItem::new(format!(
+                        core::workflow::WorkflowState::Data(data) => {
+                            ListItem::new(data.name.clone()).bold()
+                        }
+                        core::workflow::WorkflowState::Error(err) => ListItem::new(format!(
                             "Invalid workflow\nFile: \"{}\"\nError: \"{}\"",
                             w.file_path.display(),
                             err
@@ -80,7 +77,7 @@ impl Panel for Sidebar {
             palette::ACCENT
         };
 
-        Paragraph::new("+ New workflow")
+        Paragraph::new("+ Create new workflow")
             .bg(palette::BACKGROUND)
             .fg(button_color)
             .bold()
@@ -104,7 +101,7 @@ impl Panel for Sidebar {
                 KeyCode::Up => self.list_state.select_previous(),
                 KeyCode::Down => match self.list_state.selected() {
                     Some(selected) => {
-                        if selected < workflows_count!(self.core) - 1 {
+                        if selected < macros::workflows_count!(self.core) - 1 {
                             self.list_state.select_next()
                         } else {
                             self.list_state.select(None);

@@ -1,8 +1,5 @@
-mod content;
-mod macros;
-mod palette;
-mod panel;
-mod sidebar;
+mod common;
+mod views;
 
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode};
@@ -15,10 +12,9 @@ use std::sync::{Arc, RwLock};
 use tui_logger::TuiLoggerWidget;
 
 use crate::core::Core;
-use crate::tui::content::Content;
-use crate::tui::panel::Panel;
-use crate::tui::sidebar::Sidebar;
-use crate::workflows_count;
+use common::{palette, panel, macros};
+use views::workflows::workflow_content::WorkflowPanel;
+use views::workflows::workflows_sidebar::WorkflowsSidebar;
 
 pub fn render_tui(core: Core) -> Result<()> {
     let app = TuiApp::new(core);
@@ -36,8 +32,9 @@ struct TuiApp {
     is_running: bool,
     show_logs: bool,
     focused_panel: PanelType,
-    content: Box<dyn Panel>,
-    sidebar: Box<dyn Panel>,
+    content: Box<dyn panel::Panel>,
+    sidebar: Box<dyn panel::Panel>,
+    // view: Box<dyn View>,
     show_sidebar: bool,
 }
 
@@ -52,8 +49,8 @@ impl TuiApp {
             is_running: false,
             show_logs: cfg!(debug_assertions),
             focused_panel: PanelType::Content,
-            sidebar: Box::new(Sidebar::new(core_sidebar_arc)),
-            content: Box::new(Content::new(core_content_arc)),
+            sidebar: Box::new(WorkflowsSidebar::new(core_sidebar_arc)),
+            content: Box::new(WorkflowPanel::new(core_content_arc)),
             show_sidebar: true,
         }
     }
@@ -61,7 +58,7 @@ impl TuiApp {
     fn run(mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         self.is_running = true;
 
-        if workflows_count!(self.core) > 0 {
+        if macros::workflows_count!(self.core) > 0 {
             self.show_sidebar = true;
             self.focused_panel = PanelType::Sidebar;
         } else {
@@ -102,7 +99,7 @@ impl TuiApp {
                 }
                 KeyCode::Tab => self.move_to_next_panel(),
                 KeyCode::Char('s') => {
-                    if workflows_count!(self.core) > 0 {
+                    if macros::workflows_count!(self.core) > 0 {
                         self.show_sidebar = !self.show_sidebar;
                     } else {
                         self.show_sidebar = false;
@@ -125,7 +122,7 @@ impl TuiApp {
         match self.focused_panel {
             PanelType::Sidebar => self.focused_panel = PanelType::Content,
             PanelType::Content => {
-                if workflows_count!(self.core) > 0 {
+                if macros::workflows_count!(self.core) > 0 {
                     self.focused_panel = PanelType::Sidebar
                 }
             }
@@ -159,7 +156,7 @@ impl TuiApp {
         if self.show_sidebar {
             let [sidebar_area, separator_area, content_area] =
                 main_area.layout(&Layout::horizontal([
-                    Length(Sidebar::WIDTH),
+                    Length(WorkflowsSidebar::WIDTH),
                     Length(1),
                     Fill(1),
                 ]));
