@@ -961,7 +961,7 @@ mod tests {
 
         let file_url = format!("file://{}", html_path.display());
 
-        let mut browser = Browser::new();
+        let mut browser = Browser::new(None);
         browser.start().await.unwrap();
 
         // Navigate to the test page
@@ -1062,7 +1062,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         .unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new();
+        let mut browser = Browser::new(None);
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1240,7 +1240,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, html_content).unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new();
+        let mut browser = Browser::new(None);
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1294,7 +1294,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, html_content).unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new();
+        let mut browser = Browser::new(None);
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1331,7 +1331,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, "<html><body></body></html>").unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new();
+        let mut browser = Browser::new(None);
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1385,7 +1385,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
     fn test_quad_viewport_intersection() {
         // Test case: quad fully inside viewport
         let quads: Vec<Vec<f64>> = vec![vec![0.0, 0.0, 100.0, 0.0, 100.0, 100.0, 0.0, 100.0]];
-        let browser = Browser::new();
+        let browser = Browser::new(None);
         let result = browser._find_largest_visible_quad(&quads, &800.0, &600.0);
         assert!(result.is_some());
         if let Some(rect) = result {
@@ -1482,7 +1482,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, html_content).unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new();
+        let mut browser = Browser::new(None);
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1564,7 +1564,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         .unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new();
+        let mut browser = Browser::new(None);
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 

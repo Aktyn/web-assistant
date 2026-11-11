@@ -6,9 +6,6 @@ fn test_all_system_prompt_modes_non_empty() {
         PromptMode::Standard,
         PromptMode::NoThinking,
         PromptMode::Flash,
-        PromptMode::BrowserUseModel,
-        PromptMode::BrowserUseNoThinking,
-        PromptMode::BrowserUseFlash,
     ];
 
     for mode in modes {

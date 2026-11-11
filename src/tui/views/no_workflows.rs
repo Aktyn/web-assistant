@@ -115,10 +115,10 @@ impl View for NoWorkflowsView {
     ) -> anyhow::Result<()> {
         if let Some(key) = event.as_key_event() {
             match key.code {
-                KeyCode::Left | KeyCode::Up | KeyCode::Char('h') => {
+                KeyCode::Left | KeyCode::Up | KeyCode::Char('h') | KeyCode::BackTab => {
                     macros::move_selection!(self.list_state, Previous)
                 }
-                KeyCode::Right | KeyCode::Down | KeyCode::Char('l') => {
+                KeyCode::Right | KeyCode::Down | KeyCode::Char('l') | KeyCode::Tab => {
                     macros::move_selection!(self.list_state, Next, self.buttons.len() - 1)
                 }
                 KeyCode::Enter | KeyCode::Char(' ') => {
@@ -129,8 +129,6 @@ impl View for NoWorkflowsView {
                 _ => {}
             }
         }
-
-        log::info!("Selected: {:?}", self.list_state.selected());
 
         Ok(())
     }

@@ -39,7 +39,6 @@ impl panel::Panel for WorkflowPanel {
             .display()
             .to_string();
 
-        //TODO: add user option buttons as in the description
         Paragraph::new(format!(
             "Workflows directory: \"{}\"\nSelect another directory or run the workflow creator",
             directory_path

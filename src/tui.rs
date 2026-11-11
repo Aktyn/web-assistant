@@ -5,10 +5,11 @@ use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint::{Fill, Length};
-use ratatui::layout::{Layout, Rect};
+use ratatui::layout::{Layout, Rect, Size};
 use ratatui::widgets::{Block, Borders, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use tui_logger::TuiLoggerWidget;
 
 use crate::core::Core;
@@ -48,7 +49,7 @@ impl TuiApp {
         self.clear(terminal)?;
 
         while self.is_running {
-            self.update();
+            self.update(terminal);
             terminal
                 .draw(|frame| self.draw(frame))
                 .context("failed to draw frame")?;
@@ -69,18 +70,38 @@ impl TuiApp {
         Ok(())
     }
 
+    /// Apart from waiting for the next event, it also checks if the terminal size has changed
+    fn smart_event_poll(&mut self, terminal: &mut DefaultTerminal) -> Result<bool> {
+        let start_size = terminal.size().unwrap_or(Size::ZERO);
+        loop {
+            if event::poll(Duration::from_secs(1))? {
+                return Ok(false);
+            } else {
+                if start_size != terminal.size().unwrap_or(Size::ZERO) {
+                    return Ok(true);
+                }
+            }
+        }
+    }
+
     fn handle_events(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+        if self.smart_event_poll(terminal)? {
+            terminal.autoresize()?;
+            return Ok(());
+        }
+
         let event = event::read()?;
 
         match event {
             Event::Key(key) => match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => self.exit(),
-                KeyCode::Char('l') => {
+                KeyCode::Char('L') => {
                     self.show_logs = !self.show_logs;
                 }
                 _ => {}
             },
             Event::Resize(_width, _height) => {
+                log::info!("Resizing terminal");
                 terminal.autoresize()?;
             }
             _ => {}
@@ -96,8 +117,9 @@ impl TuiApp {
     }
 
     /// Should run before pooling events
-    fn update(&mut self) {
+    fn update(&mut self, terminal: &mut DefaultTerminal) {
         //TODO: error view informing user that terminal is too small
+        let _start_size = terminal.size().unwrap_or(Size::ZERO);
 
         if self.view.as_any().is::<EmptyView>() {
             match macros::workflows_count!(self.core) {
@@ -147,7 +169,9 @@ impl TuiApp {
                 Block::default()
                     .title(format!(
                         "{} {} ",
-                        "—".repeat(((area.width as usize) - title.len() - 2) / 2),
+                        "—".repeat(
+                            ((area.width as usize).saturating_sub(title.len() + 2usize)) / 2usize
+                        ),
                         title
                     ))
                     .borders(Borders::TOP)

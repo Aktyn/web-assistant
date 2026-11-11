@@ -212,9 +212,6 @@ mod tests {
             PromptMode::Standard,
             PromptMode::NoThinking,
             PromptMode::Flash,
-            PromptMode::BrowserUseModel,
-            PromptMode::BrowserUseNoThinking,
-            PromptMode::BrowserUseFlash,
         ];
 
         for mode in modes {
