@@ -13,6 +13,7 @@ use std::sync::{Arc, RwLock};
 use super::View;
 use super::common::button::{Button, ButtonData};
 use super::common::error_alert::ErrorAlert;
+use super::common::macros;
 use crate::core::Core;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,15 +115,12 @@ impl View for NoWorkflowsView {
     ) -> anyhow::Result<()> {
         if let Some(key) = event.as_key_event() {
             match key.code {
-                KeyCode::Left | KeyCode::Up => self.list_state.select_previous(),
-                KeyCode::Right | KeyCode::Down => match self.list_state.selected() {
-                    Some(selected) => {
-                        if selected < 2 {
-                            self.list_state.select_next()
-                        }
-                    }
-                    None => self.list_state.select_first(),
-                },
+                KeyCode::Left | KeyCode::Up | KeyCode::Char('h') => {
+                    macros::move_selection!(self.list_state, Previous)
+                }
+                KeyCode::Right | KeyCode::Down | KeyCode::Char('l') => {
+                    macros::move_selection!(self.list_state, Next, self.buttons.len() - 1)
+                }
                 KeyCode::Enter | KeyCode::Char(' ') => {
                     if let Some(selected) = self.list_state.selected() {
                         self.run_button_action(selected)
@@ -131,6 +129,8 @@ impl View for NoWorkflowsView {
                 _ => {}
             }
         }
+
+        log::info!("Selected: {:?}", self.list_state.selected());
 
         Ok(())
     }

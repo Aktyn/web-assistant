@@ -70,7 +70,7 @@ impl panel::Panel for WorkflowsSidebar {
         //TODO: workflow creation wizard
 
         Button::new("+ Create new workflow")
-            .set_selected(!self.list_state.selected().is_some())
+            .set_selected(self.list_state.selected().is_none())
             .render(buttons_area, buf);
     }
 
@@ -81,17 +81,16 @@ impl panel::Panel for WorkflowsSidebar {
     ) -> anyhow::Result<()> {
         if let Some(key) = event.as_key_event() {
             match key.code {
-                KeyCode::Up => self.list_state.select_previous(),
-                KeyCode::Down => match self.list_state.selected() {
-                    Some(selected) => {
-                        if selected < macros::workflows_count!(self.core) - 1 {
-                            self.list_state.select_next()
-                        } else {
-                            self.list_state.select(None);
-                        }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    macros::move_selection!(self.list_state, Previous)
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    let workflows_count = macros::workflows_count!(self.core);
+                    macros::move_selection!(self.list_state, Next, workflows_count);
+                    if self.list_state.selected() == Some(workflows_count) {
+                        self.list_state.select(None);
                     }
-                    None => self.list_state.select_first(),
-                },
+                }
                 _ => {}
             }
         }

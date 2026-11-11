@@ -21,18 +21,7 @@ jobs:
           fi
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      # cargo chef: compute and cache the dependency recipe for fast builds.
-      - name: Install cargo chef
-        uses: jacobtomlinson/cargo-chef@v1
-        with:
-          install-recipe: true
-
-      - name: Build recipe cache
-        uses: jacobtomlinson/cargo-chef@v1
-        with:
-          use-cache: true
+        uses: dtolnay/rust-toolchain@nightly
 
       - name: Build
         run: cargo build
