@@ -6,10 +6,14 @@ pub mod llm;
 mod tui;
 
 use anyhow::Result;
+use std::io::Write;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
+use std::time::Duration;
 
-// #[tokio::main]
-// async fn main() -> Result<()> {
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
 
     let cli = cli::get_cli();
@@ -28,18 +32,18 @@ fn main() -> Result<()> {
     //     Ok(_) => println!("Navigation successful"),
     //     Err(e) => println!("Navigation failed: {e}"),
     // };
-
+    //
     // You can check the value provided by positional arguments, or option arguments
     // if let Some(name) = cli.name.as_deref() {
     //     println!("Value for name: {name}");
     // }
 
     match &cli.command {
-        Some(cli::Commands::Foo { list }) => {
-            if *list {
-                log::info!("Printing testing lists...");
+        Some(cli::Commands::Foo { example_arg }) => {
+            if *example_arg {
+                log::info!("Printing example arg...");
             } else {
-                log::info!("Not printing testing lists...");
+                log::info!("Not printing example arg...");
             }
         }
         None => {
@@ -47,7 +51,16 @@ fn main() -> Result<()> {
             tui_logger::init_logger(tui_logger::LevelFilter::Trace).unwrap();
             tui_logger::set_default_level(tui_logger::LevelFilter::Trace);
 
-            let core = core::Core::new(cli);
+            let done = Arc::new(AtomicUsize::new(0));
+            let done_thread = Arc::clone(&done);
+            let handle = thread::spawn(move || {
+                run_loading_animation(&done_thread);
+            });
+
+            let core = core::Core::new(cli).await;
+
+            done.store(1, Ordering::SeqCst);
+            handle.join().unwrap();
 
             for workflow in &core.workflows {
                 log::info!("Workflow: {:?}", workflow);
@@ -58,6 +71,21 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn run_loading_animation(done: &Arc<AtomicUsize>) {
+    let label = "Starting Web Assistant";
+    let spinner = ['—', '\\', '|', '/'];
+    let mut step = 0usize;
+
+    while done.load(Ordering::SeqCst) == 0 {
+        let indicator = spinner[step % spinner.len()];
+        let line = format!("\r {indicator} {label}");
+        std::io::stdout().write_all(line.as_bytes()).ok();
+        std::io::stdout().flush().ok();
+        step = step.wrapping_add(1);
+        thread::sleep(Duration::from_millis(250));
+    }
 }
 
 // An example left for future reference

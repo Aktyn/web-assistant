@@ -19,7 +19,7 @@ pub enum Commands {
     Foo {
         /// command argument description
         #[arg(short, long)]
-        list: bool,
+        example_arg: bool,
     },
 }
 

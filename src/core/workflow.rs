@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use serde_json;
-use std::{fs::DirEntry, path::PathBuf};
+use std::path::PathBuf;
+use tokio::fs::DirEntry;
 
 #[derive(Debug, Deserialize)]
 pub struct WorkflowData {
@@ -40,9 +41,9 @@ pub(crate) struct WorkflowDataJson {
 }
 
 impl WorkflowDataJson {
-    pub(crate) fn new(entry: &DirEntry) -> Option<Self> {
+    pub(crate) async fn new(entry: &DirEntry) -> Option<Self> {
         if entry.path().extension().and_then(|ext| ext.to_str()) == Some("json") {
-            let content = std::fs::read_to_string(entry.path()).ok()?;
+            let content = tokio::fs::read_to_string(entry.path()).await.ok()?;
             Some(Self {
                 path: entry.path(),
                 content,

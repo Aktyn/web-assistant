@@ -10,8 +10,7 @@ use ratatui::{
 };
 use std::sync::{Arc, RwLock};
 
-use super::super::super::panel;
-use super::super::super::palette;
+use super::super::common::{panel, palette};
 use crate::core::Core;
 
 pub(crate) struct WorkflowPanel {
