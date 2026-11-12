@@ -35,7 +35,8 @@ impl panel::Panel for WorkflowPanel {
             .core
             .read()
             .expect("core lock poisoned")
-            .workflows_directory
+            .config
+            .workflowsDirectory
             .display()
             .to_string();
 
@@ -67,19 +68,22 @@ mod tests {
     use super::*;
     use crate::tui::common::panel::Panel;
 
+    fn empty_core() -> Core {
+        Core {
+            config: crate::core::config::Config::default(),
+            workflows: Vec::new(),
+        }
+    }
+
     #[test]
     fn test_workflow_panel_new() {
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let _panel = WorkflowPanel::new(core.clone());
     }
 
     #[test]
     fn test_workflow_panel_draw_no_panic() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let core = Arc::new(RwLock::new(Core {
-            workflows_directory: temp_dir.path().to_path_buf(),
-            workflows: vec![],
-        }));
+        let core = Arc::new(RwLock::new(empty_core()));
         let mut panel = WorkflowPanel::new(core);
         let area = Rect::new(0, 0, 50, 20);
         let mut buf = Buffer::empty(area);
@@ -88,11 +92,7 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_draw_focused() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let core = Arc::new(RwLock::new(Core {
-            workflows_directory: temp_dir.path().to_path_buf(),
-            workflows: vec![],
-        }));
+        let core = Arc::new(RwLock::new(empty_core()));
         let mut panel = WorkflowPanel::new(core);
         let area = Rect::new(0, 0, 50, 20);
         let mut buf = Buffer::empty(area);
@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_handle_up_event_ok() {
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let mut panel = WorkflowPanel::new(core);
         let event = Event::Key(KeyCode::Up.into());
         let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_handle_mouse_event_ok() {
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let mut panel = WorkflowPanel::new(core);
         let event = Event::Mouse(crossterm::event::MouseEvent {
             kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_draw_with_default_path_no_panic() {
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let mut panel = WorkflowPanel::new(core);
         let area = Rect::new(0, 0, 50, 20);
         let mut buf = Buffer::empty(area);

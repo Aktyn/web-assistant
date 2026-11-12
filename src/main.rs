@@ -12,6 +12,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
 
+use core::config;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
@@ -39,12 +41,19 @@ async fn main() -> Result<()> {
     // }
 
     match &cli.command {
-        Some(cli::Commands::Foo { example_arg }) => {
-            if *example_arg {
-                log::info!("Printing example arg...");
-            } else {
-                log::info!("Not printing example arg...");
-            }
+        Some(cli::Commands::InitConfig { output_path }) => {
+            std::io::stdout()
+                .write_all(b"Initializing config...\n")
+                .ok();
+
+            config::init_default_config(output_path.clone()).await;
+
+            std::io::stdout()
+                .write_all(
+                    format!(r"The default config was successfully saved to {output_path:?}")
+                        .as_bytes(),
+                )
+                .ok();
         }
         None => {
             //NOTE: TUI logger is being initialized here to catch early core logs

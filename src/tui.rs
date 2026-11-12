@@ -116,15 +116,18 @@ impl TuiApp {
     }
 
     /// Should run after handling events
+    /// Reacts to state changes in current view
     fn post_update(&mut self) {
         if let Some(no_workflows_view) = self.view.as_any().downcast_ref::<NoWorkflowsView>() {
             match no_workflows_view.pending_action {
                 NoWorkflowsChoice::Pending => {}
-                NoWorkflowsChoice::ChooseWorkflowsDirectory => todo!(),
                 NoWorkflowsChoice::CreateNewWorkflow => todo!(),
                 NoWorkflowsChoice::QuitApp => self.exit(),
             }
         }
+        // if let Some(workflows_view) = self.view.as_any().downcast_ref::<WorkflowView>() {
+        //     //TODO:
+        // }
     }
 
     fn draw(&mut self, frame: &mut Frame) {
@@ -188,10 +191,18 @@ fn smart_event_poll(terminal: &mut DefaultTerminal) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::config::Config;
+
+    fn empty_core() -> Core {
+        Core {
+            config: Config::default(),
+            workflows: Vec::new(),
+        }
+    }
 
     #[test]
     fn test_tui_app_new_with_empty_core() {
-        let core = Core::default();
+        let core = empty_core();
         let app = TuiApp::new(core);
         assert!(!app.is_running);
         // In debug mode show_logs is true; in release it's false.
@@ -201,7 +212,7 @@ mod tests {
 
     #[test]
     fn test_tui_app_exit_sets_running_false() {
-        let core = Core::default();
+        let core = empty_core();
         let mut app = TuiApp::new(core);
         assert!(!app.is_running);
         app.exit();
@@ -210,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_tui_app_exit_while_not_running_stays_false() {
-        let core = Core::default();
+        let core = empty_core();
         let mut app = TuiApp::new(core);
         app.exit();
         app.exit(); // idempotent
@@ -219,7 +230,7 @@ mod tests {
 
     #[test]
     fn test_render_logs_no_panic() {
-        let core = Core::default();
+        let core = empty_core();
         let app = TuiApp::new(core);
         let _ = app;
         let area = Rect::new(0, 0, 80, 12);

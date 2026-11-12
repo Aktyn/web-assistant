@@ -5,7 +5,8 @@ use ratatui::{
         Constraint::{self, Fill, Length, Ratio},
         Layout, Rect,
     },
-    text::ToLine,
+    style::Stylize,
+    text::{Line, Span, Text, ToLine, ToSpan},
     widgets::{ListState, Paragraph, Widget as _},
 };
 use std::sync::{Arc, RwLock};
@@ -13,13 +14,12 @@ use std::sync::{Arc, RwLock};
 use super::View;
 use super::common::button::{Button, ButtonData};
 use super::common::error_alert::ErrorAlert;
-use super::common::macros;
+use super::common::{macros, palette};
 use crate::core::Core;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NoWorkflowsChoice {
     Pending,
-    ChooseWorkflowsDirectory,
     CreateNewWorkflow,
     QuitApp,
 }
@@ -30,7 +30,7 @@ pub(crate) struct NoWorkflowsView {
     core: Arc<RwLock<Core>>,
     /// Used for navigating over option buttons
     list_state: ListState,
-    buttons: [ThisButtonData; 3],
+    buttons: [ThisButtonData; 2],
     pub(crate) pending_action: NoWorkflowsChoice,
 }
 
@@ -40,10 +40,6 @@ impl NoWorkflowsView {
             core,
             list_state: ListState::default(),
             buttons: [
-                ThisButtonData::new(
-                    "Choose another directory",
-                    NoWorkflowsChoice::ChooseWorkflowsDirectory,
-                ),
                 ThisButtonData::new("Create new workflow", NoWorkflowsChoice::CreateNewWorkflow),
                 ThisButtonData::new("Quit app", NoWorkflowsChoice::QuitApp),
             ],
@@ -59,14 +55,24 @@ impl NoWorkflowsView {
             Fill(1),
         ]));
 
-        let text = format!(
-            "No workflows files were found in the given directory: \"{directory_path}\"\nSelect another directory or create a new workflow"
-        );
+        let text = Text::from(vec![
+            Line::from(vec![
+                "Update ".into(),
+                "workflowsDirectory".to_span().style(palette::ACCENT).bold(),
+                " in your config file or create a new workflow".into(),
+            ]),
+            Line::from(vec![
+                "No workflow files were found in the given directory: \"".into(),
+                Span::from(directory_path).style(palette::ACCENT),
+                "\"".into(),
+            ]),
+        ])
+        .centered();
         Paragraph::new(text).centered().render(info_area, buf);
 
-        let button_areas: [Rect; 3] = buttons_area
-            .centered_horizontally(Constraint::Max(92))
-            .layout(&Layout::horizontal([Ratio(1, 3); 3]));
+        let button_areas: [Rect; 2] = buttons_area
+            .centered_horizontally(Constraint::Max(64))
+            .layout(&Layout::horizontal([Ratio(1, 2); 2]));
 
         assert!(
             button_areas.len() == self.buttons.len(),
@@ -95,7 +101,7 @@ impl View for NoWorkflowsView {
         let workflows_directory = self
             .core
             .read()
-            .map(|core| core.workflows_directory.display().to_string());
+            .map(|core| core.config.workflowsDirectory.display().to_string());
 
         match workflows_directory {
             Ok(directory_path) => {
@@ -156,9 +162,16 @@ mod tests {
         assert_eq!(original, copied);
     }
 
+    fn empty_core() -> Core {
+        Core {
+            config: crate::core::config::Config::default(),
+            workflows: Vec::new(),
+        }
+    }
+
     #[test]
     fn test_no_workflows_view_new_pending_action() {
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let view = NoWorkflowsView::new(core);
         assert_eq!(view.pending_action, NoWorkflowsChoice::Pending);
         assert!(view.list_state.selected().is_none());
@@ -166,23 +179,21 @@ mod tests {
 
     #[test]
     fn test_run_button_action_sets_correct_choice() {
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let mut view = NoWorkflowsView::new(core);
         view.run_button_action(0);
         assert_eq!(
             view.pending_action,
-            NoWorkflowsChoice::ChooseWorkflowsDirectory
+            NoWorkflowsChoice::CreateNewWorkflow
         );
         view.run_button_action(1);
-        assert_eq!(view.pending_action, NoWorkflowsChoice::CreateNewWorkflow);
-        view.run_button_action(2);
         assert_eq!(view.pending_action, NoWorkflowsChoice::QuitApp);
     }
 
     #[test]
     #[should_panic(expected = "selected >= self.buttons.len()")]
     fn test_run_button_action_out_of_bounds_panics() {
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let mut view = NoWorkflowsView::new(core);
         view.run_button_action(5); // invalid index
     }
@@ -198,11 +209,7 @@ mod tests {
     /// Render test with valid area - checks no panics during draw
     #[test]
     fn test_no_workflows_view_draw_with_valid_core() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let core = Arc::new(RwLock::new(Core {
-            workflows_directory: temp_dir.path().to_path_buf(),
-            workflows: vec![],
-        }));
+        let core = Arc::new(RwLock::new(empty_core()));
         let mut view = NoWorkflowsView::new(core);
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
@@ -212,7 +219,7 @@ mod tests {
 
     #[test]
     fn test_no_workflows_view_as_any() {
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let view = NoWorkflowsView::new(core);
         assert!(view.as_any().is::<NoWorkflowsView>());
     }

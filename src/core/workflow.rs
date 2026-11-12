@@ -1,23 +1,22 @@
 use serde::Deserialize;
-use serde_json;
 use std::path::PathBuf;
 use tokio::fs::DirEntry;
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct WorkflowData {
-    pub name: String,
+pub(crate) struct WorkflowData {
+    pub(crate) name: String,
 }
 
 #[derive(Debug)]
-pub enum WorkflowState {
+pub(crate) enum WorkflowState {
     Data(WorkflowData),
     Error(serde_json::Error),
 }
 
 #[derive(Debug)]
-pub struct Workflow {
-    pub state: WorkflowState,
-    pub file_path: PathBuf,
+pub(crate) struct Workflow {
+    pub(crate) state: WorkflowState,
+    pub(crate) file_path: PathBuf,
 }
 
 impl Workflow {

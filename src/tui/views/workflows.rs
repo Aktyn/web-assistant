@@ -120,7 +120,15 @@ impl View for WorkflowView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::config::Config;
     use crate::tui::views::View;
+
+    fn empty_core() -> Core {
+        Core {
+            config: Config::default(),
+            workflows: Vec::new(),
+        }
+    }
 
     #[test]
     fn test_panel_type_debug() {
@@ -137,7 +145,7 @@ mod tests {
 
     #[test]
     fn test_workflow_view_new_default_state() {
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let view = WorkflowView::new(core);
         // Public state after construction: show_sidebar=true, focused=Sidebar
         assert!(view.show_sidebar);
@@ -146,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_workflow_view_move_to_next_panel_from_sidebar() {
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let mut view = WorkflowView::new(core);
         view.move_to_next_panel();
         assert_eq!(view.focused_panel, PanelType::Content);
@@ -155,7 +163,7 @@ mod tests {
     #[test]
     fn test_workflow_view_move_to_next_panel_from_content_empty() {
         // When no workflows exist, moving from Content stays at Content
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let mut view = WorkflowView::new(core);
         // Move to Content first
         view.move_to_next_panel();
@@ -167,14 +175,14 @@ mod tests {
 
     #[test]
     fn test_workflow_view_as_any() {
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let view = WorkflowView::new(core);
         assert!(view.as_any().is::<WorkflowView>());
     }
 
     #[test]
     fn test_workflow_view_get_focused_panel_returns_sidebar_when_focused() {
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let view = WorkflowView::new(core);
         // Verify show_sidebar starts true and focused_panel is Sidebar
         assert!(view.show_sidebar);
@@ -183,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_workflow_view_get_focused_panel_returns_content_after_tab() {
-        let core = Arc::new(RwLock::new(Core::default()));
+        let core = Arc::new(RwLock::new(empty_core()));
         let mut view = WorkflowView::new(core);
         view.move_to_next_panel();
         assert_eq!(view.focused_panel, PanelType::Content);

@@ -1,20 +1,23 @@
-pub mod workflow;
+pub mod config;
+pub(crate) mod workflow;
 
 use std::{ffi::OsStr, path::PathBuf};
 use tokio::fs::DirEntry;
 
 use crate::cli::Cli;
+use config::Config;
 use workflow::{Workflow, WorkflowDataJson};
 
-#[derive(Default)]
 pub struct Core {
-    pub workflows_directory: PathBuf,
-    pub workflows: Vec<Workflow>,
+    pub(crate) config: Config,
+    pub(crate) workflows: Vec<Workflow>,
 }
 
 impl Core {
-    pub async fn new(cli: Cli) -> Self {
-        let workflows_directory = cli.workflows_path.expect("workflows path is required");
+    pub(crate) async fn new(cli: Cli) -> Self {
+        let config_path = cli.config_path.expect("Config path is required");
+        let config = Config::new(&config_path).await;
+        let workflows_directory = &config.workflowsDirectory;
 
         assert!(
             !workflows_directory.exists() || workflows_directory.is_dir(),
@@ -22,7 +25,7 @@ impl Core {
             workflows_directory.display()
         );
 
-        let json_files = read_json_files(&workflows_directory).await;
+        let json_files = read_json_files(workflows_directory).await;
         let mut workflows = Vec::with_capacity(json_files.len());
         for entry in &json_files {
             if let Some(json) = WorkflowDataJson::new(entry).await {
@@ -30,10 +33,7 @@ impl Core {
             }
         }
 
-        Self {
-            workflows_directory,
-            workflows,
-        }
+        Self { config, workflows }
     }
 }
 
@@ -79,7 +79,22 @@ async fn filter_json_files(entry: &DirEntry) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use tempfile::TempDir;
+
+    /// Write a config.json into `parent_dir` pointing at `workflows_dir`, then build a
+    /// `Cli` whose `config_path` resolves to it. `Core::new` reads the config to
+    /// discover the workflows directory, so the test must supply a real config
+    /// file rather than a bare `Cli` struct literal.
+    fn make_cli(parent_dir: &std::path::Path, workflows_dir: &std::path::Path) -> Cli {
+        let config_path = parent_dir.join("config.json");
+        let config = json!({ "workflowsDirectory": workflows_dir });
+        std::fs::write(&config_path, serde_json::to_string_pretty(&config).unwrap()).unwrap();
+        Cli {
+            config_path: Some(config_path),
+            command: None,
+        }
+    }
 
     fn setup_workflow_dir(files: &[(&str, &str)]) -> TempDir {
         let tmp = TempDir::new().unwrap();
@@ -93,22 +108,18 @@ mod tests {
     #[tokio::test]
     async fn test_core_new_with_empty_directory() {
         let tmp = setup_workflow_dir(&[]);
-        let cli = Cli {
-            workflows_path: Some(tmp.path().to_path_buf()),
-            command: None,
-        };
+        let parent_tmp = TempDir::new().unwrap();
+        let cli = make_cli(parent_tmp.path(), tmp.path());
         let core = Core::new(cli).await;
         assert_eq!(core.workflows.len(), 0);
-        assert_eq!(core.workflows_directory, tmp.path());
+        assert_eq!(core.config.workflowsDirectory, tmp.path());
     }
 
     #[tokio::test]
     async fn test_core_new_with_valid_workflow_file() {
         let tmp = setup_workflow_dir(&[("valid.json", r#"{"name": "My Workflow"}"#)]);
-        let cli = Cli {
-            workflows_path: Some(tmp.path().to_path_buf()),
-            command: None,
-        };
+        let parent_tmp = TempDir::new().unwrap();
+        let cli = make_cli(parent_tmp.path(), tmp.path());
         let core = Core::new(cli).await;
         assert_eq!(core.workflows.len(), 1);
         // Verify the workflow loaded successfully
@@ -127,10 +138,8 @@ mod tests {
             ("notes.txt", "This should be ignored"),
             ("script.py", "import os"),
         ]);
-        let cli = Cli {
-            workflows_path: Some(tmp.path().to_path_buf()),
-            command: None,
-        };
+        let parent_tmp = TempDir::new().unwrap();
+        let cli = make_cli(parent_tmp.path(), tmp.path());
         let core = Core::new(cli).await;
         assert_eq!(core.workflows.len(), 1);
     }
@@ -141,10 +150,8 @@ mod tests {
             ("good.json", r#"{"name": "Good"}"#),
             ("bad.json", "{invalid json content"),
         ]);
-        let cli = Cli {
-            workflows_path: Some(tmp.path().to_path_buf()),
-            command: None,
-        };
+        let parent_tmp = TempDir::new().unwrap();
+        let cli = make_cli(parent_tmp.path(), tmp.path());
         let core = Core::new(cli).await;
         // Both files enter the pipeline (they're both .json). The invalid one
         // does not get skipped — it is stored as a Workflow in Error state.
@@ -179,21 +186,12 @@ mod tests {
 
         // Cannot directly call filter_json_files since it takes DirEntry;
         // instead verify via the higher-level read_json_files.
-        let cli = Cli {
-            workflows_path: Some(tmp.path().to_path_buf()),
-            command: None,
-        };
+        let parent_tmp = TempDir::new().unwrap();
+        let cli = make_cli(parent_tmp.path(), tmp.path());
         let core = Core::new(cli).await;
         // Only .json file enters the pipeline; .txt is filtered out.
         // The json file has {} which deserializes to an error (missing `name` field),
         // but it still counts as one workflow entry (in Error state).
         assert_eq!(core.workflows.len(), 1);
-    }
-
-    #[test]
-    fn test_core_default_has_empty_workflows() {
-        let core = Core::default();
-        assert!(core.workflows.is_empty());
-        assert_eq!(core.workflows_directory, PathBuf::from(""));
     }
 }
