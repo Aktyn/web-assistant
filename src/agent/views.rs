@@ -35,6 +35,7 @@ pub enum Action {
 }
 
 impl Action {
+    #[must_use]
     pub fn name(&self) -> &'static str {
         match self {
             Action::Navigate { .. } => "navigate",
@@ -135,20 +136,24 @@ pub struct AgentHistoryList {
 }
 
 impl AgentHistoryList {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             history: Vec::new(),
         }
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.history.is_empty()
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.history.len()
     }
 
+    #[must_use]
     pub fn final_result(&self) -> Option<String> {
         if let Some(last_step) = self.history.last()
             && let Some(last_res) = last_step.result.last()
@@ -159,6 +164,7 @@ impl AgentHistoryList {
         None
     }
 
+    #[must_use]
     pub fn is_done(&self) -> bool {
         if let Some(last_step) = self.history.last()
             && let Some(last_res) = last_step.result.last()
@@ -168,6 +174,7 @@ impl AgentHistoryList {
         false
     }
 
+    #[must_use]
     pub fn is_successful(&self) -> Option<bool> {
         if let Some(last_step) = self.history.last()
             && let Some(last_res) = last_step.result.last()

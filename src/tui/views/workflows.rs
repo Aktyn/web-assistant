@@ -45,7 +45,7 @@ impl WorkflowView {
             PanelType::Sidebar => self.focused_panel = PanelType::Content,
             PanelType::Content => {
                 if macros::workflows_count!(self.core) > 0 {
-                    self.focused_panel = PanelType::Sidebar
+                    self.focused_panel = PanelType::Sidebar;
                 }
             }
         }

@@ -10,6 +10,7 @@ pub struct PermissionsWatchdog {
 }
 
 impl PermissionsWatchdog {
+    #[must_use]
     pub fn new(client: CdpClient) -> Self {
         Self {
             client,
@@ -26,11 +27,13 @@ impl PermissionsWatchdog {
         }
     }
 
+    #[must_use]
     pub fn with_permissions(mut self, permissions: Vec<String>) -> Self {
         self.permissions = permissions;
         self
     }
 
+    #[must_use]
     pub fn permissions(&self) -> &[String] {
         &self.permissions
     }

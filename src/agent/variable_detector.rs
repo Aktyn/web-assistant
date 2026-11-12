@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::views::{Action, AgentHistoryList, DetectedVariable, InteractedElementMetadata};
 
+#[must_use]
 pub fn detect_variables_in_history(
     history: &AgentHistoryList,
 ) -> HashMap<String, DetectedVariable> {
@@ -10,9 +11,8 @@ pub fn detect_variables_in_history(
     let mut detected_values: HashSet<String> = HashSet::new();
 
     for history_item in &history.history {
-        let model_output = match &history_item.model_output {
-            Some(out) => out,
-            None => continue,
+        let Some(model_output) = &history_item.model_output else {
+            continue;
         };
 
         for (action_idx, action) in model_output.action.iter().enumerate() {
@@ -111,10 +111,7 @@ pub fn detect_variable_type(
 pub fn detect_from_attributes(
     attributes: &HashMap<String, String>,
 ) -> Option<(String, Option<String>)> {
-    let input_type = attributes
-        .get("type")
-        .map(|s| s.to_lowercase())
-        .unwrap_or_default();
+    let input_type = attributes.get("type").map_or_default(|s| s.to_lowercase());
 
     match input_type.as_str() {
         "email" => return Some(("email".into(), Some("email".into()))),
@@ -127,7 +124,7 @@ pub fn detect_from_attributes(
 
     let semantic_attrs: Vec<&str> = ["id", "name", "placeholder", "aria-label"]
         .iter()
-        .filter_map(|key| attributes.get(*key).map(|s| s.as_str()))
+        .filter_map(|key| attributes.get(*key).map(std::string::String::as_str))
         .collect();
 
     let combined_text = semantic_attrs.join(" ").to_lowercase();
@@ -140,9 +137,8 @@ pub fn detect_from_attributes(
             return Some(("billing_address".into(), None));
         } else if combined_text.contains("shipping") {
             return Some(("shipping_address".into(), None));
-        } else {
-            return Some(("address".into(), None));
         }
+        return Some(("address".into(), None));
     }
 
     if combined_text.contains("comment")
@@ -218,7 +214,7 @@ pub fn detect_from_value_pattern(value: &str) -> Option<(String, Option<String>)
 
     let phone_chars_regex = Regex::new(r"^[\d\s\-\(\)\+]+$").unwrap();
     if phone_chars_regex.is_match(value) {
-        let digits_only: String = value.chars().filter(|c| c.is_ascii_digit()).collect();
+        let digits_only: String = value.chars().filter(char::is_ascii_digit).collect();
         if digits_only.len() >= 10 {
             return Some(("phone".into(), Some("phone".into())));
         }
@@ -230,7 +226,7 @@ pub fn detect_from_value_pattern(value: &str) -> Option<(String, Option<String>)
     }
 
     if !value.is_empty()
-        && value.chars().next().is_some_and(|c| c.is_uppercase())
+        && value.chars().next().is_some_and(char::is_uppercase)
         && value
             .chars()
             .all(|c| c.is_alphabetic() || c == ' ' || c == '-')
@@ -267,13 +263,14 @@ fn ensure_unique_name(base_name: &str, existing: &HashMap<String, DetectedVariab
     }
 }
 
-pub fn substitute_variables_in_history(
+#[must_use]
+pub fn substitute_variables_in_history<S: ::std::hash::BuildHasher + Default>(
     history: &AgentHistoryList,
-    variables: &HashMap<String, String>,
+    variables: &HashMap<String, String, S>,
 ) -> AgentHistoryList {
     let detected = detect_variables_in_history(history);
 
-    let mut value_replacements: HashMap<String, String> = HashMap::new();
+    let mut value_replacements: HashMap<String, String> = HashMap::default();
     for (var_name, new_val) in variables {
         if let Some(detected_var) = detected.get(var_name) {
             value_replacements.insert(detected_var.original_value.clone(), new_val.clone());

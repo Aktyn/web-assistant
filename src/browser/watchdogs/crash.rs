@@ -1,3 +1,5 @@
+#![allow(clippy::missing_errors_doc)]
+
 use anyhow::Result;
 use serde_json::Value;
 use std::sync::Arc;
@@ -16,6 +18,7 @@ pub struct CrashWatchdog {
 }
 
 impl CrashWatchdog {
+    #[must_use]
     pub fn new(client: CdpClient) -> Self {
         Self {
             client,
@@ -36,22 +39,29 @@ impl CrashWatchdog {
         }
     }
 
+    #[must_use]
     pub fn crash_count(&self) -> usize {
         self.crash_count.load(Ordering::SeqCst)
     }
 
+    #[must_use]
     pub fn is_crashed(&self) -> bool {
         self.crashed.load(Ordering::SeqCst)
     }
 
+    #[must_use]
     pub fn recovery_count(&self) -> usize {
         self.recovery_count.load(Ordering::SeqCst)
     }
 
-    pub async fn handle_cdp_event(&self, event: &Value) -> Result<bool> {
-        let method = match event.get("method").and_then(|m| m.as_str()) {
-            Some(m) => m,
-            None => return Ok(false),
+    /// Handle a crash-related CDP event.
+    ///
+    /// # Errors
+    ///
+    /// This function never returns an error.
+    pub fn handle_cdp_event(&self, event: &Value) -> Result<bool> {
+        let Some(method) = event.get("method").and_then(|m| m.as_str()) else {
+            return Ok(false);
         };
 
         if method == "Inspector.targetCrashed" || method == "Target.targetCrashed" {
@@ -67,19 +77,22 @@ impl CrashWatchdog {
     /// Heartbeat ping to check if page is responsive
     pub async fn check_responsive(&self, timeout: Duration) -> bool {
         let ping_future = self.client.evaluate("1 + 1");
-        match tokio::time::timeout(timeout, ping_future).await {
-            Ok(Ok(val)) => val.as_i64() == Some(2),
-            _ => {
-                warn!(
-                    "CrashWatchdog: Page failed to respond to heartbeat ping within {:?}",
-                    timeout
-                );
-                false
-            }
+        if let Ok(Ok(val)) = tokio::time::timeout(timeout, ping_future).await {
+            val.as_i64() == Some(2)
+        } else {
+            warn!(
+                "CrashWatchdog: Page failed to respond to heartbeat ping within {:?}",
+                timeout
+            );
+            false
         }
     }
 
-    /// Attempt reload recovery
+    /// Attempt reload recovery.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the reload command cannot be sent to the browser.
     pub async fn recover(&self) -> Result<bool> {
         warn!("CrashWatchdog: Attempting recovery via Page.reload...");
         self.recovery_count.fetch_add(1, Ordering::SeqCst);
@@ -115,8 +128,7 @@ mod tests {
             "method": "Target.targetCrashed",
             "params": {}
         });
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let handled = rt.block_on(wd.handle_cdp_event(&event)).unwrap();
+        let handled = wd.handle_cdp_event(&event).unwrap();
         assert!(handled);
         assert!(wd.is_crashed());
         assert_eq!(wd.crash_count(), 1);
@@ -129,8 +141,7 @@ mod tests {
             "method": "Inspector.targetCrashed",
             "params": {}
         });
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let handled = rt.block_on(wd.handle_cdp_event(&event)).unwrap();
+        let handled = wd.handle_cdp_event(&event).unwrap();
         assert!(handled);
         assert!(wd.is_crashed());
     }
@@ -142,8 +153,7 @@ mod tests {
             "method": "Page.loadEventFired",
             "params": {}
         });
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let handled = rt.block_on(wd.handle_cdp_event(&event)).unwrap();
+        let handled = wd.handle_cdp_event(&event).unwrap();
         assert!(!handled);
         assert!(!wd.is_crashed());
     }
@@ -152,8 +162,7 @@ mod tests {
     fn test_missing_method_field_returns_false() {
         let wd = CrashWatchdog::new_test();
         let event = serde_json::json!({"params": {}});
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let handled = rt.block_on(wd.handle_cdp_event(&event)).unwrap();
+        let handled = wd.handle_cdp_event(&event).unwrap();
         assert!(!handled);
     }
 

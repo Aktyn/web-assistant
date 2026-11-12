@@ -8,39 +8,47 @@ pub struct SecurityWatchdog {
 }
 
 impl SecurityWatchdog {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[must_use]
     pub fn allow_domain(mut self, domain: impl Into<String>) -> Self {
         self.allowed_domains.push(domain.into().to_lowercase());
         self
     }
 
+    #[must_use]
     pub fn block_domain(mut self, domain: impl Into<String>) -> Self {
         self.blocked_domains.push(domain.into().to_lowercase());
         self
     }
 
+    /// Returns `true` when navigation to `raw_url` is permitted.
+    ///
+    /// # Errors
+    ///
+    /// This function never returns an error.
+    #[must_use]
     pub fn is_url_allowed(&self, raw_url: &str) -> bool {
         if raw_url == "about:blank" || raw_url.starts_with("chrome:") {
             return true;
         }
 
-        let parsed = match Url::parse(raw_url) {
-            Ok(u) => u,
-            Err(_) => return false,
+        let Ok(parsed) = Url::parse(raw_url) else {
+            return false;
         };
 
-        let host = match parsed.host_str() {
-            Some(h) => h.to_lowercase(),
-            None => return false,
+        let Some(host) = parsed.host_str() else {
+            return false;
         };
+        let host = host.to_lowercase();
 
         // Allowed domains take precedence over blocked (matches Python semantics).
         if !self.allowed_domains.is_empty() {
             for allowed in &self.allowed_domains {
-                if Self::_domain_matches(&host, allowed) {
+                if Self::domain_matches(&host, allowed) {
                     return true;
                 }
             }
@@ -50,7 +58,7 @@ impl SecurityWatchdog {
 
         // No allowlist — check blocked domains
         for blocked in &self.blocked_domains {
-            if Self::_domain_matches(&host, blocked) {
+            if Self::domain_matches(&host, blocked) {
                 return false;
             }
         }
@@ -62,7 +70,7 @@ impl SecurityWatchdog {
     /// Matches exact hostname or `www.` prefix variant when the pattern is a
     /// two-label domain (e.g. `"example.com"`). Arbitrary subdomains are NOT
     /// matched unless the pattern itself contains a wildcard.
-    fn _domain_matches(host: &str, pattern: &str) -> bool {
+    fn domain_matches(host: &str, pattern: &str) -> bool {
         if host == pattern {
             return true;
         }
@@ -73,11 +81,15 @@ impl SecurityWatchdog {
         false
     }
 
+    /// Validates that `raw_url` is permitted by the security policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `raw_url` is blocked by the allow/block lists.
     pub fn validate_url(&self, raw_url: &str) -> Result<()> {
         if !self.is_url_allowed(raw_url) {
             return Err(anyhow!(
-                "Navigation to {} blocked by SecurityWatchdog policy",
-                raw_url
+                "Navigation to {raw_url} blocked by SecurityWatchdog policy"
             ));
         }
         Ok(())

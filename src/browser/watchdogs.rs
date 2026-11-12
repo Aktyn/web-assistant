@@ -1,3 +1,5 @@
+#![allow(clippy::missing_errors_doc)]
+
 pub mod captcha;
 pub mod crash;
 pub mod downloads;
@@ -33,11 +35,13 @@ pub struct BrowserWatchdogs {
 }
 
 impl BrowserWatchdogs {
+    #[must_use]
     pub fn new(client: CdpClient, download_dir: Option<PathBuf>) -> Self {
         let dl_dir = download_dir.unwrap_or_else(|| {
-            dirs_home()
-                .map(|h| h.join(".config/web-assistant/downloads"))
-                .unwrap_or_else(|| PathBuf::from("downloads"))
+            dirs_home().map_or_else(
+                || PathBuf::from("downloads"),
+                |h| h.join(".config/web-assistant/downloads"),
+            )
         });
 
         Self {
@@ -64,7 +68,7 @@ impl BrowserWatchdogs {
         let _ = self.captcha.handle_cdp_event(event).await;
         let _ = self.popups.handle_cdp_event(event).await;
         let _ = self.downloads.handle_cdp_event(event).await;
-        let _ = self.crash.handle_cdp_event(event).await;
+        let _ = self.crash.handle_cdp_event(event);
         Ok(())
     }
 

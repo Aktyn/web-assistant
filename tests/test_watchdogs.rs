@@ -16,8 +16,8 @@ use web_assistant::browser::watchdogs::{
 #[test]
 fn test_security_watchdog_exported_types() {
     let sec = SecurityWatchdog::new();
-    assert!(sec.allowed_domains.is_empty());
-    assert!(sec.blocked_domains.is_empty());
+    assert_eq!(sec.allowed_domains, [] as [std::string::String; 0]);
+    assert_eq!(sec.blocked_domains, [] as [std::string::String; 0]);
 }
 
 #[test]

@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
             handle.join().unwrap();
 
             for workflow in &core.workflows {
-                log::info!("Workflow: {:?}", workflow);
+                log::info!("Workflow: {workflow:?}");
             }
 
             return tui::render_tui(core);

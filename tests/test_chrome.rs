@@ -45,7 +45,10 @@ fn test_list_profiles_empty_and_created() {
     let path = temp.path();
 
     let initial = Chrome::list_profiles(path);
-    assert!(initial.is_empty());
+    assert_eq!(
+        initial,
+        [] as [web_assistant::browser::cdp::chrome::ChromeProfileInfo; 0]
+    );
 
     std::fs::create_dir(path.join("Default")).unwrap();
     std::fs::create_dir(path.join("Profile 1")).unwrap();

@@ -40,8 +40,7 @@ impl panel::Panel for WorkflowPanel {
             .to_string();
 
         Paragraph::new(format!(
-            "Workflows directory: \"{}\"\nSelect another directory or run the workflow creator",
-            directory_path
+            "Workflows directory: \"{directory_path}\"\nSelect another directory or run the workflow creator"
         ))
         .centered()
         .render(content_area.centered_vertically(Constraint::Length(2)), buf);
@@ -100,14 +99,14 @@ mod tests {
         panel.draw(area, &mut buf, true);
     }
 
-    /// handle_event never reads _terminal for the events we exercise. We
-    /// store an uninit'ed slot behind a OnceLock and return a raw address
-    /// that satisfies the &mut DefaultTerminal type without being deref'd.
-    fn _no_read_term() -> *mut DefaultTerminal {
+    /// `handle_event` never reads `_terminal` for the events we exercise. We
+    /// store an uninit'ed slot behind a `OnceLock` and return a raw address
+    /// that satisfies the &mut `DefaultTerminal` type without being deref'd.
+    fn no_read_term() -> *mut DefaultTerminal {
         use std::mem::MaybeUninit;
         static SLOT: std::sync::OnceLock<MaybeUninit<DefaultTerminal>> = std::sync::OnceLock::new();
         let slot = SLOT.get_or_init(MaybeUninit::uninit);
-        slot.as_ptr() as *mut DefaultTerminal
+        slot.as_ptr().cast_mut()
     }
 
     #[test]
@@ -115,7 +114,7 @@ mod tests {
         let core = Arc::new(RwLock::new(Core::default()));
         let mut panel = WorkflowPanel::new(core);
         let event = Event::Key(KeyCode::Up.into());
-        let result = panel.handle_event(&event, unsafe { &mut *_no_read_term() });
+        let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
         assert!(result.is_ok());
     }
 
@@ -129,7 +128,7 @@ mod tests {
             row: 0,
             modifiers: crossterm::event::KeyModifiers::NONE,
         });
-        let result = panel.handle_event(&event, unsafe { &mut *_no_read_term() });
+        let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
         assert!(result.is_ok());
     }
 

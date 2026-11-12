@@ -42,9 +42,7 @@ fn test_all_input_types_detection() {
         let vars = detect_variables_in_history(&history);
         assert!(
             vars.contains_key(expected_name),
-            "Expected variable {} for type {}",
-            expected_name,
-            input_type
+            "Expected variable {expected_name} for type {input_type}"
         );
         let var = vars.get(expected_name).unwrap();
         assert_eq!(var.original_value, val);
@@ -92,9 +90,7 @@ fn test_semantic_attributes_detection() {
         let vars = detect_variables_in_history(&history);
         assert!(
             vars.contains_key(expected_name),
-            "Expected {} for attr {}",
-            expected_name,
-            id_attr
+            "Expected {expected_name} for attr {id_attr}"
         );
     }
 }

@@ -1,3 +1,5 @@
+#![allow(clippy::missing_errors_doc)]
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -29,7 +31,7 @@ pub struct OriginEntry {
 }
 
 /// Full storage state combining cookies and origin entries
-/// Matches the format used by BrowserUse's Python `storage_state_watchdog.py`.
+/// Matches the format used by `BrowserUse`'s Python `storage_state_watchdog.py`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct StorageState {
     #[serde(default)]
@@ -45,6 +47,7 @@ pub struct StorageStateWatchdog {
 }
 
 impl StorageStateWatchdog {
+    #[must_use]
     pub fn new(client: CdpClient) -> Self {
         Self {
             client,
@@ -60,22 +63,6 @@ impl StorageStateWatchdog {
             client: CdpClient::new_test_client(),
             last_cookie_snapshot: Arc::new(Mutex::new(None)),
         }
-    }
-
-    /// Normalize cookie expiry values for compatibility with different formats.
-    ///
-    /// Python/BrowserUse normalizes session cookies (expires=0, -1, etc.) by omitting them
-    /// because CDP treats expires=0 as already-expired.
-    fn normalize_cookie_expiry(&self, mut cookie: Value) -> Value {
-        if let Some(obj) = cookie.as_object_mut()
-            && let Some(expires) = obj.get("expires")
-            && (expires.is_i64() || expires.is_f64())
-            && let Some(val) = expires.as_f64()
-            && val <= 0.0
-        {
-            obj.remove("expires");
-        }
-        cookie
     }
 
     async fn get_cookies_raw(&self) -> Result<Vec<Value>> {
@@ -95,17 +82,14 @@ impl StorageStateWatchdog {
 
     pub async fn get_cookies(&self) -> Result<Vec<Value>> {
         let cookies = self.get_cookies_raw().await?;
-        Ok(cookies
-            .into_iter()
-            .map(|c| self.normalize_cookie_expiry(c))
-            .collect())
+        Ok(cookies.into_iter().map(normalize_cookie_expiry).collect())
     }
 
     pub async fn set_cookies(&self, cookies: &[Value]) -> Result<()> {
         // Build normalized cookies array (normalize expiry on the fly)
         let normalized: Vec<Value> = cookies
             .iter()
-            .map(|c| self.normalize_cookie_expiry(c.clone()))
+            .map(|c| normalize_cookie_expiry(c.clone()))
             .collect();
 
         self.client
@@ -127,7 +111,7 @@ impl StorageStateWatchdog {
     /// Get current localStorage + sessionStorage content via JavaScript evaluation.
     /// Returns an array of origin entries with their storage contents.
     pub async fn get_all_storage_items(&self) -> Result<Vec<OriginEntry>> {
-        let js = r#"
+        let js = r"
         (() => {
             const entries = [];
             try {
@@ -149,7 +133,7 @@ impl StorageStateWatchdog {
             } catch (e) {}
             return entries;
         })()
-        "#;
+        ";
 
         let result = self.client.evaluate(js).await?;
         let items: Vec<OriginEntry> = serde_json::from_value(result).unwrap_or_default();
@@ -158,7 +142,7 @@ impl StorageStateWatchdog {
 
     /// Save full storage state (cookies + localStorage/sessionStorage) to file.
     ///
-    /// Format matches BrowserUse's Python JSON output for easy interoperability.
+    /// Format matches `BrowserUse`'s Python JSON output for easy interoperability.
     pub async fn save_storage_state(&self, path: impl AsRef<Path>) -> Result<()> {
         let cookies = self.get_cookies().await?;
         let origins = self.get_all_storage_items().await?;
@@ -198,10 +182,7 @@ impl StorageStateWatchdog {
                     .map(|item| {
                         let n = serde_json::to_string(&item.name).unwrap_or_default();
                         let v = serde_json::to_string(&item.value).unwrap_or_default();
-                        format!(
-                            "try {{ window.localStorage.setItem({}, {}); }} catch(e) {{}}",
-                            n, v
-                        )
+                        format!("try {{ window.localStorage.setItem({n}, {v}); }} catch(e) {{}}")
                     })
                     .collect();
                 scripts.push(format!(
@@ -217,10 +198,7 @@ impl StorageStateWatchdog {
                     .map(|item| {
                         let n = serde_json::to_string(&item.name).unwrap_or_default();
                         let v = serde_json::to_string(&item.value).unwrap_or_default();
-                        format!(
-                            "try {{ window.sessionStorage.setItem({}, {}); }} catch(e) {{}}",
-                            n, v
-                        )
+                        format!("try {{ window.sessionStorage.setItem({n}, {v}); }} catch(e) {{}}")
                     })
                     .collect();
                 scripts.push(format!(
@@ -252,15 +230,15 @@ impl StorageStateWatchdog {
                 let name = c
                     .get("name")
                     .and_then(|n| n.as_str())
-                    .map(|s| s.to_string())?;
+                    .map(std::string::ToString::to_string)?;
                 let domain = c
                     .get("domain")
                     .and_then(|d| d.as_str())
-                    .map(|s| s.to_string())?;
+                    .map(std::string::ToString::to_string)?;
                 let path = c
                     .get("path")
                     .and_then(|p| p.as_str())
-                    .map(|s| s.to_string())?;
+                    .map(std::string::ToString::to_string)?;
                 Some((name, domain, path))
             })
             .collect();
@@ -272,17 +250,14 @@ impl StorageStateWatchdog {
     pub async fn has_cookie_changes(&self) -> Result<bool> {
         let current = self.cookie_fingerprint().await?;
         let mut guard = self.last_cookie_snapshot.lock().await;
-        match guard.as_ref() {
-            Some(prev) => {
-                let changed = prev != &current;
-                *guard = Some(current);
-                Ok(changed)
-            }
-            None => {
-                // First call — just record current state
-                *guard = Some(current);
-                Ok(false)
-            }
+        if let Some(prev) = guard.as_ref() {
+            let changed = prev != &current;
+            *guard = Some(current);
+            Ok(changed)
+        } else {
+            // First call — just record current state
+            *guard = Some(current);
+            Ok(false)
         }
     }
 
@@ -296,9 +271,21 @@ impl StorageStateWatchdog {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+/// Normalize cookie expiry values for compatibility with different formats.
+///
+/// Python/BrowserUse normalizes session cookies (expires=0, -1, etc.) by omitting them
+/// because CDP treats expires=0 as already-expired.
+fn normalize_cookie_expiry(mut cookie: Value) -> Value {
+    if let Some(obj) = cookie.as_object_mut()
+        && let Some(expires) = obj.get("expires")
+        && (expires.is_i64() || expires.is_f64())
+        && let Some(val) = expires.as_f64()
+        && val <= 0.0
+    {
+        obj.remove("expires");
+    }
+    cookie
+}
 
 #[cfg(test)]
 mod tests {
@@ -362,11 +349,11 @@ mod tests {
     #[test]
     fn test_cookie_expiry_normalization_session() {
         // Session cookies with expires=0 or -1 should be stripped
-        // We use the default constructor which has no real client — normalize_cookie_expiry is pure.
-        let wd = StorageStateWatchdog::new_test();
+        // normalize_cookie_expiry is pure; we only need the type for type-checking.
+        let _wd = StorageStateWatchdog::new_test();
 
         let mut cookie = serde_json::json!({"name":"a","value":"b","domain":"x","expires":0});
-        cookie = wd.normalize_cookie_expiry(cookie);
+        cookie = normalize_cookie_expiry(cookie);
         assert!(
             cookie.get("expires").is_none(),
             "expires=0 should be removed"
@@ -374,8 +361,8 @@ mod tests {
 
         // Future-expiry cookie should be kept
         let mut cookie2 =
-            serde_json::json!({"name":"a","value":"b","domain":"x","expires":9999999999.0});
-        cookie2 = wd.normalize_cookie_expiry(cookie2);
+            serde_json::json!({"name":"a","value":"b","domain":"x","expires":9_999_999_999.0});
+        cookie2 = normalize_cookie_expiry(cookie2);
         assert!(
             cookie2.get("expires").is_some(),
             "future expires should be kept"
@@ -383,7 +370,7 @@ mod tests {
 
         // Negative expiry should be stripped
         let mut cookie3 = serde_json::json!({"name":"a","value":"b","domain":"x","expires":-1});
-        cookie3 = wd.normalize_cookie_expiry(cookie3);
+        cookie3 = normalize_cookie_expiry(cookie3);
         assert!(
             cookie3.get("expires").is_none(),
             "negative expires should be removed"

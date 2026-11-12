@@ -38,3 +38,5 @@ strip = true
 [lints.clippy]
 print_stdout = "deny"
 print_stderr = "deny"
+unused_self = "warn"
+pedantic = "warn"

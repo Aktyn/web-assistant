@@ -50,22 +50,22 @@ mod tests {
         assert!(any.is::<EmptyView>());
     }
 
-    /// EmptyView::draw / handle_event are marked unreachable. We verify that
+    /// `EmptyView::draw` / `handle_event` are marked unreachable. We verify that
     /// the methods exist on the type (compile check) without invoking them,
     /// since an unconditional panic aborts the process and cannot be caught
-    /// by #[should_panic].
+    /// by #[`should_panic`].
     #[test]
     fn test_empty_view_methods_compile_and_are_unreachable() {
         let mut v = EmptyView;
         // These calls would panic at runtime (unreachable!), so we only verify
         // the trait impl is present by checking the method pointers compile.
-        let _draw: fn(&mut EmptyView, ratatui::layout::Rect, &mut ratatui::buffer::Buffer) =
+        let draw: fn(&mut EmptyView, ratatui::layout::Rect, &mut ratatui::buffer::Buffer) =
             |_, _, _| unreachable!();
-        let _handle: fn(
+        let handle: fn(
             &mut EmptyView,
             &crossterm::event::Event,
             &mut ratatui::DefaultTerminal,
         ) -> anyhow::Result<()> = |_, _, _| unreachable!();
-        let _ = (&mut v, _draw, _handle);
+        let _ = (&mut v, draw, handle);
     }
 }

@@ -26,6 +26,7 @@ impl Default for SystemPrompt {
 }
 
 impl SystemPrompt {
+    #[must_use]
     pub fn new(mode: PromptMode) -> Self {
         Self {
             mode,
@@ -35,10 +36,12 @@ impl SystemPrompt {
         }
     }
 
+    #[must_use]
     pub fn builder() -> SystemPromptBuilder {
         SystemPromptBuilder::default()
     }
 
+    #[must_use]
     pub fn get_system_message(&self) -> String {
         if let Some(ref override_msg) = self.override_system_message {
             return override_msg.clone();
@@ -168,26 +171,31 @@ pub struct SystemPromptBuilder {
 }
 
 impl SystemPromptBuilder {
+    #[must_use]
     pub fn mode(mut self, mode: PromptMode) -> Self {
         self.mode = mode;
         self
     }
 
+    #[must_use]
     pub fn max_actions_per_step(mut self, max: usize) -> Self {
         self.max_actions_per_step = Some(max);
         self
     }
 
+    #[must_use]
     pub fn override_system_message(mut self, msg: impl Into<String>) -> Self {
         self.override_system_message = Some(msg.into());
         self
     }
 
+    #[must_use]
     pub fn extend_system_message(mut self, msg: impl Into<String>) -> Self {
         self.extend_system_message = Some(msg.into());
         self
     }
 
+    #[must_use]
     pub fn build(self) -> SystemPrompt {
         SystemPrompt {
             mode: self.mode,
@@ -198,6 +206,7 @@ impl SystemPromptBuilder {
     }
 }
 
+#[must_use]
 pub fn get_system_prompt() -> String {
     SystemPrompt::default().get_system_message()
 }
@@ -217,8 +226,8 @@ mod tests {
         for mode in modes {
             let prompt = SystemPrompt::new(mode);
             let msg = prompt.get_system_message();
-            assert!(!msg.is_empty(), "Mode {:?} produced empty message", mode);
-            assert!(msg.contains("JSON"), "Mode {:?} should mention JSON", mode);
+            assert!(!msg.is_empty(), "Mode {mode:?} produced empty message");
+            assert!(msg.contains("JSON"), "Mode {mode:?} should mention JSON");
         }
     }
 

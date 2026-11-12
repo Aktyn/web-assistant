@@ -58,6 +58,7 @@ impl DownloadsWatchdog {
         }
     }
 
+    #[must_use]
     pub fn download_dir(&self) -> &Path {
         &self.download_dir
     }
@@ -107,9 +108,8 @@ impl DownloadsWatchdog {
     }
 
     pub async fn handle_cdp_event(&self, event: &Value) -> Result<bool> {
-        let method = match event.get("method").and_then(|m| m.as_str()) {
-            Some(m) => m,
-            None => return Ok(false),
+        let Some(method) = event.get("method").and_then(|m| m.as_str()) else {
+            return Ok(false);
         };
 
         match method {
@@ -157,11 +157,11 @@ impl DownloadsWatchdog {
                 let guid = params.get("guid").and_then(|v| v.as_str()).unwrap_or("");
                 let total_bytes = params
                     .get("totalBytes")
-                    .and_then(|v| v.as_u64())
+                    .and_then(serde_json::Value::as_u64)
                     .unwrap_or(0);
                 let received_bytes = params
                     .get("receivedBytes")
-                    .and_then(|v| v.as_u64())
+                    .and_then(serde_json::Value::as_u64)
                     .unwrap_or(0);
                 let state_str = params.get("state").and_then(|v| v.as_str()).unwrap_or("");
 
@@ -227,6 +227,7 @@ impl DownloadsWatchdog {
         lock.values().cloned().collect()
     }
 
+    #[must_use]
     pub fn download_dir_path(&self) -> &PathBuf {
         &self.download_dir
     }

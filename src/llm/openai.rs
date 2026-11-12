@@ -1,3 +1,5 @@
+#![allow(clippy::missing_errors_doc)]
+
 use anyhow::{Context, Result, anyhow};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -60,6 +62,7 @@ impl ChatOpenAI {
         }
     }
 
+    #[must_use]
     pub fn builder() -> ChatOpenAIBuilder {
         ChatOpenAIBuilder::default()
     }
@@ -125,26 +128,31 @@ pub struct ChatOpenAIBuilder {
 }
 
 impl ChatOpenAIBuilder {
+    #[must_use]
     pub fn model(mut self, model: impl Into<String>) -> Self {
         self.model = Some(model.into());
         self
     }
 
+    #[must_use]
     pub fn api_key(mut self, api_key: impl Into<String>) -> Self {
         self.api_key = Some(api_key.into());
         self
     }
 
+    #[must_use]
     pub fn base_url(mut self, base_url: impl Into<String>) -> Self {
         self.base_url = Some(base_url.into());
         self
     }
 
+    #[must_use]
     pub fn temperature(mut self, temperature: f32) -> Self {
         self.temperature = Some(temperature);
         self
     }
 
+    #[must_use]
     pub fn max_completion_tokens(mut self, tokens: u32) -> Self {
         self.max_completion_tokens = Some(tokens);
         self

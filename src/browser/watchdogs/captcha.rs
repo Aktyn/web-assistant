@@ -76,11 +76,11 @@ impl<'de> Deserialize<'de> for CaptchaInfo {
 }
 
 impl CaptchaInfo {
+    #[must_use]
     pub fn now() -> Self {
         let started_at_epoch = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs_f64())
-            .unwrap_or(0.0);
+            .map_or(0.0, |d| d.as_secs_f64());
         Self {
             vendor: String::new(),
             url: String::new(),
@@ -101,6 +101,7 @@ pub struct CaptchaWatchdog {
 }
 
 impl CaptchaWatchdog {
+    #[must_use]
     pub fn new(client: CdpClient) -> Self {
         Self {
             client,
@@ -112,19 +113,20 @@ impl CaptchaWatchdog {
         }
     }
 
+    #[must_use]
     pub fn is_solving(&self) -> bool {
         self.solving.load(Ordering::SeqCst)
     }
 
+    #[must_use]
     pub fn was_detected(&self) -> bool {
         self.detected.load(Ordering::SeqCst)
     }
 
-    /// Handles CDP events from BrowserUse captcha solving proxy (BrowserUse.captchaSolverStarted / Finished)
+    /// Handles CDP events from `BrowserUse` captcha solving proxy (BrowserUse.captchaSolverStarted / Finished)
     pub async fn handle_cdp_event(&self, event: &Value) -> Result<bool> {
-        let method = match event.get("method").and_then(|m| m.as_str()) {
-            Some(m) => m,
-            None => return Ok(false),
+        let Some(method) = event.get("method").and_then(|m| m.as_str()) else {
+            return Ok(false);
         };
 
         match method {
@@ -157,8 +159,7 @@ impl CaptchaWatchdog {
                     target_id,
                     started_at_epoch: SystemTime::now()
                         .duration_since(SystemTime::UNIX_EPOCH)
-                        .map(|d| d.as_secs_f64())
-                        .unwrap_or(0.0),
+                        .map_or(0.0, |d| d.as_secs_f64()),
                 });
                 Ok(true)
             }
@@ -166,11 +167,11 @@ impl CaptchaWatchdog {
                 let params = event.get("params").cloned().unwrap_or(Value::Null);
                 let success = params
                     .get("success")
-                    .and_then(|v| v.as_bool())
+                    .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false);
                 let duration_ms = params
                     .get("durationMs")
-                    .and_then(|v| v.as_u64())
+                    .and_then(serde_json::Value::as_u64)
                     .unwrap_or(0);
                 let vendor = params
                     .get("vendor")
@@ -226,12 +227,8 @@ impl CaptchaWatchdog {
 
         let vendor = info_clone
             .as_ref()
-            .map(|i| i.vendor.clone())
-            .unwrap_or_else(|| "unknown".into());
-        let url = info_clone
-            .as_ref()
-            .map(|i| i.url.clone())
-            .unwrap_or_default();
+            .map_or_else(|| "unknown".into(), |i| i.vendor.clone());
+        let url = info_clone.as_ref().map_or_default(|i| i.url.clone());
 
         info!(
             "⏳ Waiting for {} captcha to be solved on {} (timeout={:?})...",
@@ -239,18 +236,18 @@ impl CaptchaWatchdog {
         );
 
         tokio::select! {
-            _ = self.notify_finished.notified() => {
+            () = self.notify_finished.notified() => {
                 let lock = self.last_result.lock().await;
                 lock.clone()
             }
-            _ = tokio::time::sleep(timeout) => {
+            () = tokio::time::sleep(timeout) => {
                 warn!("⏰ Captcha wait timed out after {:?} for {} on {}", timeout, vendor, url);
                 self.solving.store(false, Ordering::SeqCst);
                 Some(CaptchaWaitResult {
                     waited: true,
                     vendor,
                     url,
-                    duration_ms: timeout.as_millis() as u64,
+                    duration_ms: u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX),
                     result: CaptchaResultType::Timeout,
                 })
             }
@@ -384,14 +381,14 @@ mod tests {
             vendor: "cloudflare".into(),
             url: "https://example.com".into(),
             target_id: "abc-123".into(),
-            started_at_epoch: 1700000000.0,
+            started_at_epoch: 1_700_000_000.0,
         };
         let json = serde_json::to_string(&info).unwrap();
         assert!(json.contains("\"cloudflare\""));
         assert!(json.contains("\"started_at_epoch\""));
         let restored: CaptchaInfo = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.vendor, "cloudflare");
-        assert_eq!(restored.started_at_epoch, 1700000000.0);
+        assert_eq!(restored.started_at_epoch, 1_700_000_000.0);
     }
 
     #[test]

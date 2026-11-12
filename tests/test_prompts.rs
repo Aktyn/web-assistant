@@ -11,7 +11,7 @@ fn test_all_system_prompt_modes_non_empty() {
     for mode in modes {
         let sp = SystemPrompt::new(mode);
         let content = sp.get_system_message();
-        assert!(!content.is_empty(), "Mode {:?} should not be empty", mode);
+        assert!(!content.is_empty(), "Mode {mode:?} should not be empty");
         assert!(content.contains("JSON"));
     }
 }

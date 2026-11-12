@@ -1,3 +1,5 @@
+#![allow(clippy::missing_errors_doc)]
+
 pub mod judge;
 pub mod prompts;
 mod variable_detector;
@@ -50,21 +52,25 @@ impl Agent {
         }
     }
 
+    #[must_use]
     pub fn max_steps(mut self, steps: usize) -> Self {
         self.max_steps = steps;
         self
     }
 
+    #[must_use]
     pub fn prompt_mode(mut self, mode: PromptMode) -> Self {
         self.system_prompt.mode = mode;
         self
     }
 
+    #[must_use]
     pub fn system_prompt(mut self, prompt: SystemPrompt) -> Self {
         self.system_prompt = prompt;
         self
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn run(&mut self) -> Result<AgentHistoryList> {
         info!("Starting agent task: {}", self.task);
         self.browser.start().await?;
@@ -106,7 +112,7 @@ impl Agent {
                     Action::Navigate { url } => {
                         info!("Navigating to: {}", url);
                         match self.browser.navigate(url).await {
-                            Ok(_) => action_results
+                            Ok(()) => action_results
                                 .push(ActionResult::success(format!("Navigated to {url}"))),
                             Err(e) => action_results
                                 .push(ActionResult::error(format!("Navigation failed: {e}"))),
@@ -122,7 +128,7 @@ impl Agent {
                             });
                         }
                         match self.browser.click(*index).await {
-                            Ok(_) => action_results
+                            Ok(()) => action_results
                                 .push(ActionResult::success(format!("Clicked element [{index}]"))),
                             Err(e) => action_results
                                 .push(ActionResult::error(format!("Click failed: {e}"))),
@@ -138,7 +144,7 @@ impl Agent {
                             });
                         }
                         match self.browser.input(*index, text).await {
-                            Ok(_) => action_results.push(ActionResult::success(format!(
+                            Ok(()) => action_results.push(ActionResult::success(format!(
                                 "Inputted text into element [{index}]"
                             ))),
                             Err(e) => action_results
@@ -148,7 +154,7 @@ impl Agent {
                     Action::Scroll { amount } => {
                         info!("Scrolling by {}", amount);
                         match self.browser.scroll(*amount).await {
-                            Ok(_) => action_results
+                            Ok(()) => action_results
                                 .push(ActionResult::success(format!("Scrolled by {amount}"))),
                             Err(e) => action_results
                                 .push(ActionResult::error(format!("Scroll failed: {e}"))),
@@ -156,7 +162,7 @@ impl Agent {
                     }
                     Action::Wait { seconds } => {
                         info!("Waiting for {} seconds", seconds);
-                        let _ = self.browser.wait(*seconds as u64).await;
+                        let _ = self.browser.wait(u64::from(*seconds)).await;
                         action_results
                             .push(ActionResult::success(format!("Waited {seconds} seconds")));
                     }
@@ -224,9 +230,8 @@ impl Agent {
         let mut results = Vec::new();
 
         for (i, step) in history.history.iter().enumerate() {
-            let output = match &step.model_output {
-                Some(out) => out,
-                None => continue,
+            let Some(output) = &step.model_output else {
+                continue;
             };
 
             info!("Replaying step {}/{}", i + 1, history.history.len());
@@ -235,33 +240,34 @@ impl Agent {
                     Action::Navigate { url } => {
                         info!("Replay: Navigating to {}", url);
                         match self.browser.navigate(url).await {
-                            Ok(_) => {
-                                results.push(ActionResult::success(format!("Navigated to {url}")))
+                            Ok(()) => {
+                                results.push(ActionResult::success(format!("Navigated to {url}")));
                             }
                             Err(e) => {
-                                results.push(ActionResult::error(format!("Navigation failed: {e}")))
+                                results
+                                    .push(ActionResult::error(format!("Navigation failed: {e}")));
                             }
                         }
                     }
                     Action::Click { index } => {
                         info!("Replay: Clicking element [{}]", index);
                         match self.browser.click(*index).await {
-                            Ok(_) => {
-                                results.push(ActionResult::success(format!("Clicked [{index}]")))
+                            Ok(()) => {
+                                results.push(ActionResult::success(format!("Clicked [{index}]")));
                             }
                             Err(e) => {
-                                results.push(ActionResult::error(format!("Click failed: {e}")))
+                                results.push(ActionResult::error(format!("Click failed: {e}")));
                             }
                         }
                     }
                     Action::Input { index, text } => {
                         info!("Replay: Inputting [{}] -> {}", index, text);
                         match self.browser.input(*index, text).await {
-                            Ok(_) => results.push(ActionResult::success(format!(
+                            Ok(()) => results.push(ActionResult::success(format!(
                                 "Inputted text into [{index}]"
                             ))),
                             Err(e) => {
-                                results.push(ActionResult::error(format!("Input failed: {e}")))
+                                results.push(ActionResult::error(format!("Input failed: {e}")));
                             }
                         }
                     }
@@ -270,7 +276,7 @@ impl Agent {
                         results.push(ActionResult::success(format!("Scrolled {amount}")));
                     }
                     Action::Wait { seconds } => {
-                        let _ = self.browser.wait(*seconds as u64).await;
+                        let _ = self.browser.wait(u64::from(*seconds)).await;
                         results.push(ActionResult::success(format!("Waited {seconds}s")));
                     }
                     Action::Extract { query } => {
@@ -305,22 +311,22 @@ impl Agent {
 }
 
 pub fn parse_agent_output(raw_text: &str) -> Result<AgentOutput> {
-    let clean_json = extract_json_str(raw_text)?;
+    let clean_json = extract_json_str(raw_text);
     let val: serde_json::Value = serde_json::from_str(&clean_json)
         .with_context(|| format!("Failed to parse JSON from:\n{clean_json}"))?;
 
     let thought = val
         .get("thought")
         .and_then(|t| t.as_str())
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
     let memory = val
         .get("memory")
         .and_then(|t| t.as_str())
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
     let next_goal = val
         .get("next_goal")
         .and_then(|t| t.as_str())
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
 
     let mut actions = Vec::new();
 
@@ -358,28 +364,28 @@ pub fn parse_agent_output(raw_text: &str) -> Result<AgentOutput> {
     })
 }
 
-fn extract_json_str(raw: &str) -> Result<String> {
+fn extract_json_str(raw: &str) -> String {
     let trimmed = raw.trim();
 
     if let Some(start_idx) = trimmed.find("```json") {
         let after_start = &trimmed[start_idx + 7..];
         if let Some(end_idx) = after_start.find("```") {
-            return Ok(after_start[..end_idx].trim().to_string());
+            return after_start[..end_idx].trim().to_string();
         }
     } else if let Some(start_idx) = trimmed.find("```") {
         let after_start = &trimmed[start_idx + 3..];
         if let Some(end_idx) = after_start.find("```") {
-            return Ok(after_start[..end_idx].trim().to_string());
+            return after_start[..end_idx].trim().to_string();
         }
     }
 
     if let (Some(first_brace), Some(last_brace)) = (trimmed.find('{'), trimmed.rfind('}'))
         && first_brace < last_brace
     {
-        return Ok(trimmed[first_brace..=last_brace].to_string());
+        return trimmed[first_brace..=last_brace].to_string();
     }
 
-    Ok(trimmed.to_string())
+    trimmed.to_string()
 }
 
 #[cfg(test)]
@@ -405,7 +411,7 @@ mod tests {
         assert_eq!(output.action.len(), 1);
         match &output.action[0] {
             Action::Navigate { url } => {
-                assert_eq!(url, "https://github.com/browser-use/browser-use")
+                assert_eq!(url, "https://github.com/browser-use/browser-use");
             }
             _ => panic!("Expected Navigate action"),
         }
@@ -519,28 +525,28 @@ mod tests {
     #[test]
     fn test_extract_json_str_plain_json() {
         let raw = r#"{"key": "value"}"#;
-        let result = extract_json_str(raw).unwrap();
+        let result = extract_json_str(raw);
         assert_eq!(result, "{\"key\": \"value\"}");
     }
 
     #[test]
     fn test_extract_json_str_with_codeblock() {
         let raw = "```json\n{\"key\": \"value\"}\n```";
-        let result = extract_json_str(raw).unwrap();
+        let result = extract_json_str(raw);
         assert_eq!(result, "{\"key\": \"value\"}");
     }
 
     #[test]
     fn test_extract_json_str_with_text_before_json() {
         let raw = "Some text\n{\"key\": \"value\"}";
-        let result = extract_json_str(raw).unwrap();
+        let result = extract_json_str(raw);
         assert_eq!(result, "{\"key\": \"value\"}");
     }
 
     #[test]
     fn test_extract_json_str_returns_trimmed() {
         let raw = "  \n  {\"key\": \"value\"}  \n  ";
-        let result = extract_json_str(raw).unwrap();
+        let result = extract_json_str(raw);
         assert_eq!(result, "{\"key\": \"value\"}");
     }
 
@@ -592,7 +598,7 @@ mod tests {
 
         let llm = ChatOpenAI::new("auto");
         assert_eq!(llm.model, "auto");
-        assert!(llm.api_key.is_empty());
+        assert_eq!(llm.api_key, "");
         assert_eq!(llm.base_url, "https://api.openai.com/v1");
         assert_eq!(llm.temperature, Some(0.2));
         assert_eq!(llm.max_completion_tokens, Some(4096));

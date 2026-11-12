@@ -99,6 +99,7 @@ impl Chrome {
     }
 
     /// Get user data directory for Chrome
+    #[must_use]
     pub fn get_default_user_data_dir(executable: Option<&Path>) -> Option<PathBuf> {
         let home = dirs_home()?;
 
@@ -171,7 +172,8 @@ impl Chrome {
         Ok(dedicated_dir)
     }
 
-    /// Check if the user data directory has an active SingletonLock
+    /// Check if the user data directory has an active `SingletonLock`
+    #[must_use]
     pub fn is_user_data_dir_locked(user_data_dir: &Path) -> bool {
         let lock_file = user_data_dir.join("SingletonLock");
         if !lock_file.exists() && fs::symlink_metadata(&lock_file).is_err() {
@@ -195,6 +197,7 @@ impl Chrome {
     }
 
     /// List available profiles inside user data directory
+    #[must_use]
     pub fn list_profiles(user_data_dir: &Path) -> Vec<ChromeProfileInfo> {
         let mut profiles = Vec::new();
         if !user_data_dir.is_dir() {
@@ -224,6 +227,7 @@ impl Chrome {
     }
 
     /// Standard Chrome arguments optimized for automation and CDP
+    #[must_use]
     pub fn default_args(port: u16, user_data_dir: &Path, headless: bool) -> Vec<String> {
         let mut args = vec![
             format!("--remote-debugging-port={port}"),
@@ -295,7 +299,7 @@ mod tests {
     fn test_list_profiles_empty_dir() {
         let tmp = TempDir::new().unwrap();
         let profiles = Chrome::list_profiles(tmp.path());
-        assert!(profiles.is_empty());
+        assert_eq!(profiles, [] as [ChromeProfileInfo; 0]);
     }
 
     #[test]
@@ -319,7 +323,7 @@ mod tests {
     #[test]
     fn test_default_args_contains_required_flags() {
         let args = Chrome::default_args(9222, Path::new("/tmp"), true);
-        let args_str: Vec<String> = args.iter().cloned().collect();
+        let args_str: Vec<String> = args.iter().map(ToString::to_string).collect();
         let combined = args_str.join(" ");
         assert!(combined.contains("--remote-debugging-port=9222"));
         assert!(combined.contains("--headless=new"));
@@ -330,7 +334,7 @@ mod tests {
     #[test]
     fn test_default_args_non_headless() {
         let args = Chrome::default_args(9223, Path::new("/tmp"), false);
-        let args_str: Vec<String> = args.iter().cloned().collect();
+        let args_str: Vec<String> = args.iter().map(ToString::to_string).collect();
         let combined = args_str.join(" ");
         assert!(!combined.contains("--headless"));
     }

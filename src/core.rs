@@ -16,12 +16,11 @@ impl Core {
     pub async fn new(cli: Cli) -> Self {
         let workflows_directory = cli.workflows_path.expect("workflows path is required");
 
-        if workflows_directory.exists() && !workflows_directory.is_dir() {
-            panic!(
-                "Workflows path already exists but is not a directory: \"{}\"",
-                workflows_directory.display()
-            );
-        }
+        assert!(
+            !workflows_directory.exists() || workflows_directory.is_dir(),
+            "Workflows path already exists but is not a directory: \"{}\"",
+            workflows_directory.display()
+        );
 
         let json_files = read_json_files(&workflows_directory).await;
         let mut workflows = Vec::with_capacity(json_files.len());
@@ -46,7 +45,7 @@ async fn read_json_files(directory_path: &PathBuf) -> Vec<DirEntry> {
     let mut dir = match tokio::fs::read_dir(directory_path).await {
         Ok(dir) => dir,
         Err(e) => {
-            log::error!("error reading workflows directory: {}", e);
+            log::error!("error reading workflows directory: {e}");
             return vec![];
         }
     };
@@ -61,7 +60,7 @@ async fn read_json_files(directory_path: &PathBuf) -> Vec<DirEntry> {
             }
             Ok(None) => break,
             Err(e) => {
-                log::error!("error reading directory entry: {}", e);
+                log::error!("error reading directory entry: {e}");
             }
         }
     }
@@ -117,7 +116,7 @@ mod tests {
             workflow::WorkflowState::Data(data) => {
                 assert_eq!(data.name, "My Workflow");
             }
-            _ => panic!("Expected valid workflow data"),
+            workflow::WorkflowState::Error(_) => panic!("Expected valid workflow data"),
         }
     }
 
@@ -159,7 +158,7 @@ mod tests {
         assert_eq!(errors.len(), 1);
         match &valid[0].state {
             workflow::WorkflowState::Data(data) => assert_eq!(data.name, "Good"),
-            _ => unreachable!(),
+            workflow::WorkflowState::Error(_) => unreachable!(),
         }
     }
 

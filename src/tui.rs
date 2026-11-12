@@ -48,7 +48,8 @@ impl TuiApp {
     fn run(mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         self.is_running = true;
 
-        self.clear(terminal)?;
+        #[cfg(debug_assertions)]
+        clear_terminal(terminal)?;
 
         while self.is_running {
             self.update(terminal);
@@ -61,33 +62,8 @@ impl TuiApp {
         Ok(())
     }
 
-    #[cfg(debug_assertions)]
-    fn clear(&self, terminal: &mut DefaultTerminal) -> Result<()> {
-        terminal
-            .draw(|frame| {
-                let buffer = frame.buffer_mut();
-                buffer.set_style(*buffer.area(), palette::FOREGROUND);
-            })
-            .context("failed to clear frame")?;
-        Ok(())
-    }
-
-    /// Apart from waiting for the next event, it also checks if the terminal size has changed
-    fn smart_event_poll(&mut self, terminal: &mut DefaultTerminal) -> Result<bool> {
-        let start_size = terminal.size().unwrap_or(Size::ZERO);
-        loop {
-            if event::poll(Duration::from_secs(1))? {
-                return Ok(false);
-            } else {
-                if start_size != terminal.size().unwrap_or(Size::ZERO) {
-                    return Ok(true);
-                }
-            }
-        }
-    }
-
     fn handle_events(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
-        if self.smart_event_poll(terminal)? {
+        if smart_event_poll(terminal)? {
             terminal.autoresize()?;
             return Ok(());
         }
@@ -157,7 +133,7 @@ impl TuiApp {
 
         let main_area = if self.show_logs && area.height > consts::LOGS_PANEL_HEIGHT_REQUIREMENT {
             let [main_area, log_area] = area.layout(&Layout::vertical([Fill(1), Length(12)]));
-            self.render_logs(log_area, buf);
+            render_logs(log_area, buf);
 
             main_area
         } else {
@@ -166,22 +142,46 @@ impl TuiApp {
 
         self.view.draw(main_area, buf);
     }
+}
 
-    fn render_logs(&self, area: Rect, buf: &mut Buffer) {
-        let log_widget = TuiLoggerWidget::default()
-            .output_timestamp(None)
-            // .output_level(None)
-            .output_file(false)
-            .output_line(false)
-            .output_target(false)
-            .block(
-                Block::default()
-                    .title(Line::from(" Logs (press L to toggle) ").centered())
-                    .borders(Borders::TOP)
-                    .border_style(palette::SEPARATOR_STYLE),
-            )
-            .style(palette::STYLE);
-        log_widget.render(area, buf);
+#[cfg(debug_assertions)]
+fn clear_terminal(terminal: &mut DefaultTerminal) -> Result<()> {
+    terminal
+        .draw(|frame| {
+            let buffer = frame.buffer_mut();
+            buffer.set_style(*buffer.area(), palette::FOREGROUND);
+        })
+        .context("failed to clear frame")?;
+    Ok(())
+}
+
+fn render_logs(area: Rect, buf: &mut Buffer) {
+    let log_widget = TuiLoggerWidget::default()
+        .output_timestamp(None)
+        // .output_level(None)
+        .output_file(false)
+        .output_line(false)
+        .output_target(false)
+        .block(
+            Block::default()
+                .title(Line::from(" Logs (press L to toggle) ").centered())
+                .borders(Borders::TOP)
+                .border_style(palette::SEPARATOR_STYLE),
+        )
+        .style(palette::STYLE);
+    log_widget.render(area, buf);
+}
+
+/// Apart from waiting for the next event, it also checks if the terminal size has changed
+fn smart_event_poll(terminal: &mut DefaultTerminal) -> Result<bool> {
+    let start_size = terminal.size().unwrap_or(Size::ZERO);
+    loop {
+        if event::poll(Duration::from_secs(1))? {
+            return Ok(false);
+        }
+        if start_size != terminal.size().unwrap_or(Size::ZERO) {
+            return Ok(true);
+        }
     }
 }
 
@@ -221,9 +221,10 @@ mod tests {
     fn test_render_logs_no_panic() {
         let core = Core::default();
         let app = TuiApp::new(core);
+        let _ = app;
         let area = Rect::new(0, 0, 80, 12);
         let mut buf = Buffer::empty(area);
-        app.render_logs(area, &mut buf);
+        render_logs(area, &mut buf);
         // Succeeded without panicking.
     }
 
@@ -235,9 +236,9 @@ mod tests {
     #[test]
     fn test_palette_colors_are_valid() {
         // Verify constants resolve without panicking
-        let _bg = palette::BACKGROUND;
-        let _fg = palette::FOREGROUND;
-        let _accent = palette::ACCENT;
-        let _err_fg = palette::ERROR_FOREGROUND;
+        let _ = palette::BACKGROUND;
+        let _ = palette::FOREGROUND;
+        let _ = palette::ACCENT;
+        let _ = palette::ERROR_FOREGROUND;
     }
 }

@@ -82,7 +82,7 @@ impl panel::Panel for WorkflowsSidebar {
         if let Some(key) = event.as_key_event() {
             match key.code {
                 KeyCode::Up | KeyCode::Char('k') => {
-                    macros::move_selection!(self.list_state, Previous)
+                    macros::move_selection!(self.list_state, Previous);
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
                     let workflows_count = macros::workflows_count!(self.core);
@@ -105,13 +105,13 @@ mod tests {
     use crossterm::event::{Event, KeyCode};
     use std::mem::MaybeUninit;
 
-    /// handle_event never reads _terminal for the events we exercise. We
-    /// store an uninit'ed slot behind a OnceLock and return a raw address
-    /// that satisfies the &mut DefaultTerminal type without being deref'd.
-    fn _no_read_term() -> *mut DefaultTerminal {
+    /// `handle_event` never reads `_terminal` for the events we exercise. We
+    /// store an uninit'ed slot behind a `OnceLock` and return a raw address
+    /// that satisfies the &mut `DefaultTerminal` type without being deref'd.
+    fn no_read_term() -> *mut DefaultTerminal {
         static SLOT: std::sync::OnceLock<MaybeUninit<DefaultTerminal>> = std::sync::OnceLock::new();
         let slot = SLOT.get_or_init(MaybeUninit::uninit);
-        slot.as_ptr() as *mut DefaultTerminal
+        slot.as_ptr().cast_mut()
     }
 
     #[test]
@@ -151,7 +151,7 @@ mod tests {
         sidebar.list_state.select(Some(1));
         let key_event = Event::Key(KeyCode::Up.into());
         sidebar
-            .handle_event(&key_event, unsafe { &mut *_no_read_term() })
+            .handle_event(&key_event, unsafe { &mut *no_read_term() })
             .unwrap();
         assert_eq!(sidebar.list_state.selected(), Some(0));
     }
@@ -163,7 +163,7 @@ mod tests {
         sidebar.list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Down.into());
         sidebar
-            .handle_event(&key_event, unsafe { &mut *_no_read_term() })
+            .handle_event(&key_event, unsafe { &mut *no_read_term() })
             .unwrap();
         assert_eq!(sidebar.list_state.selected(), None);
     }
@@ -175,7 +175,7 @@ mod tests {
         sidebar.list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Char('j').into());
         sidebar
-            .handle_event(&key_event, unsafe { &mut *_no_read_term() })
+            .handle_event(&key_event, unsafe { &mut *no_read_term() })
             .unwrap();
         assert_eq!(sidebar.list_state.selected(), None);
     }
@@ -187,7 +187,7 @@ mod tests {
         sidebar.list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Char('k').into());
         sidebar
-            .handle_event(&key_event, unsafe { &mut *_no_read_term() })
+            .handle_event(&key_event, unsafe { &mut *no_read_term() })
             .unwrap();
         assert_eq!(sidebar.list_state.selected(), Some(0));
     }
@@ -202,7 +202,7 @@ mod tests {
             row: 0,
             modifiers: crossterm::event::KeyModifiers::NONE,
         });
-        let result = sidebar.handle_event(&mouse_event, unsafe { &mut *_no_read_term() });
+        let result = sidebar.handle_event(&mouse_event, unsafe { &mut *no_read_term() });
         assert!(result.is_ok());
     }
 }

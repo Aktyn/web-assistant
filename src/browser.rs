@@ -1,3 +1,5 @@
+#![allow(clippy::missing_errors_doc)]
+
 pub mod cdp;
 mod dom;
 pub mod watchdogs;
@@ -29,6 +31,7 @@ pub struct Browser {
 }
 
 impl Browser {
+    #[must_use]
     pub fn new(conf: Option<BrowserConfig>) -> Self {
         Self {
             config: conf.unwrap_or_default(),
@@ -39,6 +42,7 @@ impl Browser {
         }
     }
 
+    #[must_use]
     pub fn builder() -> BrowserBuilder {
         BrowserBuilder::default()
     }
@@ -146,10 +150,10 @@ impl Browser {
         self.start().await?;
 
         // Step 1: Get element information and validate special cases
-        let (_tag, _input_type, mut rect) = self._get_element_info(index).await?;
+        let (_tag, _input_type, mut rect) = self.get_element_info(index).await?;
 
         // Step 2: Try to get backend node ID for advanced CDP operations
-        let backend_node_id = self._resolve_backend_node_id(index).await.ok();
+        let backend_node_id = self.resolve_backend_node_id(index).await.ok();
 
         if let Some(node_id) = backend_node_id {
             // Step 3: Scroll element into view (if we have backend node)
@@ -163,7 +167,7 @@ impl Browser {
             {
                 // Step 5: Try to get better coordinates from CDP
                 if let Ok(cdp_rect) = self
-                    ._get_element_rect_from_cdp(node_id, &viewport_width, &viewport_height)
+                    .get_element_rect_from_cdp(node_id, viewport_width, viewport_height)
                     .await
                 {
                     rect = cdp_rect;
@@ -179,10 +183,10 @@ impl Browser {
         let center_y = center_y.clamp(0.0, 10000.0);
 
         // Step 7: Try CDP mouse events first (most reliable for modern frameworks)
-        let cdp_result = self._cdp_click(center_x, center_y).await;
+        let cdp_result = self.cdp_click(center_x, center_y).await;
 
         match cdp_result {
-            Ok(_) => {
+            Ok(()) => {
                 debug!("Clicked element at ({center_x:.0}, {center_y:.0}) using CDP mouse events");
             }
             Err(e) => {
@@ -216,8 +220,7 @@ impl Browser {
                         el.click();
                         return true;
                     }})()
-                    "#,
-                    index = index
+                    "#
                 );
                 let res = self.client()?.evaluate(&fallback_js).await?;
                 if res.as_bool() != Some(true) {
@@ -234,7 +237,7 @@ impl Browser {
     }
 
     /// Get element information including tag, type, and visible status
-    async fn _get_element_info(&self, index: u32) -> Result<(String, String, ElementRect)> {
+    async fn get_element_info(&self, index: u32) -> Result<(String, String, ElementRect)> {
         let element_info_js = format!(
             r#"
             (() => {{
@@ -273,8 +276,7 @@ impl Browser {
                     height: rect.height
                 }};
             }})()
-            "#,
-            index = index
+            "#
         );
 
         let element_info: serde_json::Value = self.client()?.evaluate(&element_info_js).await?;
@@ -293,19 +295,19 @@ impl Browser {
 
         let x: f64 = info
             .get("x")
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .ok_or_else(|| anyhow!("Missing element x coordinate"))?;
         let y: f64 = info
             .get("y")
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .ok_or_else(|| anyhow!("Missing element y coordinate"))?;
         let width: f64 = info
             .get("width")
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .ok_or_else(|| anyhow!("Missing element width"))?;
         let height: f64 = info
             .get("height")
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .ok_or_else(|| anyhow!("Missing element height"))?;
 
         // Special case: file inputs should not be clicked directly
@@ -332,7 +334,7 @@ impl Browser {
     }
 
     /// Resolve element by index to get its backend node ID
-    async fn _resolve_backend_node_id(&self, index: u32) -> Result<u64> {
+    async fn resolve_backend_node_id(&self, index: u32) -> Result<u64> {
         // Use JavaScript to find the element and get its backend node ID
         let resolve_js = format!(
             r#"
@@ -364,8 +366,7 @@ impl Browser {
                 // Return a flag indicating we need DOM resolution
                 return {{ markerId, found: true }};
             }})()
-            "#,
-            index = index
+            "#
         );
 
         let marker_info: serde_json::Value = self.client()?.evaluate(&resolve_js).await?;
@@ -374,7 +375,11 @@ impl Browser {
             return Err(anyhow!("Element with index {index} not found"));
         };
 
-        if !info.get("found").and_then(|v| v.as_bool()).unwrap_or(false) {
+        if !info
+            .get("found")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        {
             return Err(anyhow!("Element with index {index} not found"));
         }
 
@@ -385,16 +390,16 @@ impl Browser {
     }
 
     /// Get element rectangle using multiple fallback strategies
-    async fn _get_element_rect_from_cdp(
+    async fn get_element_rect_from_cdp(
         &self,
         backend_node_id: u64,
-        viewport_width: &f64,
-        viewport_height: &f64,
+        viewport_width: f64,
+        viewport_height: f64,
     ) -> Result<ElementRect> {
         // Method 1: Try DOM.getContentQuads (best for complex layouts)
         if let Ok(quads) = self.client()?.get_content_quads(backend_node_id).await
             && let Some(best_quad) =
-                self._find_largest_visible_quad(&quads, viewport_width, viewport_height)
+                find_largest_visible_quad(&quads, viewport_width, viewport_height)
         {
             return Ok(best_quad);
         }
@@ -417,82 +422,8 @@ impl Browser {
         Err(anyhow!("Could not get element rect from any CDP method"))
     }
 
-    /// Find the largest visible quad within the viewport
-    fn _find_largest_visible_quad(
-        &self,
-        quads: &[Vec<f64>],
-        viewport_width: &f64,
-        viewport_height: &f64,
-    ) -> Option<ElementRect> {
-        let mut best_area = 0.0;
-        let mut best_quad: Option<ElementRect> = None;
-
-        for quad in quads {
-            if quad.len() < 8 {
-                continue;
-            }
-
-            // Quad format: [x1,y1, x2,y2, x3,y3, x4,y4]
-            let x1 = quad[0];
-            let y1 = quad[1];
-            let x2 = quad[2];
-            let y2 = quad[3];
-            let x3 = quad[4];
-            let y3 = quad[5];
-            let x4 = quad[6];
-            let y4 = quad[7];
-
-            // Calculate bounding box
-            let min_x = x1.min(x2).min(x3).min(x4);
-            let max_x = x1.max(x2).max(x3).max(x4);
-            let min_y = y1.min(y2).min(y3).min(y4);
-            let max_y = y1.max(y2).max(y3).max(y4);
-
-            // Check if quad intersects with viewport
-            if max_x < 0.0 || max_y < 0.0 || min_x > *viewport_width || min_y > *viewport_height {
-                continue;
-            }
-
-            // Calculate visible area
-            let visible_min_x = (0.0f64).max(min_x);
-            let visible_max_x = (*viewport_width).min(max_x);
-            let visible_min_y = (0.0f64).max(min_y);
-            let visible_max_y = (*viewport_height).min(max_y);
-
-            let visible_width = visible_max_x - visible_min_x;
-            let visible_height = visible_max_y - visible_min_y;
-            let visible_area = visible_width * visible_height;
-
-            if visible_area > best_area {
-                best_area = visible_area;
-                best_quad = Some(ElementRect {
-                    x: visible_min_x,
-                    y: visible_min_y,
-                    width: visible_width,
-                    height: visible_height,
-                });
-            }
-        }
-
-        best_quad.or_else(|| {
-            // If no visible quad found, use the first one anyway
-            quads.first().and_then(|quad| {
-                if quad.len() >= 8 {
-                    Some(ElementRect {
-                        x: quad[0],
-                        y: quad[1],
-                        width: quad[4] - quad[0],
-                        height: quad[7] - quad[1],
-                    })
-                } else {
-                    None
-                }
-            })
-        })
-    }
-
     /// Perform a click using CDP mouse events (more reliable for React/Vue apps).
-    async fn _cdp_click(&self, x: f64, y: f64) -> Result<()> {
+    async fn cdp_click(&self, x: f64, y: f64) -> Result<()> {
         // Move mouse to position
         self.client()?
             .send_command(
@@ -624,9 +555,7 @@ impl Browser {
 
                 return true;
             }})()
-            "#,
-            index = index,
-            escaped_text = escaped_text
+            "#
         );
 
         let res = self.client()?.evaluate(&input_js).await?;
@@ -679,6 +608,79 @@ impl Browser {
     }
 }
 
+/// Find the largest visible quad within the viewport
+fn find_largest_visible_quad(
+    quads: &[Vec<f64>],
+    viewport_width: f64,
+    viewport_height: f64,
+) -> Option<ElementRect> {
+    let mut best_area = 0.0;
+    let mut best_quad: Option<ElementRect> = None;
+
+    for quad in quads {
+        if quad.len() < 8 {
+            continue;
+        }
+
+        // Quad format: [x1,y1, x2,y2, x3,y3, x4,y4]
+        let x1 = quad[0];
+        let y1 = quad[1];
+        let x2 = quad[2];
+        let y2 = quad[3];
+        let x3 = quad[4];
+        let y3 = quad[5];
+        let x4 = quad[6];
+        let y4 = quad[7];
+
+        // Calculate bounding box
+        let min_x = x1.min(x2).min(x3).min(x4);
+        let max_x = x1.max(x2).max(x3).max(x4);
+        let min_y = y1.min(y2).min(y3).min(y4);
+        let max_y = y1.max(y2).max(y3).max(y4);
+
+        // Check if quad intersects with viewport
+        if max_x < 0.0 || max_y < 0.0 || min_x > viewport_width || min_y > viewport_height {
+            continue;
+        }
+
+        // Calculate visible area
+        let visible_min_x = (0.0f64).max(min_x);
+        let visible_max_x = viewport_width.min(max_x);
+        let visible_min_y = (0.0f64).max(min_y);
+        let visible_max_y = viewport_height.min(max_y);
+
+        let visible_width = visible_max_x - visible_min_x;
+        let visible_height = visible_max_y - visible_min_y;
+        let visible_area = visible_width * visible_height;
+
+        if visible_area > best_area {
+            best_area = visible_area;
+            best_quad = Some(ElementRect {
+                x: visible_min_x,
+                y: visible_min_y,
+                width: visible_width,
+                height: visible_height,
+            });
+        }
+    }
+
+    best_quad.or_else(|| {
+        // If no visible quad found, use the first one anyway
+        quads.first().and_then(|quad| {
+            if quad.len() >= 8 {
+                Some(ElementRect {
+                    x: quad[0],
+                    y: quad[1],
+                    width: quad[4] - quad[0],
+                    height: quad[7] - quad[1],
+                })
+            } else {
+                None
+            }
+        })
+    })
+}
+
 impl Default for Browser {
     fn default() -> Self {
         Self::new(None)
@@ -691,31 +693,37 @@ pub struct BrowserBuilder {
 }
 
 impl BrowserBuilder {
+    #[must_use]
     pub fn headless(mut self, headless: bool) -> Self {
         self.config.headless = headless;
         self
     }
 
+    #[must_use]
     pub fn executable_path(mut self, path: impl Into<PathBuf>) -> Self {
         self.config.executable_path = Some(path.into());
         self
     }
 
+    #[must_use]
     pub fn user_data_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.config.user_data_dir = Some(path.into());
         self
     }
 
+    #[must_use]
     pub fn downloads_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.config.downloads_dir = Some(path.into());
         self
     }
 
+    #[must_use]
     pub fn cdp_url(mut self, url: impl Into<String>) -> Self {
         self.config.cdp_url = Some(url.into());
         self
     }
 
+    #[must_use]
     pub fn build(self) -> Browser {
         Browser {
             config: self.config,
@@ -732,6 +740,7 @@ mod tests {
     use super::*;
 
     /// Test helper: build an input JavaScript and return its text for inspection.
+    #[allow(clippy::uninlined_format_args)]
     fn build_input_js(index: u32, text: &str) -> String {
         let escaped_text = serde_json::to_string(text).unwrap();
         format!(
@@ -917,8 +926,7 @@ mod tests {
             // Verify the escaped value appears correctly in the JS
             assert!(
                 js.contains(&escaped),
-                "JS should contain properly escaped text for: {}",
-                text
+                "JS should contain properly escaped text for: {text}",
             );
         }
     }
@@ -938,7 +946,7 @@ mod tests {
     /// Live integration test: creates a browser, navigates to a test page,
     /// and verifies text input works correctly.
     #[tokio::test]
-    #[ignore] // Requires Chrome/Chromium to be installed
+    #[ignore = "Requires Chrome/Chromium to be installed"]
     async fn test_input_with_live_browser() {
         // Create a simple HTML page with a form input
         let temp_dir = tempfile::tempdir().unwrap();
@@ -981,10 +989,10 @@ mod tests {
         browser.input(input_index, "test_user").await.unwrap();
 
         // Verify by evaluating JS directly
-        let verify_js = r#"(() => {
+        let verify_js = r"(() => {
                 const input = document.querySelector('#username');
                 return input.value;
-            })()"#
+            })()"
             .to_string();
         let value: serde_json::Value = browser.evaluate(&verify_js).await.unwrap();
         let actual_value = value.as_str().unwrap_or_default();
@@ -1003,10 +1011,10 @@ mod tests {
 
         browser.input(textarea_index, "hello world").await.unwrap();
 
-        let verify_js = r#"(() => {
+        let verify_js = r"(() => {
                 const textarea = document.querySelector('#message');
                 return textarea.value;
-            })()"#
+            })()"
             .to_string();
         let value: serde_json::Value = browser.evaluate(&verify_js).await.unwrap();
         assert_eq!(value.as_str().unwrap(), "hello world");
@@ -1021,7 +1029,7 @@ mod tests {
 
     /// Test that verifies React-compatible value setting works on a real React-like page.
     #[tokio::test]
-    #[ignore]
+    #[ignore = "Requires Chrome/Chromium"]
     async fn test_input_on_simulated_react_page() {
         let temp_dir = tempfile::tempdir().unwrap();
         let html_path = temp_dir.path().join("react_form.html");
@@ -1079,9 +1087,9 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
             .unwrap();
 
         // Verify the value was actually set
-        let verify_js = r#"(() => {
+        let verify_js = r"(() => {
             return document.getElementById('react-input').value;
-        })()"#;
+        })()";
         let value: serde_json::Value = browser.evaluate(verify_js).await.unwrap();
         assert_eq!(value.as_str().unwrap(), "react_text_test");
 
@@ -1102,12 +1110,10 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         for index in [1, 5, 42] {
             let js = build_input_js(index, "Test");
             // Format produces "matched[index - 1]"
-            let expected_element = format!("matched[{} - 1]", index);
+            let expected_element = format!("matched[{index} - 1]");
             assert!(
                 js.contains(&expected_element),
-                "JS should reference element using format {} for index {}",
-                expected_element,
-                index
+                "JS should reference element using format {expected_element} for index {index}",
             );
         }
     }
@@ -1117,6 +1123,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
     // =========================================================================
 
     /// Helper to build the click JavaScript and return its text for inspection.
+    #[allow(clippy::uninlined_format_args)]
     fn build_click_js(index: u32) -> String {
         format!(
             r#"
@@ -1155,7 +1162,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
     fn test_click_js_uses_correct_element_lookup() {
         for index in [1, 3, 10] {
             let js = build_click_js(index);
-            let expected_elem = format!("matched[{} - 1]", index);
+            let expected_elem = format!("matched[{index} - 1]");
             assert!(
                 js.contains(&expected_elem),
                 "Should look up element at index-1"
@@ -1213,7 +1220,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
 
     /// Integration test: verifies clicking works on a simple HTML page.
     #[tokio::test]
-    #[ignore] // Requires Chrome/Chromium
+    #[ignore = "Requires Chrome/Chromium"]
     async fn test_click_with_live_browser() {
         let temp_dir = tempfile::tempdir().unwrap();
         let html_path = temp_dir.path().join("test_click.html");
@@ -1258,9 +1265,9 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         }
 
         // Verify click count increased
-        let verify_js = r#"(() => {
+        let verify_js = r"(() => {
             return document.getElementById('count').textContent;
-        })()"#;
+        })()";
         let value: serde_json::Value = browser.evaluate(verify_js).await.unwrap();
         let count = value.as_str().unwrap_or_default();
 
@@ -1271,7 +1278,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
 
     /// Test that clicking file inputs returns an error.
     #[tokio::test]
-    #[ignore] // Requires Chrome/Chromium
+    #[ignore = "Requires Chrome/Chromium"]
     async fn test_click_file_input_returns_error() {
         let temp_dir = tempfile::tempdir().unwrap();
         let html_path = temp_dir.path().join("test_file_input.html");
@@ -1312,7 +1319,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
 
     /// Test that clicking non-existent element returns error.
     #[tokio::test]
-    #[ignore] // Requires Chrome/Chromium
+    #[ignore = "Requires Chrome/Chromium"]
     async fn test_click_nonexistent_element_returns_error() {
         let temp_dir = tempfile::tempdir().unwrap();
         let html_path = temp_dir.path().join("test_empty.html");
@@ -1375,7 +1382,8 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         // Test case: quad fully inside viewport
         let quads: Vec<Vec<f64>> = vec![vec![0.0, 0.0, 100.0, 0.0, 100.0, 100.0, 0.0, 100.0]];
         let browser = Browser::new(None);
-        let result = browser._find_largest_visible_quad(&quads, &800.0, &600.0);
+        let _ = browser;
+        let result = find_largest_visible_quad(&quads, 800.0, 600.0);
         assert!(result.is_some());
         if let Some(rect) = result {
             assert_eq!(rect.x, 0.0);
@@ -1387,7 +1395,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         // Test case: quad partially outside viewport (clipped)
         let quads2: Vec<Vec<f64>> =
             vec![vec![500.0, 500.0, 900.0, 500.0, 900.0, 700.0, 500.0, 700.0]];
-        let result2 = browser._find_largest_visible_quad(&quads2, &800.0, &600.0);
+        let result2 = find_largest_visible_quad(&quads2, 800.0, 600.0);
         assert!(result2.is_some());
         if let Some(rect) = result2 {
             // Should be clipped to viewport bounds
@@ -1401,12 +1409,12 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         let quads3: Vec<Vec<f64>> = vec![vec![
             -100.0, -100.0, -50.0, -100.0, -50.0, -50.0, -100.0, -50.0,
         ]];
-        let result3 = browser._find_largest_visible_quad(&quads3, &800.0, &600.0);
+        let result3 = find_largest_visible_quad(&quads3, 800.0, 600.0);
         // Should return None or fall back to first quad
         assert!(result3.is_some());
     }
 
-    /// Test ElementRect center calculation.
+    /// Test `ElementRect` center calculation.
     #[test]
     fn test_element_rect_center() {
         use super::dom::ElementRect;
@@ -1449,7 +1457,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
 
     /// Integration test: verifies click with live browser works end-to-end.
     #[tokio::test]
-    #[ignore] // Requires Chrome/Chromium
+    #[ignore = "Requires Chrome/Chromium"]
     async fn test_click_with_multiple_elements() {
         let temp_dir = tempfile::tempdir().unwrap();
         let html_path = temp_dir.path().join("test_multi_click.html");
@@ -1496,8 +1504,8 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         browser.click(btn2.index).await.unwrap();
 
         // Verify counts
-        let verify_js1 = r#"(() => { return document.getElementById('c1').textContent; })()"#;
-        let verify_js2 = r#"(() => { return document.getElementById('c2').textContent; })()"#;
+        let verify_js1 = r"(() => { return document.getElementById('c1').textContent; })()";
+        let verify_js2 = r"(() => { return document.getElementById('c2').textContent; })()";
 
         let val1: serde_json::Value = browser.evaluate(verify_js1).await.unwrap();
         let val2: serde_json::Value = browser.evaluate(verify_js2).await.unwrap();
@@ -1518,7 +1526,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
 
     /// Integration test: verifies link clicking works.
     #[tokio::test]
-    #[ignore] // Requires Chrome/Chromium
+    #[ignore = "Requires Chrome/Chromium"]
     async fn test_click_link_navigates() {
         let temp_dir = tempfile::tempdir().unwrap();
         let html_path = temp_dir.path().join("test_link.html");

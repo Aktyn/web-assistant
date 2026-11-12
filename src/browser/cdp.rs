@@ -1,3 +1,5 @@
+#![allow(clippy::missing_errors_doc)]
+
 pub mod chrome;
 
 use anyhow::{Context, Result, anyhow};
@@ -26,8 +28,9 @@ pub fn get_available_port() -> Result<u16> {
     Ok(port)
 }
 
+/// Internal request type sent through the CDP client channel.
 #[derive(Serialize)]
-struct CdpRequest {
+pub(crate) struct CdpRequest {
     id: u64,
     method: String,
     params: Value,
@@ -149,14 +152,15 @@ impl CdpClient {
     pub(crate) fn new_test_client() -> Self {
         use tokio::sync::mpsc;
         // Drop the sender immediately so any send will fail gracefully.
-        let (_tx, _rx) = mpsc::channel::<(CdpRequest, oneshot::Sender<Result<Value>>)>(1);
+        let (tx, _rx) = mpsc::channel::<(CdpRequest, oneshot::Sender<Result<Value>>)>(1);
         Self {
             next_id: Arc::new(AtomicU64::new(1)),
-            tx_cmd: _tx,
+            tx_cmd: tx,
         }
     }
 
     #[cfg(test)]
+    #[allow(clippy::type_complexity)]
     pub(crate) fn new_with_channel() -> (
         Self,
         tokio::sync::mpsc::Receiver<(CdpRequest, oneshot::Sender<Result<Value>>)>,
@@ -253,7 +257,7 @@ impl CdpClient {
             let mut result = Vec::new();
             for quad in quads {
                 if let Some(q) = quad.as_array() {
-                    let coords: Vec<f64> = q.iter().filter_map(|v| v.as_f64()).collect();
+                    let coords: Vec<f64> = q.iter().filter_map(serde_json::Value::as_f64).collect();
                     if coords.len() == 8 {
                         result.push(coords);
                     }
@@ -316,11 +320,11 @@ impl CdpClient {
         if let Some(layout) = resp.get("layoutViewport") {
             let width = layout
                 .get("clientWidth")
-                .and_then(|v| v.as_f64())
+                .and_then(serde_json::Value::as_f64)
                 .unwrap_or(0.0);
             let height = layout
                 .get("clientHeight")
-                .and_then(|v| v.as_f64())
+                .and_then(serde_json::Value::as_f64)
                 .unwrap_or(0.0);
             return Ok((width, height));
         }
@@ -369,12 +373,11 @@ impl BrowserProcess {
         };
 
         let port = get_available_port()?;
-        let (resolved_data_dir, is_temp) = match user_data_dir {
-            Some(dir) => (dir.to_path_buf(), false),
-            None => {
-                let dir = Chrome::resolve_user_data_dir(Some(&executable), None)?;
-                (dir, false)
-            }
+        let (resolved_data_dir, is_temp) = if let Some(dir) = user_data_dir {
+            (dir.to_path_buf(), false)
+        } else {
+            let dir = Chrome::resolve_user_data_dir(Some(&executable), None)?;
+            (dir, false)
         };
 
         let args = Chrome::default_args(port, &resolved_data_dir, headless);
@@ -458,7 +461,7 @@ mod tests {
     async fn test_get_available_port() {
         let port = get_available_port().unwrap();
         assert!(port > 0);
-        assert!(port < u16::MAX as u16);
+        assert!(port < u16::MAX);
     }
 
     #[test]

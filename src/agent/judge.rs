@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -19,6 +21,7 @@ pub struct Judge {
 }
 
 impl Judge {
+    #[must_use]
     pub fn new(llm: ChatOpenAI) -> Self {
         Self { llm }
     }
@@ -44,16 +47,16 @@ impl Judge {
             let mut actions_str = String::new();
             if let Some(out) = &item.model_output {
                 for act in &out.action {
-                    actions_str.push_str(&format!("{:?}; ", act));
+                    let _ = write!(actions_str, "{act:?}; ");
                 }
             }
 
             let mut results_str = String::new();
             for res in &item.result {
                 if let Some(err) = &res.error {
-                    results_str.push_str(&format!("Error: {err}; "));
+                    let _ = write!(results_str, "Error: {err}; ");
                 } else if let Some(content) = &res.extracted_content {
-                    results_str.push_str(&format!("Output: {content}; "));
+                    let _ = write!(results_str, "Output: {content}; ");
                 }
             }
 
@@ -74,6 +77,7 @@ impl Judge {
     }
 }
 
+#[must_use]
 pub fn construct_judge_messages(
     task: &str,
     final_result: &str,
@@ -139,7 +143,7 @@ Respond with EXACTLY this JSON structure:
 
     let steps_text = steps.join("\n\n");
     let user_prompt = format!(
-        r#"
+        r"
 <task>
 {task}
 </task>
@@ -152,7 +156,7 @@ Respond with EXACTLY this JSON structure:
 {final_result}
 </final_result>
 
-Evaluate this agent execution given the criteria and respond with the exact JSON structure requested."#
+Evaluate this agent execution given the criteria and respond with the exact JSON structure requested."
     );
 
     vec![

@@ -15,6 +15,7 @@ pub struct PopupsWatchdog {
 }
 
 impl PopupsWatchdog {
+    #[must_use]
     pub fn new(client: CdpClient) -> Self {
         Self {
             client,
@@ -23,17 +24,18 @@ impl PopupsWatchdog {
         }
     }
 
+    #[must_use]
     pub fn handled_count(&self) -> usize {
         self.handled_count.load(Ordering::SeqCst)
     }
 
     /// Enable the Page CDP domain so we receive dialog events.
-    /// Called during setup_all.
+    /// Called during `setup_all`.
     pub async fn setup(&self) -> Result<()> {
-        if !self
+        if self
             .page_enabled
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
+            .is_err()
         {
             debug!("PopupsWatchdog: Page domain already enabled, skipping");
             return Ok(());
@@ -139,7 +141,7 @@ mod tests {
         assert!(wd.page_enabled.load(Ordering::SeqCst));
     }
 
-    /// Mirror of the acceptance-decision logic from handle_cdp_event.
+    /// Mirror of the acceptance-decision logic from `handle_cdp_event`.
     fn matches_dialog_accept(dialog_type: &str) -> bool {
         matches!(dialog_type, "alert" | "confirm" | "beforeunload")
     }

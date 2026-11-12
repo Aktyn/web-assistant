@@ -72,7 +72,7 @@ mod tests {
             WorkflowState::Data(data) => {
                 assert_eq!(data.name, "Test Workflow");
             }
-            _ => panic!("Expected Data variant"),
+            WorkflowState::Error(_) => panic!("Expected Data variant"),
         }
         assert_eq!(workflow.file_path, path);
     }
@@ -86,7 +86,7 @@ mod tests {
         let workflow = Workflow::new(json);
         match &workflow.state {
             WorkflowState::Error(_) => {} // expected
-            _ => panic!("Expected Error variant"),
+            WorkflowState::Data(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -99,7 +99,7 @@ mod tests {
         let workflow = Workflow::new(json);
         match &workflow.state {
             WorkflowState::Error(_) => {} // missing required `name` field → deserialize error
-            _ => panic!("Expected Error variant"),
+            WorkflowState::Data(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -112,7 +112,7 @@ mod tests {
         let workflow = Workflow::new(json);
         match &workflow.state {
             WorkflowState::Error(_) => {}
-            _ => panic!("Expected Error variant"),
+            WorkflowState::Data(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -125,7 +125,7 @@ mod tests {
         let workflow = Workflow::new(json);
         match &workflow.state {
             WorkflowState::Error(_) => {}
-            _ => panic!("Expected Error variant"),
+            WorkflowState::Data(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -146,7 +146,7 @@ mod tests {
         });
         match state {
             WorkflowState::Data(d) => assert_eq!(d.name, "ok"),
-            _ => panic!("Expected Data"),
+            WorkflowState::Error(_) => panic!("Expected Data"),
         }
     }
 
