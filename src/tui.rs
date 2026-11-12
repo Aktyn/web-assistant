@@ -6,6 +6,7 @@ use crossterm::event::{self, Event, KeyCode};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint::{Fill, Length};
 use ratatui::layout::{Layout, Rect, Size};
+use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use std::sync::{Arc, RwLock};
@@ -17,6 +18,7 @@ use crate::tui::views::no_workflows::NoWorkflowsChoice;
 use common::{consts, macros, palette};
 use views::empty::EmptyView;
 use views::no_workflows::NoWorkflowsView;
+use views::terminal_size_error::TerminalSizeErrorView;
 use views::workflows::WorkflowView;
 
 pub fn render_tui(core: Core) -> Result<()> {
@@ -122,10 +124,14 @@ impl TuiApp {
         if size.width < consts::MINIMUM_TERMINAL_SIZE.width
             || size.height < consts::MINIMUM_TERMINAL_SIZE.height
         {
-            //TODO: error view informing user that terminal is too small
+            if !self.view.as_any().is::<TerminalSizeErrorView>() {
+                self.view = Box::new(TerminalSizeErrorView::new());
+            }
+            return;
         }
 
-        if self.view.as_any().is::<EmptyView>() {
+        if self.view.as_any().is::<EmptyView>() || self.view.as_any().is::<TerminalSizeErrorView>()
+        {
             match macros::workflows_count!(self.core) {
                 0 => self.view = Box::new(NoWorkflowsView::new(self.core.clone())),
                 _ => self.view = Box::new(WorkflowView::new(self.core.clone())),
@@ -162,7 +168,6 @@ impl TuiApp {
     }
 
     fn render_logs(&self, area: Rect, buf: &mut Buffer) {
-        let title = "Logs (press L to toggle)";
         let log_widget = TuiLoggerWidget::default()
             .output_timestamp(None)
             // .output_level(None)
@@ -171,13 +176,7 @@ impl TuiApp {
             .output_target(false)
             .block(
                 Block::default()
-                    .title(format!(
-                        "{} {} ",
-                        "—".repeat(
-                            ((area.width as usize).saturating_sub(title.len() + 2usize)) / 2usize
-                        ),
-                        title
-                    ))
+                    .title(Line::from(" Logs (press L to toggle) ").centered())
                     .borders(Borders::TOP)
                     .border_style(palette::SEPARATOR_STYLE),
             )

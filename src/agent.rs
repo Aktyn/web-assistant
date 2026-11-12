@@ -435,4 +435,194 @@ mod tests {
             _ => panic!("Expected Done action"),
         }
     }
+
+    #[test]
+    fn test_parse_agent_output_multiple_actions() {
+        let raw = r#"{
+            "action": [
+                {"click": {"index": 1}},
+                {"input": {"index": 2, "text": "hello"}}
+            ]
+        }"#;
+
+        let output = parse_agent_output(raw).unwrap();
+        assert_eq!(output.action.len(), 2);
+        match &output.action[0] {
+            Action::Click { index } => assert_eq!(*index, 1),
+            _ => panic!("Expected Click action"),
+        }
+        match &output.action[1] {
+            Action::Input { index, text } => {
+                assert_eq!(*index, 2);
+                assert_eq!(text, "hello");
+            }
+            _ => panic!("Expected Input action"),
+        }
+    }
+
+    #[test]
+    fn test_parse_agent_output_single_action_object() {
+        let raw = r#"{
+            "action": {"scroll": {"amount": 500}}
+        }"#;
+
+        let output = parse_agent_output(raw).unwrap();
+        assert_eq!(output.action.len(), 1);
+        match &output.action[0] {
+            Action::Scroll { amount } => assert_eq!(*amount, 500),
+            _ => panic!("Expected Scroll action"),
+        }
+    }
+
+    #[test]
+    fn test_parse_agent_output_wait_action() {
+        let raw = r#"{
+            "action": [{"wait": {"seconds": 5}}]
+        }"#;
+
+        let output = parse_agent_output(raw).unwrap();
+        match &output.action[0] {
+            Action::Wait { seconds } => assert_eq!(*seconds, 5),
+            _ => panic!("Expected Wait action"),
+        }
+    }
+
+    #[test]
+    fn test_parse_agent_output_extract_action() {
+        let raw = r#"{
+            "action": [{"extract": {"query": "price"}}]
+        }"#;
+
+        let output = parse_agent_output(raw).unwrap();
+        match &output.action[0] {
+            Action::Extract { query } => assert_eq!(query, "price"),
+            _ => panic!("Expected Extract action"),
+        }
+    }
+
+    #[test]
+    fn test_parse_agent_output_custom_action() {
+        let raw = r#"{
+            "action": {"custom": {"key": "value"}}
+        }"#;
+
+        let output = parse_agent_output(raw).unwrap();
+        match &output.action[0] {
+            Action::Custom(val) => {
+                // Custom actions are stored as-is, the key should be there
+                assert_eq!(val["custom"]["key"], "value");
+            }
+            _ => panic!("Expected Custom action"),
+        }
+    }
+
+    #[test]
+    fn test_extract_json_str_plain_json() {
+        let raw = r#"{"key": "value"}"#;
+        let result = extract_json_str(raw).unwrap();
+        assert_eq!(result, "{\"key\": \"value\"}");
+    }
+
+    #[test]
+    fn test_extract_json_str_with_codeblock() {
+        let raw = "```json\n{\"key\": \"value\"}\n```";
+        let result = extract_json_str(raw).unwrap();
+        assert_eq!(result, "{\"key\": \"value\"}");
+    }
+
+    #[test]
+    fn test_extract_json_str_with_text_before_json() {
+        let raw = "Some text\n{\"key\": \"value\"}";
+        let result = extract_json_str(raw).unwrap();
+        assert_eq!(result, "{\"key\": \"value\"}");
+    }
+
+    #[test]
+    fn test_extract_json_str_returns_trimmed() {
+        let raw = "  \n  {\"key\": \"value\"}  \n  ";
+        let result = extract_json_str(raw).unwrap();
+        assert_eq!(result, "{\"key\": \"value\"}");
+    }
+
+    #[test]
+    fn test_chat_message_system() {
+        let msg = ChatMessage::system("You are helpful");
+        assert_eq!(msg.role, "system");
+        assert_eq!(msg.content, "You are helpful");
+    }
+
+    #[test]
+    fn test_chat_message_user() {
+        let msg = ChatMessage::user("Hello");
+        assert_eq!(msg.role, "user");
+        assert_eq!(msg.content, "Hello");
+    }
+
+    #[test]
+    fn test_chat_message_assistant() {
+        let msg = ChatMessage::assistant("Hi there");
+        assert_eq!(msg.role, "assistant");
+        assert_eq!(msg.content, "Hi there");
+    }
+
+    #[test]
+    fn test_chat_openai_builder() {
+        let llm = ChatOpenAI::builder()
+            .model("gpt-4")
+            .api_key("test-key")
+            .base_url("http://localhost:8080")
+            .temperature(0.5)
+            .max_completion_tokens(1024)
+            .build()
+            .unwrap();
+        assert_eq!(llm.model, "gpt-4");
+        assert_eq!(llm.api_key, "test-key");
+        assert_eq!(llm.base_url, "http://localhost:8080");
+        assert_eq!(llm.temperature, Some(0.5));
+        assert_eq!(llm.max_completion_tokens, Some(1024));
+    }
+
+    #[test]
+    fn test_chat_openai_new_uses_defaults() {
+        // Clear any env vars that might affect this test
+        unsafe {
+            std::env::remove_var("OPENAI_API_KEY");
+            std::env::remove_var("OPENAI_BASE_URL");
+        }
+
+        let llm = ChatOpenAI::new("auto");
+        assert_eq!(llm.model, "auto");
+        assert!(llm.api_key.is_empty());
+        assert_eq!(llm.base_url, "https://api.openai.com/v1");
+        assert_eq!(llm.temperature, Some(0.2));
+        assert_eq!(llm.max_completion_tokens, Some(4096));
+    }
+
+    #[test]
+    fn test_parse_agent_output_fallback_single_key() {
+        // When action is not an array, try individual keys
+        let raw = r#"{
+            "click": {"index": 3}
+        }"#;
+
+        let output = parse_agent_output(raw).unwrap();
+        assert_eq!(output.action.len(), 1);
+        match &output.action[0] {
+            Action::Click { index } => assert_eq!(*index, 3),
+            _ => panic!("Expected Click action from fallback"),
+        }
+    }
+
+    #[test]
+    fn test_parse_agent_output_invalid_json() {
+        let result = parse_agent_output("not valid json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_agent_output_no_actions() {
+        let raw = r#"{"thought": "no actions here"}"#;
+        let result = parse_agent_output(raw);
+        assert!(result.is_err());
+    }
 }

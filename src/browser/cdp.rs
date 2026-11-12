@@ -156,6 +156,22 @@ impl CdpClient {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn new_with_channel() -> (
+        Self,
+        tokio::sync::mpsc::Receiver<(CdpRequest, oneshot::Sender<Result<Value>>)>,
+    ) {
+        use tokio::sync::mpsc;
+        let (tx, rx) = mpsc::channel::<(CdpRequest, oneshot::Sender<Result<Value>>)>(100);
+        (
+            Self {
+                next_id: Arc::new(AtomicU64::new(1)),
+                tx_cmd: tx,
+            },
+            rx,
+        )
+    }
+
     pub async fn navigate(&self, url: &str) -> Result<()> {
         self.send_command(
             "Page.navigate",
@@ -431,5 +447,74 @@ impl Drop for BrowserProcess {
         if self.is_temp && self.user_data_dir.exists() {
             let _ = std::fs::remove_dir_all(&self.user_data_dir);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_get_available_port() {
+        let port = get_available_port().unwrap();
+        assert!(port > 0);
+        assert!(port < u16::MAX as u16);
+    }
+
+    #[test]
+    fn test_cdp_request_serialization() {
+        let req = CdpRequest {
+            id: 1,
+            method: "Page.navigate".to_string(),
+            params: serde_json::json!({"url": "https://example.com"}),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("Page.navigate"));
+        assert!(json.contains("https://example.com"));
+    }
+
+    #[test]
+    fn test_cdp_response_deserialization() {
+        let json = r#"{"id": 1, "result": {"foo": "bar"}, "method": null}"#;
+        let resp: CdpResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.id, Some(1));
+        assert_eq!(resp.method, None);
+        assert!(resp.result.is_some());
+    }
+
+    #[test]
+    fn test_cdp_response_with_error() {
+        let json = r#"{"id": 2, "error": {"code": -32000, "message": "Error"}}"#;
+        let resp: CdpResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.id, Some(2));
+        assert!(resp.error.is_some());
+    }
+
+    #[test]
+    fn test_test_client_creation() {
+        let client = CdpClient::new_test_client();
+        assert_eq!(client.next_id.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn test_new_with_channel() {
+        let (client, _rx) = CdpClient::new_with_channel();
+        assert_eq!(client.next_id.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_test_client_send_command_fails() {
+        let client = CdpClient::new_test_client();
+        // Sending should fail because the receiver is dropped
+        let result = client
+            .send_command("Page.enable", serde_json::json!({}))
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_browser_process_fields() {
+        // Just verify the struct can be referenced
+        let _: fn() -> std::mem::MaybeUninit<BrowserProcess> = || std::mem::MaybeUninit::uninit();
     }
 }

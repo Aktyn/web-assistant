@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChromeProfileInfo {
     pub name: String,
     pub directory: String,
@@ -261,4 +261,91 @@ impl Chrome {
 
 fn dirs_home() -> Option<PathBuf> {
     std::env::var("HOME").ok().map(PathBuf::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_chrome_profile_info_eq() {
+        let info1 = ChromeProfileInfo {
+            name: "Default".into(),
+            directory: "Default".into(),
+        };
+        let info2 = ChromeProfileInfo {
+            name: "Default".into(),
+            directory: "Default".into(),
+        };
+        assert_eq!(info1, info2);
+    }
+
+    #[test]
+    fn test_chrome_profile_info_debug() {
+        let info = ChromeProfileInfo {
+            name: "Profile 1".into(),
+            directory: "Profile 1".into(),
+        };
+        let debug_str = format!("{info:?}");
+        assert!(debug_str.contains("Profile 1"));
+    }
+
+    #[test]
+    fn test_list_profiles_empty_dir() {
+        let tmp = TempDir::new().unwrap();
+        let profiles = Chrome::list_profiles(tmp.path());
+        assert!(profiles.is_empty());
+    }
+
+    #[test]
+    fn test_list_profiles_with_default() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir(tmp.path().join("Default")).unwrap();
+        let profiles = Chrome::list_profiles(tmp.path());
+        assert_eq!(profiles.len(), 1);
+        assert_eq!(profiles[0].directory, "Default");
+    }
+
+    #[test]
+    fn test_list_profiles_with_named_profile() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir(tmp.path().join("Profile 1")).unwrap();
+        std::fs::create_dir(tmp.path().join("Profile 2")).unwrap();
+        let profiles = Chrome::list_profiles(tmp.path());
+        assert_eq!(profiles.len(), 2);
+    }
+
+    #[test]
+    fn test_default_args_contains_required_flags() {
+        let args = Chrome::default_args(9222, Path::new("/tmp"), true);
+        let args_str: Vec<String> = args.iter().cloned().collect();
+        let combined = args_str.join(" ");
+        assert!(combined.contains("--remote-debugging-port=9222"));
+        assert!(combined.contains("--headless=new"));
+        assert!(combined.contains("--no-sandbox"));
+        assert!(combined.contains("about:blank"));
+    }
+
+    #[test]
+    fn test_default_args_non_headless() {
+        let args = Chrome::default_args(9223, Path::new("/tmp"), false);
+        let args_str: Vec<String> = args.iter().cloned().collect();
+        let combined = args_str.join(" ");
+        assert!(!combined.contains("--headless"));
+    }
+
+    #[test]
+    fn test_resolve_user_data_dir_with_explicit_path() {
+        let tmp = TempDir::new().unwrap();
+        let result = Chrome::resolve_user_data_dir(None, Some(tmp.path())).unwrap();
+        assert_eq!(result, tmp.path());
+    }
+
+    #[test]
+    fn test_is_user_data_dir_locked_nonexistent() {
+        let tmp = TempDir::new().unwrap();
+        let locked = Chrome::is_user_data_dir_locked(tmp.path());
+        assert!(!locked);
+    }
 }

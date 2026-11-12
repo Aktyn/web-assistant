@@ -22,10 +22,10 @@ jobs:
             exit 1
           fi
 
-      - name: Install Rust toolchain (nightly-2026-11-09)
+      - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: nightly-2026-11-09
+          toolchain: nightly
           components: rust-analyzer, rustfmt, clippy
           cache: false
 
@@ -46,11 +46,8 @@ jobs:
       - name: Test
         run: cargo test
 
-      - name: Install cargo-llvm-cov
-        run: cargo install cargo-llvm-cov --locked
+      - name: Install tarpaulin
+        run: cargo install cargo-tarpaulin --locked
 
       - name: Coverage
-        run: |
-          cargo llvm-cov --lcov --output-path lcov.info \
-            --fail-under 80 \
-            --ignore-filename-regex "tests/.*"
+        run: cargo run-script coverage

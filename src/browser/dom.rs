@@ -81,6 +81,111 @@ impl BrowserState {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_element_rect_center() {
+        let rect = ElementRect {
+            x: 10.0,
+            y: 20.0,
+            width: 100.0,
+            height: 50.0,
+        };
+        let (cx, cy) = rect.center();
+        assert!((cx - 60.0).abs() < f64::EPSILON);
+        assert!((cy - 45.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_browser_state_format_with_elements() {
+        let state = BrowserState {
+            url: "https://example.com".into(),
+            title: "Example".into(),
+            elements: vec![EnhancedElement {
+                index: 1,
+                tag: "button".into(),
+                text: "Click me".into(),
+                attributes: HashMap::new(),
+                x: 10.0,
+                y: 20.0,
+            }],
+            text: "Page content".into(),
+        };
+
+        let formatted = state.format_for_prompt();
+        assert!(formatted.contains("Current URL: https://example.com"));
+        assert!(formatted.contains("Page Title: Example"));
+        // Format is [index]<tag>text</tag>
+        assert!(formatted.contains("[1]button>Click me</button"));
+        assert!(formatted.contains("Page content"));
+    }
+
+    #[test]
+    fn test_browser_state_format_empty_elements() {
+        let state = BrowserState {
+            url: "".into(),
+            title: "".into(),
+            elements: vec![],
+            text: "".into(),
+        };
+
+        let formatted = state.format_for_prompt();
+        assert!(formatted.contains("(No interactive elements found)"));
+    }
+
+    #[test]
+    fn test_browser_state_format_truncates_long_text() {
+        let long_text = "x".repeat(4000);
+        let state = BrowserState {
+            url: "test".into(),
+            title: "test".into(),
+            elements: vec![],
+            text: long_text.clone(),
+        };
+
+        let formatted = state.format_for_prompt();
+        assert!(formatted.ends_with("...\n"));
+        // Should contain truncated content
+        assert!(formatted.contains(&long_text[..3000]));
+    }
+
+    #[test]
+    fn test_browser_state_format_with_attributes() {
+        let mut attrs = HashMap::new();
+        attrs.insert("type".into(), "text".into());
+        attrs.insert("name".into(), "username".into());
+        attrs.insert("class".into(), "input".into()); // should not appear
+
+        let state = BrowserState {
+            url: "test".into(),
+            title: "test".into(),
+            elements: vec![EnhancedElement {
+                index: 1,
+                tag: "input".into(),
+                text: "".into(),
+                attributes: attrs,
+                x: 0.0,
+                y: 0.0,
+            }],
+            text: "".into(),
+        };
+
+        let formatted = state.format_for_prompt();
+        assert!(formatted.contains(r#"type="text""#));
+        assert!(formatted.contains(r#"name="username""#));
+        assert!(!formatted.contains("class"));
+    }
+
+    #[test]
+    fn test_extract_dom_js_constant_exists() {
+        assert!(!EXTRACT_DOM_JS.is_empty());
+        assert!(EXTRACT_DOM_JS.contains("getBoundingClientRect"));
+        assert!(EXTRACT_DOM_JS.contains("interactiveSelectors"));
+    }
+}
+
 pub const EXTRACT_DOM_JS: &str = r#"
 (() => {
     const isVisible = (elem) => {

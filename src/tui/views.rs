@@ -1,5 +1,6 @@
 pub(super) mod empty;
 pub(super) mod no_workflows;
+pub(super) mod terminal_size_error;
 pub(super) mod workflows;
 
 use crossterm::event::Event;
