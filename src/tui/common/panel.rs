@@ -6,6 +6,7 @@ use ratatui::{
     style::Stylize as _,
     widgets::{Paragraph, Widget},
 };
+use std::any::Any;
 
 use super::palette;
 
@@ -13,6 +14,9 @@ pub(crate) trait Panel {
     fn draw(&mut self, area: Rect, buf: &mut Buffer, focused: bool);
     fn handle_event(&mut self, event: &Event, terminal: &mut DefaultTerminal)
     -> anyhow::Result<()>;
+
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 pub(crate) struct Header {

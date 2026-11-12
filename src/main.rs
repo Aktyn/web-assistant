@@ -4,6 +4,7 @@ mod cli;
 mod core;
 pub mod llm;
 mod tui;
+mod utils;
 
 use anyhow::Result;
 use std::io::Write;

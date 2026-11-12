@@ -5,8 +5,10 @@ use ratatui::style::Style;
 pub(crate) const BACKGROUND: Color = Color::Reset;
 pub(crate) const BACKGROUND_STYLE: Style = Style::new().bg(BACKGROUND);
 
-pub(crate) const FOREGROUND: Color = Color::Rgb(236, 239, 241);
+pub(crate) const FOREGROUND: Color = Color::Rgb(236, 239, 241); // Blue gray 50
 // pub(crate) const FOREGROUND_STYLE: Style = Style::new().fg(FOREGROUND);
+
+pub(crate) const MUTED_FOREGROUND: Color = Color::Rgb(120, 144, 156); // Blue gray 400
 
 pub(crate) const ACCENT: Color = Color::Rgb(77, 182, 172); // Teal 300
 

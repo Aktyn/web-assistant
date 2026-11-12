@@ -11,27 +11,20 @@ use ratatui::{
 };
 use std::sync::{Arc, RwLock};
 
-use super::View;
 use super::common::button::{Button, ButtonData};
 use super::common::error_alert::ErrorAlert;
 use super::common::{macros, palette};
+use super::{View, ViewAction};
 use crate::core::Core;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum NoWorkflowsChoice {
-    Pending,
-    CreateNewWorkflow,
-    QuitApp,
-}
-
-type ThisButtonData = ButtonData<NoWorkflowsChoice>;
+type ThisButtonData = ButtonData<ViewAction>;
 
 pub(crate) struct NoWorkflowsView {
     core: Arc<RwLock<Core>>,
     /// Used for navigating over option buttons
     list_state: ListState,
     buttons: [ThisButtonData; 2],
-    pub(crate) pending_action: NoWorkflowsChoice,
+    pending_action: Option<ViewAction>,
 }
 
 impl NoWorkflowsView {
@@ -40,10 +33,10 @@ impl NoWorkflowsView {
             core,
             list_state: ListState::default(),
             buttons: [
-                ThisButtonData::new("Create new workflow", NoWorkflowsChoice::CreateNewWorkflow),
-                ThisButtonData::new("Quit app", NoWorkflowsChoice::QuitApp),
+                ThisButtonData::new("Create new workflow", ViewAction::OpenWorkflowCreator),
+                ThisButtonData::new("Quit app", ViewAction::QuitApp),
             ],
-            pending_action: NoWorkflowsChoice::Pending,
+            pending_action: None,
         }
     }
 
@@ -92,7 +85,7 @@ impl NoWorkflowsView {
             "selected >= self.buttons.len()"
         );
 
-        self.pending_action = self.buttons[selected].action;
+        self.pending_action = Some(self.buttons[selected].action);
     }
 }
 
@@ -136,6 +129,10 @@ impl View for NoWorkflowsView {
         }
 
         Ok(())
+    }
+
+    fn get_action(&self) -> Option<super::ViewAction> {
+        self.pending_action
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -182,10 +179,7 @@ mod tests {
         let core = Arc::new(RwLock::new(empty_core()));
         let mut view = NoWorkflowsView::new(core);
         view.run_button_action(0);
-        assert_eq!(
-            view.pending_action,
-            NoWorkflowsChoice::CreateNewWorkflow
-        );
+        assert_eq!(view.pending_action, NoWorkflowsChoice::CreateNewWorkflow);
         view.run_button_action(1);
         assert_eq!(view.pending_action, NoWorkflowsChoice::QuitApp);
     }

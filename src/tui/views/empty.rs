@@ -16,6 +16,10 @@ impl View for EmptyView {
         unreachable!("EmptyView should not be used to handle events")
     }
 
+    fn get_action(&self) -> Option<super::ViewAction> {
+        None
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

@@ -14,11 +14,11 @@ use std::time::Duration;
 use tui_logger::TuiLoggerWidget;
 
 use crate::core::Core;
-use crate::tui::views::no_workflows::NoWorkflowsChoice;
 use common::{consts, macros, palette};
 use views::empty::EmptyView;
 use views::no_workflows::NoWorkflowsView;
 use views::terminal_size_error::TerminalSizeErrorView;
+use views::workflow_creator::WorkflowCreatorView;
 use views::workflows::WorkflowView;
 
 pub fn render_tui(core: Core) -> Result<()> {
@@ -108,26 +108,30 @@ impl TuiApp {
 
         if self.view.as_any().is::<EmptyView>() || self.view.as_any().is::<TerminalSizeErrorView>()
         {
-            match macros::workflows_count!(self.core) {
-                0 => self.view = Box::new(NoWorkflowsView::new(self.core.clone())),
-                _ => self.view = Box::new(WorkflowView::new(self.core.clone())),
-            }
+            self.go_to_starting_view();
         }
     }
 
     /// Should run after handling events
     /// Reacts to state changes in current view
     fn post_update(&mut self) {
-        if let Some(no_workflows_view) = self.view.as_any().downcast_ref::<NoWorkflowsView>() {
-            match no_workflows_view.pending_action {
-                NoWorkflowsChoice::Pending => {}
-                NoWorkflowsChoice::CreateNewWorkflow => todo!(),
-                NoWorkflowsChoice::QuitApp => self.exit(),
+        match self.view.get_action() {
+            Some(views::ViewAction::QuitApp) => self.exit(),
+            Some(views::ViewAction::OpenWorkflowCreator) => {
+                self.view = Box::new(WorkflowCreatorView::new());
             }
+            Some(views::ViewAction::ExitWorkflowCreator) => {
+                self.go_to_starting_view();
+            }
+            None => (),
         }
-        // if let Some(workflows_view) = self.view.as_any().downcast_ref::<WorkflowView>() {
-        //     //TODO:
-        // }
+    }
+
+    fn go_to_starting_view(&mut self) {
+        match macros::workflows_count!(self.core) {
+            0 => self.view = Box::new(NoWorkflowsView::new(self.core.clone())),
+            _ => self.view = Box::new(WorkflowView::new(self.core.clone())),
+        }
     }
 
     fn draw(&mut self, frame: &mut Frame) {

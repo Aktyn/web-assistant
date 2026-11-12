@@ -34,6 +34,10 @@ impl View for TerminalSizeErrorView {
         Ok(())
     }
 
+    fn get_action(&self) -> Option<super::ViewAction> {
+        None
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

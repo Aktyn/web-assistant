@@ -62,7 +62,8 @@ mod tests {
 
     #[test]
     fn test_cli_init_config_command() {
-        let cli = Cli::try_parse_from(["test", "init-config", "--output-path", "/tmp/config.json"]).unwrap();
+        let cli = Cli::try_parse_from(["test", "init-config", "--output-path", "/tmp/config.json"])
+            .unwrap();
         match cli.command {
             Some(Commands::InitConfig { output_path }) => {
                 assert_eq!(

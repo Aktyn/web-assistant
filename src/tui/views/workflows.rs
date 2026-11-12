@@ -1,51 +1,51 @@
-pub(crate) mod workflow_panel;
-pub(crate) mod workflows_sidebar;
+mod workflow_panel;
+mod workflows_sidebar;
 
-use std::sync::{Arc, RwLock};
-
-use super::View;
-use super::common::{macros, palette, panel};
-use crate::core::Core;
 use crossterm::event::KeyCode;
 use ratatui::layout::Constraint::{Fill, Length};
 use ratatui::layout::Layout;
+use std::sync::{Arc, RwLock};
+
+use super::common::{macros, palette, panel};
+use super::{View, ViewAction};
+use crate::core::Core;
 use workflow_panel::WorkflowPanel;
 use workflows_sidebar::WorkflowsSidebar;
 
 #[derive(PartialEq, Debug)]
-enum PanelType {
+enum WorkflowsPanelType {
     Sidebar,
-    Content,
+    Panel,
 }
 
 pub(crate) struct WorkflowView {
     core: Arc<RwLock<Core>>,
-    content: Box<dyn panel::Panel>,
+    panel: Box<dyn panel::Panel>,
     sidebar: Box<dyn panel::Panel>,
     show_sidebar: bool,
-    focused_panel: PanelType,
+    focused_panel: WorkflowsPanelType,
 }
 
 impl WorkflowView {
     pub(crate) fn new(core: Arc<RwLock<Core>>) -> Self {
         let core_sidebar_arc = core.clone();
-        let core_content_arc = core.clone();
+        let core_panel_arc = core.clone();
 
         Self {
             core,
             sidebar: Box::new(WorkflowsSidebar::new(core_sidebar_arc)),
-            content: Box::new(WorkflowPanel::new(core_content_arc)),
+            panel: Box::new(WorkflowPanel::new(core_panel_arc)),
             show_sidebar: true,
-            focused_panel: PanelType::Sidebar,
+            focused_panel: WorkflowsPanelType::Sidebar,
         }
     }
 
     fn move_to_next_panel(&mut self) {
         match self.focused_panel {
-            PanelType::Sidebar => self.focused_panel = PanelType::Content,
-            PanelType::Content => {
+            WorkflowsPanelType::Sidebar => self.focused_panel = WorkflowsPanelType::Panel,
+            WorkflowsPanelType::Panel => {
                 if macros::workflows_count!(self.core) > 0 {
-                    self.focused_panel = PanelType::Sidebar;
+                    self.focused_panel = WorkflowsPanelType::Sidebar;
                 }
             }
         }
@@ -53,23 +53,32 @@ impl WorkflowView {
 
     fn get_focused_panel(&mut self) -> &mut dyn panel::Panel {
         match self.focused_panel {
-            PanelType::Sidebar => self.sidebar.as_mut(),
-            PanelType::Content => self.content.as_mut(),
+            WorkflowsPanelType::Sidebar => self.sidebar.as_mut(),
+            WorkflowsPanelType::Panel => self.panel.as_mut(),
         }
     }
 }
 
 impl View for WorkflowView {
     fn draw(&mut self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
+        if let Some(panel) = self.panel.as_any_mut().downcast_mut::<WorkflowPanel>()
+            && let Some(sidebar) = self.sidebar.as_any().downcast_ref::<WorkflowsSidebar>()
+        {
+            panel.update(sidebar.workflows_list_state.selected());
+        }
+
         if self.show_sidebar {
-            let [sidebar_area, separator_area, content_area] = area.layout(&Layout::horizontal([
+            let [sidebar_area, separator_area, panel_area] = area.layout(&Layout::horizontal([
                 Length(WorkflowsSidebar::WIDTH),
                 Length(1),
                 Fill(1),
             ]));
 
-            self.sidebar
-                .draw(sidebar_area, buf, self.focused_panel == PanelType::Sidebar);
+            self.sidebar.draw(
+                sidebar_area,
+                buf,
+                self.focused_panel == WorkflowsPanelType::Sidebar,
+            );
 
             for i in 0..separator_area.height {
                 buf.set_string(
@@ -80,11 +89,14 @@ impl View for WorkflowView {
                 );
             }
 
-            self.content
-                .draw(content_area, buf, self.focused_panel == PanelType::Content);
+            self.panel.draw(
+                panel_area,
+                buf,
+                self.focused_panel == WorkflowsPanelType::Panel,
+            );
         } else {
-            self.content
-                .draw(area, buf, self.focused_panel == PanelType::Content);
+            self.panel
+                .draw(area, buf, self.focused_panel == WorkflowsPanelType::Panel);
         }
     }
 
@@ -112,6 +124,15 @@ impl View for WorkflowView {
         Ok(())
     }
 
+    fn get_action(&self) -> Option<super::ViewAction> {
+        if let Some(sidebar) = self.sidebar.as_any().downcast_ref::<WorkflowsSidebar>()
+            && sidebar.create_workflow_button_pressed
+        {
+            return Some(ViewAction::OpenWorkflowCreator);
+        }
+        None
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -132,15 +153,15 @@ mod tests {
 
     #[test]
     fn test_panel_type_debug() {
-        assert_eq!(format!("{:?}", PanelType::Sidebar), "Sidebar");
-        assert_eq!(format!("{:?}", PanelType::Content), "Content");
-        assert_ne!(PanelType::Sidebar, PanelType::Content);
+        assert_eq!(format!("{:?}", WorkflowsPanelType::Sidebar), "Sidebar");
+        assert_eq!(format!("{:?}", WorkflowsPanelType::Panel), "Panel");
+        assert_ne!(WorkflowsPanelType::Sidebar, WorkflowsPanelType::Panel);
     }
 
     #[test]
     fn test_panel_type_partial_eq() {
-        assert_eq!(PanelType::Sidebar, PanelType::Sidebar);
-        assert_eq!(PanelType::Content, PanelType::Content);
+        assert_eq!(WorkflowsPanelType::Sidebar, WorkflowsPanelType::Sidebar);
+        assert_eq!(WorkflowsPanelType::Panel, WorkflowsPanelType::Panel);
     }
 
     #[test]
@@ -149,7 +170,7 @@ mod tests {
         let view = WorkflowView::new(core);
         // Public state after construction: show_sidebar=true, focused=Sidebar
         assert!(view.show_sidebar);
-        assert_eq!(view.focused_panel, PanelType::Sidebar);
+        assert_eq!(view.focused_panel, WorkflowsPanelType::Sidebar);
     }
 
     #[test]
@@ -157,20 +178,20 @@ mod tests {
         let core = Arc::new(RwLock::new(empty_core()));
         let mut view = WorkflowView::new(core);
         view.move_to_next_panel();
-        assert_eq!(view.focused_panel, PanelType::Content);
+        assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);
     }
 
     #[test]
-    fn test_workflow_view_move_to_next_panel_from_content_empty() {
-        // When no workflows exist, moving from Content stays at Content
+    fn test_workflow_view_move_to_next_panel_from_panel_empty() {
+        // When no workflows exist, moving from Panel stays at Panel
         let core = Arc::new(RwLock::new(empty_core()));
         let mut view = WorkflowView::new(core);
-        // Move to Content first
+        // Move to Panel first
         view.move_to_next_panel();
-        assert_eq!(view.focused_panel, PanelType::Content);
-        // Moving again from Content with 0 workflows should stay on Content
+        assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);
+        // Moving again from Panel with 0 workflows should stay on Panel
         view.move_to_next_panel();
-        assert_eq!(view.focused_panel, PanelType::Content);
+        assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);
     }
 
     #[test]
@@ -186,14 +207,14 @@ mod tests {
         let view = WorkflowView::new(core);
         // Verify show_sidebar starts true and focused_panel is Sidebar
         assert!(view.show_sidebar);
-        assert_eq!(view.focused_panel, PanelType::Sidebar);
+        assert_eq!(view.focused_panel, WorkflowsPanelType::Sidebar);
     }
 
     #[test]
-    fn test_workflow_view_get_focused_panel_returns_content_after_tab() {
+    fn test_workflow_view_get_focused_panel_returns_panel_after_tab() {
         let core = Arc::new(RwLock::new(empty_core()));
         let mut view = WorkflowView::new(core);
         view.move_to_next_panel();
-        assert_eq!(view.focused_panel, PanelType::Content);
+        assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);
     }
 }
