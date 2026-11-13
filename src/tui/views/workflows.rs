@@ -4,11 +4,13 @@ mod workflows_sidebar;
 use crossterm::event::KeyCode;
 use ratatui::layout::Constraint::{Fill, Length};
 use ratatui::layout::Layout;
+use ratatui::widgets::Widget;
 use std::sync::{Arc, RwLock};
 
-use super::common::{macros, palette, panel};
+use super::common::{macros, panel};
 use super::{View, ViewAction};
 use crate::core::Core;
+use crate::tui::common::widgets;
 use workflow_panel::WorkflowPanel;
 use workflows_sidebar::WorkflowsSidebar;
 
@@ -80,14 +82,7 @@ impl View for WorkflowView {
                 self.focused_panel == WorkflowsPanelType::Sidebar,
             );
 
-            for i in 0..separator_area.height {
-                buf.set_string(
-                    separator_area.x,
-                    separator_area.y + i,
-                    "│",
-                    palette::SEPARATOR_STYLE,
-                );
-            }
+            widgets::Separator::new(widgets::Separator::VERTICAL).render(separator_area, buf);
 
             self.panel.draw(
                 panel_area,
@@ -115,6 +110,15 @@ impl View for WorkflowView {
                     }
                 }
                 KeyCode::Tab => self.move_to_next_panel(),
+                KeyCode::Enter | KeyCode::Char(' ')
+                    if (self.focused_panel == WorkflowsPanelType::Sidebar) =>
+                {
+                    self.focused_panel = WorkflowsPanelType::Panel;
+                }
+                KeyCode::Backspace if (self.focused_panel == WorkflowsPanelType::Panel) => {
+                    self.focused_panel = WorkflowsPanelType::Sidebar;
+                }
+
                 _ => {}
             }
         }

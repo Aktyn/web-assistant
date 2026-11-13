@@ -61,16 +61,16 @@ async fn main() -> Result<()> {
             tui_logger::init_logger(tui_logger::LevelFilter::Trace).unwrap();
             tui_logger::set_default_level(tui_logger::LevelFilter::Trace);
 
-            let done = Arc::new(AtomicUsize::new(0));
-            let done_thread = Arc::clone(&done);
-            let handle = thread::spawn(move || {
-                run_loading_animation(&done_thread);
+            let done_loading = Arc::new(AtomicUsize::new(0));
+            let done_loading_thread = Arc::clone(&done_loading);
+            let loading_thread_handle = thread::spawn(move || {
+                run_loading_animation(&done_loading_thread);
             });
 
             let core = core::Core::new(cli).await;
 
-            done.store(1, Ordering::SeqCst);
-            handle.join().unwrap();
+            done_loading.store(1, Ordering::SeqCst);
+            loading_thread_handle.join().unwrap();
 
             for workflow in &core.workflows {
                 log::info!("Workflow: {workflow:?}");

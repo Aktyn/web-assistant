@@ -4,7 +4,7 @@ use ratatui::style::Stylize as _;
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
 
-use super::palette;
+use super::super::palette;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ErrorAlert<'a> {

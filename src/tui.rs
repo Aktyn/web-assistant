@@ -35,6 +35,8 @@ struct TuiApp {
 
 impl TuiApp {
     fn new(core: Core) -> Self {
+        // TODO: initialize palette here
+
         let core_arc = Arc::new(RwLock::new(core));
 
         Self {

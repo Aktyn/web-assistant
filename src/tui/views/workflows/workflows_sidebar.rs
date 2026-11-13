@@ -14,7 +14,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use super::super::common::{button::Button, macros, palette, panel};
+use super::super::common::{macros, palette, panel, widgets::Button};
 use crate::core::{self, Core};
 use crate::utils;
 

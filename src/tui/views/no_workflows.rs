@@ -1,4 +1,3 @@
-use crossterm::event::KeyCode;
 use ratatui::{
     buffer::Buffer,
     layout::{
@@ -11,9 +10,8 @@ use ratatui::{
 };
 use std::sync::{Arc, RwLock};
 
-use super::common::button::{Button, ButtonData};
-use super::common::error_alert::ErrorAlert;
-use super::common::{macros, palette};
+use super::common::widgets::{Button, ButtonData, ErrorAlert};
+use super::common::{palette, utils};
 use super::{View, ViewAction};
 use crate::core::Core;
 
@@ -112,19 +110,12 @@ impl View for NoWorkflowsView {
         _terminal: &mut ratatui::DefaultTerminal,
     ) -> anyhow::Result<()> {
         if let Some(key) = event.as_key_event() {
-            match key.code {
-                KeyCode::Left | KeyCode::Up | KeyCode::Char('h') | KeyCode::BackTab => {
-                    macros::move_selection!(self.list_state, Previous);
-                }
-                KeyCode::Right | KeyCode::Down | KeyCode::Char('l') | KeyCode::Tab => {
-                    macros::move_selection!(self.list_state, Next, self.buttons.len() - 1);
-                }
-                KeyCode::Enter | KeyCode::Char(' ') => {
-                    if let Some(selected) = self.list_state.selected() {
-                        self.run_button_action(selected);
-                    }
-                }
-                _ => {}
+            let navigation =
+                utils::handle_navigation_event(key, &mut self.list_state, self.buttons.len() - 1);
+            if let Some(event) = navigation
+                && let utils::NavigationEvent::Select(selected) = event
+            {
+                self.run_button_action(selected);
             }
         }
 

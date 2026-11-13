@@ -1,38 +1,38 @@
 #[must_use]
 pub fn truncate_text(text: &str, limit: usize, suffix: Option<&str>) -> String {
-    if text.chars().count() <= limit {
-        return text.to_string();
-    }
-    let suffix_ = suffix.unwrap_or(r"...");
-    // If the suffix itself is longer than the limit, just return the suffix.
-    if suffix_.len() >= limit {
-        return suffix_.to_string();
-    }
-    let keep = limit - suffix_.len();
-    format!(
-        "{}{}",
-        text.chars().take(keep).collect::<String>(),
-        suffix_
-    )
+    truncate(text, limit, suffix, false)
 }
 
 #[must_use]
 pub fn truncate_text_left(text: &str, limit: usize, suffix: Option<&str>) -> String {
+    truncate(text, limit, suffix, true)
+}
+
+fn truncate(text: &str, limit: usize, suffix: Option<&str>, from_left: bool) -> String {
     let char_count = text.chars().count();
     if char_count <= limit {
         return text.to_string();
     }
+
     let suffix_ = suffix.unwrap_or("...");
     // If the suffix itself is longer than the limit, just return the suffix.
     if suffix_.len() >= limit {
         return suffix_.to_string();
     }
     let keep = limit - suffix_.len();
-    format!(
-        "{}{}",
-        suffix_,
-        text.chars().skip(char_count - keep).collect::<String>(),
-    )
+    if from_left {
+        format!(
+            "{}{}",
+            suffix_,
+            text.chars().skip(char_count - keep).collect::<String>(),
+        )
+    } else {
+        format!(
+            "{}{}",
+            text.chars().take(keep).collect::<String>(),
+            suffix_
+        )
+    }
 }
 
 #[cfg(test)]
