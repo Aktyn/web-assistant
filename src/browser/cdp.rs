@@ -510,13 +510,18 @@ impl MockCdp {
 fn default_cdp_response(method: &str, params: &Value) -> Value {
     match method {
         "Runtime.evaluate" => {
-            let expr = params.get("expression").and_then(|v| v.as_str()).unwrap_or("");
+            let expr = params
+                .get("expression")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             if expr.contains("document.readyState") {
                 serde_json::json!({"result": {"value": "complete"}})
             } else if expr.contains("data-cdp-marker") {
                 serde_json::json!({"result": {"value": {"markerId": "marker_test", "found": true}}})
-            } else if expr.contains("el.click()") || expr.contains("nativeInputValueSetter")
-                || expr.contains("window.scrollBy") || expr.contains("bodyText")
+            } else if expr.contains("el.click()")
+                || expr.contains("nativeInputValueSetter")
+                || expr.contains("window.scrollBy")
+                || expr.contains("bodyText")
             {
                 serde_json::json!({"result": {"value": true}})
             } else if expr.contains("tagName") {
@@ -663,10 +668,16 @@ mod tests {
     #[tokio::test]
     async fn test_capture_screenshot_errors_when_data_missing() {
         let mock = MockCdp::new();
-        mock.set("Page.captureScreenshot", serde_json::json!({})).await;
+        mock.set("Page.captureScreenshot", serde_json::json!({}))
+            .await;
         let result = mock.client.capture_screenshot().await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Screenshot data missing"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Screenshot data missing")
+        );
     }
 
     #[tokio::test]
@@ -680,7 +691,8 @@ mod tests {
     #[tokio::test]
     async fn test_get_layout_metrics_errors_when_missing() {
         let mock = MockCdp::new();
-        mock.set("Page.getLayoutMetrics", serde_json::json!({})).await;
+        mock.set("Page.getLayoutMetrics", serde_json::json!({}))
+            .await;
         let result = mock.client.get_layout_metrics().await;
         assert!(result.is_err());
     }
@@ -761,7 +773,10 @@ mod tests {
     #[tokio::test]
     async fn test_send_command_increments_id() {
         let mock = MockCdp::new();
-        let _ = mock.client.send_command("Page.enable", serde_json::json!({})).await;
+        let _ = mock
+            .client
+            .send_command("Page.enable", serde_json::json!({}))
+            .await;
         assert_eq!(mock.client.next_id.load(Ordering::SeqCst), 2);
     }
 

@@ -697,9 +697,7 @@ mod tests {
             .base_url("http://localhost:9999")
             .build()
             .unwrap();
-        let custom_prompt = SystemPrompt::builder()
-            .mode(PromptMode::NoThinking)
-            .build();
+        let custom_prompt = SystemPrompt::builder().mode(PromptMode::NoThinking).build();
         let agent = Agent::new("Task", llm).system_prompt(custom_prompt);
         assert_eq!(agent.system_prompt.mode, PromptMode::NoThinking);
     }
@@ -818,18 +816,9 @@ mod tests {
         }"#;
 
         let output = parse_agent_output(raw).unwrap();
-        assert_eq!(
-            output.thought.as_deref(),
-            Some("Navigating first")
-        );
-        assert_eq!(
-            output.memory.as_deref(),
-            Some("User is logged in")
-        );
-        assert_eq!(
-            output.next_goal.as_deref(),
-            Some("Fill form")
-        );
+        assert_eq!(output.thought.as_deref(), Some("Navigating first"));
+        assert_eq!(output.memory.as_deref(), Some("User is logged in"));
+        assert_eq!(output.next_goal.as_deref(), Some("Fill form"));
     }
 
     #[test]

@@ -211,10 +211,7 @@ mod tests {
         }
         let llm = ChatOpenAI::builder().build().unwrap();
         // Builder prioritizes explicit params over env vars, but falls back correctly
-        let llm_from_env = ChatOpenAI::builder()
-            .model("gpt-4")
-            .build()
-            .unwrap();
+        let llm_from_env = ChatOpenAI::builder().model("gpt-4").build().unwrap();
         assert_eq!(llm_from_env.model, "gpt-4");
         // Clean up
         unsafe {

@@ -5,7 +5,7 @@ mod dom;
 pub mod watchdogs;
 
 use anyhow::{Context, Result, anyhow};
-use cdp::{chrome, BrowserProcess, CdpClient};
+use cdp::{BrowserProcess, CdpClient, chrome};
 use dom::{BrowserState, ElementRect, EnhancedElement};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -751,7 +751,7 @@ impl BrowserBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::browser::cdp::{chrome, MockCdp};
+    use crate::browser::cdp::{MockCdp, chrome};
 
     /// Test helper: build an input JavaScript and return its text for inspection.
     #[allow(clippy::uninlined_format_args)]
@@ -1809,7 +1809,10 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         let btn_elem = state.elements.iter().find(|e| e.tag == "button").unwrap();
 
         // Test input
-        browser.input(input_elem.index, "hello world").await.unwrap();
+        browser
+            .input(input_elem.index, "hello world")
+            .await
+            .unwrap();
         let verify_js = r"(() => document.getElementById('txt').value)()";
         let value: serde_json::Value = browser.evaluate(verify_js).await.unwrap();
         assert_eq!(value.as_str().unwrap(), "hello world");

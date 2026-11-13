@@ -371,7 +371,7 @@ mod tests {
         std::fs::create_dir(tmp.path().join("Profile 2")).unwrap();
         // Non-profile directory should be ignored
         std::fs::create_dir(tmp.path().join("Local State")).unwrap();
-        
+
         let profiles = Chrome::list_profiles(tmp.path());
         assert_eq!(profiles.len(), 3); // Default + Profile 1 + Profile 2
     }
