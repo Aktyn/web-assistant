@@ -26,7 +26,7 @@ impl WorkflowCreatorView {
 impl View for WorkflowCreatorView {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         Paragraph::new("Press backspace to exit creator")
-            .style(palette::STYLE)
+            .style(palette().style)
             .centered()
             .render(area, buf);
 

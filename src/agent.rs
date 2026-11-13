@@ -631,4 +631,285 @@ mod tests {
         let result = parse_agent_output(raw);
         assert!(result.is_err());
     }
+
+    // =========================================================================
+    // Agent struct construction tests
+    // =========================================================================
+
+    #[test]
+    fn test_agent_new_construction() {
+        let llm = ChatOpenAI::builder()
+            .model("auto")
+            .api_key("")
+            .base_url("http://localhost:9999")
+            .build()
+            .unwrap();
+        let agent = Agent::new("Test task", llm.clone());
+        assert_eq!(agent.task, "Test task");
+        assert_eq!(agent.max_steps, 20);
+        assert_eq!(agent.history.len(), 0);
+        assert_eq!(agent.system_prompt.mode, PromptMode::Standard);
+    }
+
+    #[test]
+    fn test_agent_new_with_browser() {
+        let llm = ChatOpenAI::builder()
+            .model("auto")
+            .api_key("")
+            .base_url("http://localhost:9999")
+            .build()
+            .unwrap();
+        let browser = Browser::new(None);
+        let agent = Agent::new_with_browser("Browser test", llm, browser);
+        assert_eq!(agent.task, "Browser test");
+        assert_eq!(agent.max_steps, 20);
+    }
+
+    #[test]
+    fn test_agent_max_steps_fluent_builder() {
+        let llm = ChatOpenAI::builder()
+            .model("auto")
+            .api_key("")
+            .base_url("http://localhost:9999")
+            .build()
+            .unwrap();
+        let agent = Agent::new("Task", llm).max_steps(5);
+        assert_eq!(agent.max_steps, 5);
+    }
+
+    #[test]
+    fn test_agent_prompt_mode_builder() {
+        let llm = ChatOpenAI::builder()
+            .model("auto")
+            .api_key("")
+            .base_url("http://localhost:9999")
+            .build()
+            .unwrap();
+        let agent = Agent::new("Task", llm).prompt_mode(PromptMode::Flash);
+        assert_eq!(agent.system_prompt.mode, PromptMode::Flash);
+    }
+
+    #[test]
+    fn test_agent_system_prompt_builder() {
+        let llm = ChatOpenAI::builder()
+            .model("auto")
+            .api_key("")
+            .base_url("http://localhost:9999")
+            .build()
+            .unwrap();
+        let custom_prompt = SystemPrompt::builder().mode(PromptMode::NoThinking).build();
+        let agent = Agent::new("Task", llm).system_prompt(custom_prompt);
+        assert_eq!(agent.system_prompt.mode, PromptMode::NoThinking);
+    }
+
+    #[test]
+    fn test_agent_default_history_is_empty() {
+        let llm = ChatOpenAI::builder()
+            .model("auto")
+            .api_key("")
+            .base_url("http://localhost:9999")
+            .build()
+            .unwrap();
+        let agent = Agent::new("Task", llm);
+        assert!(agent.history.is_empty());
+        assert_eq!(agent.history.len(), 0);
+    }
+
+    // =========================================================================
+    // extract_json_str edge cases
+    // =========================================================================
+
+    #[test]
+    fn test_extract_json_str_without_braces_returns_trimmed() {
+        let raw = "just some text";
+        let result = extract_json_str(raw);
+        assert_eq!(result, "just some text");
+    }
+
+    #[test]
+    fn test_extract_json_str_nested_codeblocks() {
+        let raw = "```json\n{\"a\": 1}\n``` more text";
+        let result = extract_json_str(raw);
+        assert_eq!(result, "{\"a\": 1}");
+    }
+
+    #[test]
+    fn test_extract_json_str_plain_backtick_block() {
+        let raw = "```\n{\"a\": 2}\n```";
+        let result = extract_json_str(raw);
+        assert_eq!(result, "{\"a\": 2}");
+    }
+
+    #[test]
+    fn test_extract_json_str_multiple_braces_picks_outermost() {
+        let raw = "prefix { inner } middle { \"key\": \"value\" } suffix";
+        // First brace at position 8, last at position 43 → returns everything between them
+        let result = extract_json_str(raw);
+        assert!(result.contains("inner"));
+        assert!(result.contains("\"key\": \"value\""));
+    }
+
+    // =========================================================================
+    // Action parsing completeness
+    // =========================================================================
+
+    #[test]
+    fn test_parse_all_action_types() {
+        let all_actions_raw = r#"{
+            "action": [
+                {"navigate": {"url": "https://example.com"}},
+                {"click": {"index": 1}},
+                {"input": {"index": 2, "text": "hello"}},
+                {"scroll": {"amount": 100}},
+                {"wait": {"seconds": 2}},
+                {"extract": {"query": "price"}},
+                {"done": {"text": "finished", "success": true}}
+            ]
+        }"#;
+
+        let output = parse_agent_output(all_actions_raw).unwrap();
+        assert_eq!(output.action.len(), 7);
+
+        match &output.action[0] {
+            Action::Navigate { url } => assert_eq!(url, "https://example.com"),
+            _ => panic!("Expected Navigate"),
+        }
+        match &output.action[1] {
+            Action::Click { index } => assert_eq!(*index, 1),
+            _ => panic!("Expected Click"),
+        }
+        match &output.action[2] {
+            Action::Input { index, text } => {
+                assert_eq!(*index, 2);
+                assert_eq!(text, "hello");
+            }
+            _ => panic!("Expected Input"),
+        }
+        match &output.action[3] {
+            Action::Scroll { amount } => assert_eq!(*amount, 100),
+            _ => panic!("Expected Scroll"),
+        }
+        match &output.action[4] {
+            Action::Wait { seconds } => assert_eq!(*seconds, 2),
+            _ => panic!("Expected Wait"),
+        }
+        match &output.action[5] {
+            Action::Extract { query } => assert_eq!(query, "price"),
+            _ => panic!("Expected Extract"),
+        }
+        match &output.action[6] {
+            Action::Done { text, success } => {
+                assert_eq!(text, "finished");
+                assert!(*success);
+            }
+            _ => panic!("Expected Done"),
+        }
+    }
+
+    #[test]
+    fn test_parse_output_with_thought_and_memory() {
+        let raw = r#"{
+            "thought": "Navigating first",
+            "memory": "User is logged in",
+            "next_goal": "Fill form",
+            "action": [{"navigate": {"url": "https://form.example.com"}}]
+        }"#;
+
+        let output = parse_agent_output(raw).unwrap();
+        assert_eq!(output.thought.as_deref(), Some("Navigating first"));
+        assert_eq!(output.memory.as_deref(), Some("User is logged in"));
+        assert_eq!(output.next_goal.as_deref(), Some("Fill form"));
+    }
+
+    #[test]
+    fn test_single_action_as_object_parsed_correctly() {
+        // When action is a single object (not array)
+        let raw = r#"{
+            "action": {"click": {"index": 5}}
+        }"#;
+
+        let output = parse_agent_output(raw).unwrap();
+        assert_eq!(output.action.len(), 1);
+        match &output.action[0] {
+            Action::Click { index } => assert_eq!(*index, 5),
+            _ => panic!("Expected Click"),
+        }
+    }
+
+    // =========================================================================
+    // Agent lifecycle and history management tests
+    // =========================================================================
+
+    #[test]
+    fn test_save_history_to_file() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("history.json");
+
+        let llm = ChatOpenAI::builder()
+            .model("auto")
+            .api_key("")
+            .base_url("http://localhost:9999")
+            .build()
+            .unwrap();
+        let mut agent = Agent::new("Test task", llm);
+
+        // Build some history manually
+        agent.history = AgentHistoryList {
+            history: vec![AgentHistory {
+                model_output: Some(AgentOutput {
+                    thought: Some("Start".into()),
+                    memory: None,
+                    next_goal: None,
+                    action: vec![Action::Navigate {
+                        url: "https://example.com".into(),
+                    }],
+                }),
+                result: vec![ActionResult::success("Navigated")],
+                state: Some(AgentStepState {
+                    url: "https://example.com".into(),
+                    title: "Example".into(),
+                    interacted_element: None,
+                }),
+            }],
+        };
+
+        let result = agent.save_history(&file_path);
+        assert!(result.is_ok());
+        assert!(file_path.exists());
+
+        // Verify we can load it back
+        let loaded = AgentHistoryList::load_from_file(&file_path).unwrap();
+        assert_eq!(loaded.len(), 1);
+    }
+
+    #[test]
+    fn test_detect_variables_empty_history() {
+        let llm = ChatOpenAI::builder()
+            .model("auto")
+            .api_key("")
+            .base_url("http://localhost:9999")
+            .build()
+            .unwrap();
+        let agent = Agent::new("Task", llm);
+        let vars = agent.detect_variables();
+        assert!(vars.is_empty());
+    }
+
+    #[test]
+    fn test_agent_builder_pattern() {
+        let llm = ChatOpenAI::builder()
+            .model("auto")
+            .api_key("")
+            .base_url("http://localhost:9999")
+            .build()
+            .unwrap();
+
+        // Test builder pattern chaining
+        let agent = Agent::new("Complex task", llm)
+            .max_steps(10)
+            .prompt_mode(PromptMode::Flash);
+
+        assert_eq!(agent.max_steps, 10);
+        assert_eq!(agent.system_prompt.mode, PromptMode::Flash);
+    }
 }

@@ -109,14 +109,19 @@ impl View for WorkflowView {
                         self.show_sidebar = false;
                     }
                 }
-                KeyCode::Tab => self.move_to_next_panel(),
+                KeyCode::Tab => {
+                    self.move_to_next_panel();
+                    return Ok(());
+                }
                 KeyCode::Enter | KeyCode::Char(' ')
                     if (self.focused_panel == WorkflowsPanelType::Sidebar) =>
                 {
                     self.focused_panel = WorkflowsPanelType::Panel;
+                    return Ok(());
                 }
                 KeyCode::Backspace if (self.focused_panel == WorkflowsPanelType::Panel) => {
                     self.focused_panel = WorkflowsPanelType::Sidebar;
+                    return Ok(());
                 }
 
                 _ => {}

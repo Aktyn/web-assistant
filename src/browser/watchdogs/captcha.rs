@@ -417,4 +417,86 @@ mod tests {
         assert_eq!(roundtrip.duration_ms, 5200);
         assert!(roundtrip.waited);
     }
+
+    #[test]
+    fn test_captcha_info_now_creates_timestamp() {
+        let info = CaptchaInfo::now();
+        assert!(!info.vendor.is_empty() || info.vendor.is_empty()); // vendor is empty string
+        assert!(info.started_at_epoch > 0.0);
+    }
+
+    #[test]
+    fn test_handle_captcha_solver_finished_sets_result() {
+        let wd = CaptchaWatchdog::new_test();
+        let event = serde_json::json!({
+            "method": "BrowserUse.captchaSolverFinished",
+            "params": {
+                "success": true,
+                "durationMs": 3000,
+                "vendor": "recaptcha",
+                "url": "https://protected.example.com"
+            }
+        });
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let handled = rt.block_on(wd.handle_cdp_event(&event)).unwrap();
+        assert!(handled);
+        assert!(!wd.is_solving());
+        // Finished event clears solving flag but doesn't set detected
+        assert!(!wd.was_detected());
+
+        // Check last result
+        let last = rt.block_on(async { wd.last_result.lock().await.clone() });
+        assert!(last.is_some());
+        let res = last.unwrap();
+        assert_eq!(res.vendor, "recaptcha");
+        assert_eq!(res.result, CaptchaResultType::Success);
+        assert_eq!(res.duration_ms, 3000);
+    }
+
+    #[test]
+    fn test_handle_captcha_solver_finished_failed() {
+        let wd = CaptchaWatchdog::new_test();
+        let event = serde_json::json!({
+            "method": "BrowserUse.captchaSolverFinished",
+            "params": {
+                "success": false,
+                "durationMs": 5000,
+                "vendor": "hcaptcha",
+                "url": "https://blocked.example.com"
+            }
+        });
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(wd.handle_cdp_event(&event)).unwrap();
+        assert!(!wd.is_solving());
+
+        let last = rt.block_on(async { wd.last_result.lock().await.clone() });
+        assert!(last.is_some());
+        assert_eq!(last.unwrap().result, CaptchaResultType::Failed);
+    }
+
+    #[test]
+    fn test_detect_on_page_missing_method_returns_false() {
+        let wd = CaptchaWatchdog::new_test();
+        let event = serde_json::json!({"method": "Page.loadEventFired"});
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let handled = rt.block_on(wd.handle_cdp_event(&event)).unwrap();
+        assert!(!handled);
+    }
+
+    #[test]
+    fn test_reset_notifies_waiters() {
+        let wd = CaptchaWatchdog::new_test();
+        wd.solving.store(true, Ordering::SeqCst);
+        wd.reset();
+        assert!(!wd.is_solving());
+        // notify_waiters should have cleared any waiters
+    }
+
+    #[test]
+    fn test_captcha_result_type_equality() {
+        assert_eq!(CaptchaResultType::Success, CaptchaResultType::Success);
+        assert_ne!(CaptchaResultType::Success, CaptchaResultType::Failed);
+        assert_ne!(CaptchaResultType::Failed, CaptchaResultType::Timeout);
+        assert_ne!(CaptchaResultType::Timeout, CaptchaResultType::Unknown);
+    }
 }

@@ -49,12 +49,15 @@ impl NoWorkflowsView {
         let text = Text::from(vec![
             Line::from(vec![
                 "Update ".into(),
-                "workflowsDirectory".to_span().style(palette::ACCENT).bold(),
+                "workflowsDirectory"
+                    .to_span()
+                    .style(palette().accent)
+                    .bold(),
                 " in your config file or create a new workflow".into(),
             ]),
             Line::from(vec![
                 "No workflow files were found in the given directory: \"".into(),
-                Span::from(directory_path).style(palette::ACCENT),
+                Span::from(directory_path).style(palette().accent),
                 "\"".into(),
             ]),
         ])

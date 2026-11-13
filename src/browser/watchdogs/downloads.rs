@@ -387,4 +387,97 @@ mod tests {
         assert_eq!(downloads.len(), 1);
         assert_eq!(downloads[0].guid, "");
     }
+
+    #[test]
+    fn test_progress_event_updates_bytes() {
+        let dir = temp_download_dir();
+        let wd = DownloadsWatchdog::new_test(dir);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        // Start download
+        let will_begin = serde_json::json!({
+            "method": "Browser.downloadWillBegin",
+            "params": {"guid": "g1", "url": "https://ex.com/f.zip", "suggestedFilename": "f.zip"}
+        });
+        rt.block_on(wd.handle_cdp_event(&will_begin)).unwrap();
+
+        // Progress update
+        let progress = serde_json::json!({
+            "method": "Browser.downloadProgress",
+            "params": {"guid": "g1", "totalBytes": 1000, "receivedBytes": 500, "state": "in_progress"}
+        });
+        rt.block_on(wd.handle_cdp_event(&progress)).unwrap();
+
+        let items = rt.block_on(wd.list_downloads());
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].total_bytes, 1000);
+        assert_eq!(items[0].received_bytes, 500);
+    }
+
+    #[test]
+    fn test_browser_download_events_also_handled() {
+        let dir = temp_download_dir();
+        let wd = DownloadsWatchdog::new_test(dir);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        // Browser domain events should also work
+        let will_begin = serde_json::json!({
+            "method": "Browser.downloadWillBegin",
+            "params": {"guid": "bg1", "url": "u", "suggestedFilename": "out.pdf"}
+        });
+        let handled = rt.block_on(wd.handle_cdp_event(&will_begin)).unwrap();
+        assert!(handled);
+    }
+
+    #[test]
+    fn test_completed_download_state_change() {
+        let dir = temp_download_dir();
+        let wd = DownloadsWatchdog::new_test(dir);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        let will_begin = serde_json::json!({
+            "method": "Page.downloadWillBegin",
+            "params": {"guid": "cg1", "url": "https://ex.com/a.exe", "suggestedFilename": "a.exe"}
+        });
+        rt.block_on(wd.handle_cdp_event(&will_begin)).unwrap();
+
+        let completed = serde_json::json!({
+            "method": "Page.downloadProgress",
+            "params": {"guid": "cg1", "totalBytes": 500, "receivedBytes": 500, "state": "completed"}
+        });
+        rt.block_on(wd.handle_cdp_event(&completed)).unwrap();
+
+        let completed_downloads = rt.block_on(wd.get_completed_downloads());
+        assert_eq!(completed_downloads.len(), 1);
+        assert_eq!(completed_downloads[0].state, DownloadState::Completed);
+    }
+
+    #[test]
+    fn test_canceled_download_state() {
+        let dir = temp_download_dir();
+        let wd = DownloadsWatchdog::new_test(dir);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        let will_begin = serde_json::json!({
+            "method": "Page.downloadWillBegin",
+            "params": {"guid": "can1", "url": "u", "suggestedFilename": "x.zip"}
+        });
+        rt.block_on(wd.handle_cdp_event(&will_begin)).unwrap();
+
+        let canceled = serde_json::json!({
+            "method": "Page.downloadProgress",
+            "params": {"guid": "can1", "totalBytes": 100, "receivedBytes": 50, "state": "canceled"}
+        });
+        rt.block_on(wd.handle_cdp_event(&canceled)).unwrap();
+
+        let items = rt.block_on(wd.list_downloads());
+        assert_eq!(items[0].state, DownloadState::Canceled);
+    }
+
+    #[test]
+    fn test_download_dir_path_accessor() {
+        let dir = temp_download_dir();
+        let wd = DownloadsWatchdog::new_test(&dir);
+        assert_eq!(wd.download_dir_path(), &dir);
+    }
 }

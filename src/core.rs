@@ -8,6 +8,7 @@ use crate::cli::Cli;
 use config::Config;
 use workflow::{Workflow, WorkflowDataJson};
 
+#[derive(Debug)]
 pub struct Core {
     pub(crate) config: Config,
     pub(crate) workflows: Vec<Workflow>,
@@ -193,5 +194,33 @@ mod tests {
         // The json file has {} which deserializes to an error (missing `name` field),
         // but it still counts as one workflow entry (in Error state).
         assert_eq!(core.workflows.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_core_new_with_nonexistent_workflows_dir() {
+        let tmp = TempDir::new().unwrap();
+        let nonexistent = tmp.path().join("does-not-exist");
+        let parent_tmp = TempDir::new().unwrap();
+        let cli = make_cli(parent_tmp.path(), &nonexistent);
+        let core = Core::new(cli).await;
+        assert_eq!(core.workflows.len(), 0);
+    }
+
+    #[test]
+    fn test_core_struct_debug() {
+        use crate::core::workflow::{Workflow, WorkflowDataJson};
+        use std::path::PathBuf;
+        let json = WorkflowDataJson::from_raw(
+            PathBuf::from("/tmp/test.json"),
+            r#"{"name":"Test"}"#.to_string(),
+        );
+        let workflow = Workflow::new(json);
+        let core = Core {
+            config: Config::default(),
+            workflows: vec![workflow],
+        };
+        let debug_str = format!("{core:?}");
+        assert!(debug_str.contains("workflows"));
+        assert!(debug_str.contains("config"));
     }
 }

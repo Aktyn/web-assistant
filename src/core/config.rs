@@ -2,10 +2,14 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::path::PathBuf;
 
+use crate::tui;
+
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct Config {
     pub(crate) workflowsDirectory: PathBuf,
+    /// Custom TUI colors
+    pub(crate) tuiColors: Option<tui::common::HexColorsConfig>,
 }
 
 impl Config {
@@ -36,6 +40,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             workflowsDirectory: PathBuf::from("./workflows"),
+            tuiColors: None,
         }
     }
 }
@@ -175,5 +180,19 @@ mod tests {
         };
         let cloned = config.clone();
         assert_eq!(cloned.workflowsDirectory, config.workflowsDirectory);
+    }
+
+    #[test]
+    fn test_config_debug_display() {
+        let config = Config::default();
+        let debug_str = format!("{config:?}");
+        assert!(debug_str.contains("workflowsDirectory"));
+    }
+
+    #[test]
+    fn test_config_default_is_valid_path() {
+        let config = Config::default();
+        // Default should be a relative path
+        assert!(config.workflowsDirectory.is_relative());
     }
 }
