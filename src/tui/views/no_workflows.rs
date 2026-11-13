@@ -77,7 +77,7 @@ impl NoWorkflowsView {
         });
     }
 
-    fn run_button_action(&mut self, selected: usize) {
+    pub(crate) fn run_button_action(&mut self, selected: usize) {
         assert!(
             selected < self.buttons.len(),
             "selected >= self.buttons.len()"
@@ -137,15 +137,22 @@ mod tests {
     use crate::tui::views::View;
 
     #[test]
-    fn test_no_workflows_choice_variants() {
-        assert_eq!(format!("{:?}", NoWorkflowsChoice::Pending), "Pending");
-        assert_eq!(format!("{:?}", NoWorkflowsChoice::QuitApp), "QuitApp");
-        assert_ne!(NoWorkflowsChoice::Pending, NoWorkflowsChoice::QuitApp);
+    fn test_view_action_variants() {
+        assert_eq!(format!("{:?}", ViewAction::QuitApp), "QuitApp");
+        assert_eq!(
+            format!("{:?}", ViewAction::OpenWorkflowCreator),
+            "OpenWorkflowCreator"
+        );
+        assert_eq!(
+            format!("{:?}", ViewAction::ExitWorkflowCreator),
+            "ExitWorkflowCreator"
+        );
+        assert_ne!(ViewAction::QuitApp, ViewAction::OpenWorkflowCreator);
     }
 
     #[test]
-    fn test_no_workflows_choice_clone_copy() {
-        let original = NoWorkflowsChoice::CreateNewWorkflow;
+    fn test_view_action_clone_copy() {
+        let original = ViewAction::OpenWorkflowCreator;
         let copied = original;
         assert_eq!(original, copied);
     }
@@ -161,7 +168,7 @@ mod tests {
     fn test_no_workflows_view_new_pending_action() {
         let core = Arc::new(RwLock::new(empty_core()));
         let view = NoWorkflowsView::new(core);
-        assert_eq!(view.pending_action, NoWorkflowsChoice::Pending);
+        assert_eq!(view.pending_action, None);
         assert!(view.list_state.selected().is_none());
     }
 
@@ -170,9 +177,9 @@ mod tests {
         let core = Arc::new(RwLock::new(empty_core()));
         let mut view = NoWorkflowsView::new(core);
         view.run_button_action(0);
-        assert_eq!(view.pending_action, NoWorkflowsChoice::CreateNewWorkflow);
+        assert_eq!(view.pending_action, Some(ViewAction::OpenWorkflowCreator));
         view.run_button_action(1);
-        assert_eq!(view.pending_action, NoWorkflowsChoice::QuitApp);
+        assert_eq!(view.pending_action, Some(ViewAction::QuitApp));
     }
 
     #[test]
@@ -185,10 +192,10 @@ mod tests {
 
     #[test]
     fn test_button_data_for_no_workflows() {
-        // Verify ButtonData construction works with NoWorkflowsChoice
-        let data = ButtonData::new("label", NoWorkflowsChoice::Pending);
+        // Verify ButtonData construction works with ViewAction
+        let data = ButtonData::new("label", ViewAction::QuitApp);
         assert_eq!(data.label, "label");
-        assert_eq!(data.action, NoWorkflowsChoice::Pending);
+        assert_eq!(data.action, ViewAction::QuitApp);
     }
 
     /// Render test with valid area - checks no panics during draw
