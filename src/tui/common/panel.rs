@@ -35,11 +35,11 @@ impl Widget for Header {
         Paragraph::new(content)
             .centered()
             .bold()
-            .bg(palette::BACKGROUND)
+            .bg(palette().background)
             .fg(if self.focused {
-                palette::ACCENT
+                palette().accent
             } else {
-                palette::FOREGROUND
+                palette().foreground
             })
             .render(area, buf);
     }

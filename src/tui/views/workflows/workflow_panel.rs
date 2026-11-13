@@ -62,7 +62,7 @@ impl WorkflowPanel {
         Self {
             core,
             selected_workflow: None,
-            list_state: ListState::default(),
+            list_state: ListState::default().with_selected(Some(0)),
             buttons: [
                 ThisButtonData::new("Open file", WorkflowAction::OpenFile),
                 ThisButtonData::new("Edit", WorkflowAction::Edit),
@@ -175,7 +175,7 @@ impl WorkflowPanel {
                 None
             )
         ))
-        .style(palette::STYLE)
+        .style(palette().style)
         .render(path_area, buf);
 
         widgets::Separator::new(widgets::Separator::HORIZONTAL).render(options_separator_area, buf);
@@ -208,7 +208,7 @@ const OPTIONS_HEIGHT: u16 = 3;
 
 impl panel::Panel for WorkflowPanel {
     fn draw(&mut self, area: Rect, buf: &mut Buffer, focused: bool) {
-        buf.set_style(area, palette::BACKGROUND_STYLE);
+        buf.set_style(area, palette().background_style);
 
         let [header_area, content_area] = area.layout(&Layout::vertical([Length(2), Fill(1)]));
 
@@ -270,7 +270,7 @@ fn render_valid_workflow(workflow: &ValidWorkflowState, area: Rect, buf: &mut Bu
 fn render_no_selection_info(area: Rect, buf: &mut Buffer) {
     let text = "No workflow selected";
     Paragraph::new(text)
-        .style(palette::MUTED_FOREGROUND)
+        .style(palette().muted_foreground)
         .render(
             area.centered(
                 Constraint::Length(text.len().try_into().unwrap_or(u16::MAX)),

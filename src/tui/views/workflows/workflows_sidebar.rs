@@ -42,7 +42,7 @@ impl WorkflowsSidebar {
 
 impl panel::Panel for WorkflowsSidebar {
     fn draw(&mut self, area: Rect, buf: &mut Buffer, focused: bool) {
-        buf.set_style(area, palette::BACKGROUND_STYLE);
+        buf.set_style(area, palette().background_style);
 
         let items = self
             .core
@@ -80,7 +80,7 @@ impl panel::Panel for WorkflowsSidebar {
                                 )
                                 .into(),
                             ];
-                            ListItem::new(text).style(palette::ERROR_FOREGROUND)
+                            ListItem::new(text).style(palette().error_foreground)
                         }
                     })
                     .collect::<Vec<ListItem>>()
@@ -93,7 +93,7 @@ impl panel::Panel for WorkflowsSidebar {
         panel::Header::new(format!("Workflows: {}", items.len()), focused).render(header_area, buf);
 
         let list = List::new(items)
-            .style(palette::STYLE)
+            .style(palette().style)
             .highlight_style(Modifier::REVERSED);
         // .highlight_symbol("");
 
