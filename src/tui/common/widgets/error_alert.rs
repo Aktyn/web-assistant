@@ -79,7 +79,8 @@ mod tests {
 
     #[test]
     fn test_error_alert_render_large_area_no_panic() {
-        let alert = ErrorAlert::new("A very long error message that explains what happened in detail");
+        let alert =
+            ErrorAlert::new("A very long error message that explains what happened in detail");
         let area = Rect::new(0, 0, 200, 60);
         let mut buf = Buffer::empty(area);
         alert.render(area, &mut buf);

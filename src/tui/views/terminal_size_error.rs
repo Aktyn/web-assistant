@@ -83,7 +83,7 @@ mod tests {
     }
 
     /// Returns a `&mut DefaultTerminal` that is never dereferenced by
-/// `TerminalSizeErrorView::handle_event` (the `_terminal` parameter is unused).
+    /// `TerminalSizeErrorView::handle_event` (the `_terminal` parameter is unused).
     fn no_read_term() -> *mut ratatui::DefaultTerminal {
         use std::mem::MaybeUninit;
         static SLOT: std::sync::OnceLock<MaybeUninit<ratatui::DefaultTerminal>> =

@@ -197,8 +197,8 @@ fn smart_event_poll(terminal: &mut DefaultTerminal) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crossterm::event::{Event, KeyCode};
     use crate::core::config::Config;
+    use crossterm::event::{Event, KeyCode};
     use views::View;
 
     fn empty_core() -> Core {
@@ -212,8 +212,7 @@ mod tests {
     /// views we exercise (they ignore the `_terminal` parameter).
     fn no_read_term() -> *mut DefaultTerminal {
         use std::mem::MaybeUninit;
-        static SLOT: std::sync::OnceLock<MaybeUninit<DefaultTerminal>> =
-            std::sync::OnceLock::new();
+        static SLOT: std::sync::OnceLock<MaybeUninit<DefaultTerminal>> = std::sync::OnceLock::new();
         let slot = SLOT.get_or_init(MaybeUninit::uninit);
         slot.as_ptr().cast_mut()
     }

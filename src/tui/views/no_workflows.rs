@@ -139,8 +139,14 @@ mod tests {
     #[test]
     fn test_view_action_variants() {
         assert_eq!(format!("{:?}", ViewAction::QuitApp), "QuitApp");
-        assert_eq!(format!("{:?}", ViewAction::OpenWorkflowCreator), "OpenWorkflowCreator");
-        assert_eq!(format!("{:?}", ViewAction::ExitWorkflowCreator), "ExitWorkflowCreator");
+        assert_eq!(
+            format!("{:?}", ViewAction::OpenWorkflowCreator),
+            "OpenWorkflowCreator"
+        );
+        assert_eq!(
+            format!("{:?}", ViewAction::ExitWorkflowCreator),
+            "ExitWorkflowCreator"
+        );
         assert_ne!(ViewAction::QuitApp, ViewAction::OpenWorkflowCreator);
     }
 

@@ -27,11 +27,7 @@ fn truncate(text: &str, limit: usize, suffix: Option<&str>, from_left: bool) -> 
             text.chars().skip(char_count - keep).collect::<String>(),
         )
     } else {
-        format!(
-            "{}{}",
-            text.chars().take(keep).collect::<String>(),
-            suffix_
-        )
+        format!("{}{}", text.chars().take(keep).collect::<String>(), suffix_)
     }
 }
 

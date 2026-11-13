@@ -283,8 +283,8 @@ fn render_no_selection_info(area: Rect, buf: &mut Buffer) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crossterm::event::KeyCode;
     use crate::tui::common::panel::Panel;
+    use crossterm::event::KeyCode;
 
     fn empty_core() -> Core {
         Core {
@@ -379,15 +379,16 @@ mod tests {
         use std::path::PathBuf;
 
         let mk = |name: &str, path: &str| {
-            let json = WorkflowDataJson::from_raw(
-                PathBuf::from(path),
-                format!(r#"{{"name":"{name}"}}"#),
-            );
+            let json =
+                WorkflowDataJson::from_raw(PathBuf::from(path), format!(r#"{{"name":"{name}"}}"#));
             Workflow::new(json)
         };
         Core {
             config: crate::core::config::Config::default(),
-            workflows: vec![mk("First", "/tmp/first.json"), mk("Second", "/tmp/second.json")],
+            workflows: vec![
+                mk("First", "/tmp/first.json"),
+                mk("Second", "/tmp/second.json"),
+            ],
         }
     }
 
@@ -395,10 +396,8 @@ mod tests {
         use crate::core::workflow::{Workflow, WorkflowDataJson};
         use std::path::PathBuf;
 
-        let json = WorkflowDataJson::from_raw(
-            PathBuf::from("/tmp/bad.json"),
-            "{invalid json".to_string(),
-        );
+        let json =
+            WorkflowDataJson::from_raw(PathBuf::from("/tmp/bad.json"), "{invalid json".to_string());
         let workflow = Workflow::new(json);
         Core {
             config: crate::core::config::Config::default(),

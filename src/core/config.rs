@@ -92,7 +92,10 @@ mod tests {
 
         let path = PathBuf::from(tmp.path());
         let loaded = Config::new(&path).await;
-        assert_eq!(loaded.workflowsDirectory, PathBuf::from("/custom/workflows"));
+        assert_eq!(
+            loaded.workflowsDirectory,
+            PathBuf::from("/custom/workflows")
+        );
     }
 
     #[tokio::test]
@@ -147,7 +150,10 @@ mod tests {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async { init_default_config(Some(output_path.clone())).await });
         });
-        assert!(result.is_err(), "Expected panic when output file already exists");
+        assert!(
+            result.is_err(),
+            "Expected panic when output file already exists"
+        );
     }
 
     #[tokio::test]

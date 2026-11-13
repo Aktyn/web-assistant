@@ -259,7 +259,10 @@ mod tests {
             .name(),
             "done"
         );
-        assert_eq!(Action::Custom(serde_json::json!({"k": "v"})).name(), "custom");
+        assert_eq!(
+            Action::Custom(serde_json::json!({"k": "v"})).name(),
+            "custom"
+        );
     }
 
     #[test]
