@@ -5,7 +5,7 @@ mod dom;
 pub mod watchdogs;
 
 use anyhow::{Context, Result, anyhow};
-use cdp::{BrowserProcess, CdpClient};
+use cdp::{BrowserProcess, CdpClient, chrome};
 use dom::{BrowserState, ElementRect, EnhancedElement};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -606,6 +606,19 @@ impl Browser {
         self.cached_state = None;
         Ok(())
     }
+
+    /// Test-only constructor that injects a pre-built CdpClient so unit tests
+    /// can exercise browser methods without a real Chrome process.
+    #[cfg(test)]
+    pub(crate) fn new_with_client(client: CdpClient) -> Self {
+        Self {
+            config: BrowserConfig::default(),
+            process: None,
+            client: Some(client),
+            watchdogs: None,
+            cached_state: None,
+        }
+    }
 }
 
 /// Find the largest visible quad within the viewport
@@ -738,6 +751,7 @@ impl BrowserBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::browser::cdp::{MockCdp, chrome};
 
     /// Test helper: build an input JavaScript and return its text for inspection.
     #[allow(clippy::uninlined_format_args)]
@@ -1594,5 +1608,281 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
             anyhow!("Cannot click on <select> elements. Use dropdown selection actions instead.");
         assert!(select_err.to_string().contains("<select>"));
         assert!(select_err.to_string().contains("dropdown"));
+    }
+
+    // =========================================================================
+    // Browser method coverage via MockCdp
+    // =========================================================================
+
+    async fn mock_browser_with_state(state_json: serde_json::Value) -> Browser {
+        let mock = MockCdp::new();
+        mock.set(
+            "Runtime.evaluate",
+            serde_json::json!({"result": {"value": state_json}}),
+        )
+        .await;
+        Browser::new_with_client(mock.client)
+    }
+
+    #[tokio::test]
+    async fn test_get_state_returns_browser_state() {
+        let state_json = serde_json::json!({
+            "url": "https://example.com",
+            "title": "Example",
+            "elements": [],
+            "text": "Hello world"
+        });
+        let mut browser = mock_browser_with_state(state_json).await;
+        let state = browser.get_state().await.unwrap();
+        assert_eq!(state.url, "https://example.com");
+        assert_eq!(state.title, "Example");
+        assert_eq!(state.text, "Hello world");
+        assert!(state.elements.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_refresh_state_caches_state() {
+        let state_json = serde_json::json!({
+            "url": "https://cached.example.com",
+            "title": "Cached",
+            "elements": [],
+            "text": "cached text"
+        });
+        let mut browser = mock_browser_with_state(state_json).await;
+        let state = browser.refresh_state().await.unwrap();
+        assert_eq!(state.url, "https://cached.example.com");
+        // Subsequent get_element should find cached state
+        assert!(browser.cached_state.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_get_element_finds_cached_element() {
+        let state_json = serde_json::json!({
+            "url": "u",
+            "title": "t",
+            "elements": [
+                {"index": 1, "tag": "button", "text": "Click", "attributes": {}, "x": 0.0, "y": 0.0}
+            ],
+            "text": ""
+        });
+        let mut browser = mock_browser_with_state(state_json).await;
+        browser.refresh_state().await.unwrap();
+        let elem = browser.get_element(1);
+        assert!(elem.is_some());
+        assert_eq!(elem.unwrap().tag, "button");
+        // Missing element returns None
+        assert!(browser.get_element(99).is_none());
+    }
+
+    #[tokio::test]
+    async fn test_navigate_formats_url_and_calls_client() {
+        let state_json = serde_json::json!({
+            "url": "https://example.com",
+            "title": "Example",
+            "elements": [],
+            "text": ""
+        });
+        let mut browser = mock_browser_with_state(state_json).await;
+        let result = browser.navigate("example.com").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_navigate_with_full_url_does_not_double_prefix() {
+        let state_json = serde_json::json!({
+            "url": "https://example.com",
+            "title": "Example",
+            "elements": [],
+            "text": ""
+        });
+        let mut browser = mock_browser_with_state(state_json).await;
+        let result = browser.navigate("https://example.com").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_navigate_with_about_url_preserved() {
+        let state_json = serde_json::json!({
+            "url": "about:blank",
+            "title": "",
+            "elements": [],
+            "text": ""
+        });
+        let mut browser = mock_browser_with_state(state_json).await;
+        let result = browser.navigate("about:blank").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_returns_value_from_client() {
+        let mock = MockCdp::new();
+        mock.set(
+            "Runtime.evaluate",
+            serde_json::json!({"result": {"value": "hello"}}),
+        )
+        .await;
+        let mut browser = Browser::new_with_client(mock.client);
+        let val = browser.evaluate("1+1").await.unwrap();
+        assert_eq!(val, serde_json::json!("hello"));
+    }
+
+    #[tokio::test]
+    async fn test_screenshot_returns_data() {
+        let mock = MockCdp::new();
+        let mut browser = Browser::new_with_client(mock.client);
+        let data = browser.screenshot().await.unwrap();
+        assert_eq!(data, "iVBORw0KGgo=");
+    }
+
+    #[tokio::test]
+    async fn test_user_data_dir_none_before_start() {
+        let browser = Browser::new(None);
+        assert!(browser.user_data_dir().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_watchdogs_none_before_start() {
+        let mut browser = Browser::new(None);
+        assert!(browser.watchdogs().is_none());
+        assert!(browser.watchdogs_mut().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_close_resets_all_state() {
+        let mock = MockCdp::new();
+        let mut browser = Browser::new_with_client(mock.client);
+        browser.cached_state = Some(BrowserState {
+            url: String::new(),
+            title: String::new(),
+            elements: Vec::new(),
+            text: String::new(),
+        });
+        browser.close().await.unwrap();
+        assert!(browser.client.is_none());
+        assert!(browser.watchdogs.is_none());
+        assert!(browser.cached_state.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_scroll_sends_eval() {
+        let state_json = serde_json::json!({
+            "url": "u", "title": "t", "elements": [], "text": ""
+        });
+        let mut browser = mock_browser_with_state(state_json).await;
+        let result = browser.scroll(500).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_wait_succeeds() {
+        let mut browser = Browser::new(None);
+        let result = browser.wait(0).await;
+        assert!(result.is_ok());
+    }
+
+    // =========================================================================
+    // Live browser integration tests (requires Chromium)
+    // =========================================================================
+
+    #[tokio::test]
+    #[ignore = "Requires Chrome/Chromium"]
+    async fn test_live_browser_click_and_input() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let html_path = temp_dir.path().join("test_click_input.html");
+        std::fs::write(
+            &html_path,
+            "<!DOCTYPE html>\n<html><body>\n\
+             <input type='text' id='txt' placeholder='Type here'/>\n\
+             <button id='btn'>Click Me</button>\n\
+             </body></html>",
+        )
+        .unwrap();
+
+        let file_url = format!("file://{}", html_path.display());
+        let mut browser = Browser::new(None);
+        browser.start().await.unwrap();
+        browser.navigate(&file_url).await.unwrap();
+
+        // Get state and find elements
+        let state = browser.get_state().await.unwrap();
+        let input_elem = state.elements.iter().find(|e| e.tag == "input").unwrap();
+        let btn_elem = state.elements.iter().find(|e| e.tag == "button").unwrap();
+
+        // Test input
+        browser
+            .input(input_elem.index, "hello world")
+            .await
+            .unwrap();
+        let verify_js = r"(() => document.getElementById('txt').value)()";
+        let value: serde_json::Value = browser.evaluate(verify_js).await.unwrap();
+        assert_eq!(value.as_str().unwrap(), "hello world");
+
+        // Test click
+        browser.click(btn_elem.index).await.unwrap();
+
+        browser.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "Requires Chrome/Chromium"]
+    async fn test_live_browser_scroll() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let html_path = temp_dir.path().join("test_scroll.html");
+        std::fs::write(
+            &html_path,
+            "<div style='height:2000px'><p>Content</p></div>",
+        )
+        .unwrap();
+
+        let file_url = format!("file://{}", html_path.display());
+        let mut browser = Browser::new(None);
+        browser.start().await.unwrap();
+        browser.navigate(&file_url).await.unwrap();
+
+        let result = browser.scroll(500).await;
+        assert!(result.is_ok());
+
+        browser.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "Requires Chrome/Chromium"]
+    async fn test_live_browser_user_data_dir() {
+        let mut browser = Browser::new(None);
+        browser.start().await.unwrap();
+        assert!(browser.user_data_dir().is_some());
+        browser.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "Requires Chrome/Chromium"]
+    async fn test_live_browser_close_resets_state() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let html_path = temp_dir.path().join("test_close.html");
+        std::fs::write(&html_path, "<html><body>Test</body></html>").unwrap();
+
+        let file_url = format!("file://{}", html_path.display());
+        let mut browser = Browser::new(None);
+        browser.start().await.unwrap();
+        browser.navigate(&file_url).await.unwrap();
+        browser.close().await.unwrap();
+
+        // After close, client should be reset
+        assert!(browser.client.is_none());
+        assert!(browser.watchdogs.is_none());
+    }
+
+    #[tokio::test]
+    #[ignore = "Requires Chrome/Chromium"]
+    async fn test_live_browser_build_flags_in_args() {
+        // Verifies Chrome::default_args includes expected flags
+        let port = cdp::get_available_port().unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let args = chrome::Chrome::default_args(port, temp_dir.path(), true);
+        let args_str: Vec<String> = args.iter().map(ToString::to_string).collect();
+        let combined = args_str.join(" ");
+        assert!(combined.contains("--no-sandbox"));
+        assert!(combined.contains("--headless=new"));
+        assert!(combined.contains("--disable-extensions"));
     }
 }

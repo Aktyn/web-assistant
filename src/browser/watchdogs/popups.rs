@@ -145,4 +145,29 @@ mod tests {
     fn matches_dialog_accept(dialog_type: &str) -> bool {
         matches!(dialog_type, "alert" | "confirm" | "beforeunload")
     }
+
+    #[test]
+    fn test_handle_non_dialog_event_returns_false() {
+        let wd = PopupsWatchdog::new(CdpClient::new_test_client());
+        let event = serde_json::json!({"method": "Page.navigate"});
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let handled = rt.block_on(wd.handle_cdp_event(&event)).unwrap();
+        assert!(!handled);
+    }
+
+    #[test]
+    fn test_dialog_types_recognized() {
+        // Verify all expected dialog types are handled correctly
+        for dialog_type in ["alert", "confirm", "beforeunload"] {
+            let event = serde_json::json!({
+                "method": "Page.javascriptDialogOpening",
+                "params": {"type": dialog_type, "message": "Test message"}
+            });
+            // We can't easily test the full handle since it requires a real client,
+            // but we verify the pattern matching works
+            assert!(matches_dialog_accept(dialog_type));
+        }
+        // Prompt should be dismissed
+        assert!(!matches_dialog_accept("prompt"));
+    }
 }
