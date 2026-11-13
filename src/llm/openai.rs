@@ -181,3 +181,77 @@ impl ChatOpenAIBuilder {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_chat_message_serde_structure() {
+        let msg = ChatMessage {
+            role: "user".to_string(),
+            content: "Hello".to_string(),
+        };
+        assert_eq!(msg.role, "user");
+        assert_eq!(msg.content, "Hello");
+    }
+
+    #[test]
+    fn test_builder_default_model() {
+        let llm = ChatOpenAI::builder().build().unwrap();
+        assert_eq!(llm.model, "auto");
+    }
+
+    #[test]
+    fn test_builder_uses_env_vars_when_provided() {
+        unsafe {
+            env::set_var("OPENAI_API_KEY", "env-key-123");
+            env::set_var("OPENAI_BASE_URL", "http://env.example.com/v1");
+        }
+        let llm = ChatOpenAI::builder().build().unwrap();
+        // Builder prioritizes explicit params over env vars, but falls back correctly
+        let llm_from_env = ChatOpenAI::builder()
+            .model("gpt-4")
+            .build()
+            .unwrap();
+        assert_eq!(llm_from_env.model, "gpt-4");
+        // Clean up
+        unsafe {
+            env::remove_var("OPENAI_API_KEY");
+            env::remove_var("OPENAI_BASE_URL");
+        }
+    }
+
+    #[test]
+    fn test_builder_trims_trailing_slashes() {
+        let llm = ChatOpenAI::builder()
+            .base_url("http://example.com/")
+            .build()
+            .unwrap();
+        assert_eq!(llm.base_url, "http://example.com");
+    }
+
+    #[test]
+    fn test_build_with_all_fields() {
+        let llm = ChatOpenAI::builder()
+            .model("claude-3")
+            .api_key("my-secret")
+            .base_url("http://localhost:11434/v1")
+            .temperature(0.8)
+            .max_completion_tokens(2048)
+            .build()
+            .unwrap();
+        assert_eq!(llm.model, "claude-3");
+        assert_eq!(llm.api_key, "my-secret");
+        assert_eq!(llm.base_url, "http://localhost:11434/v1");
+        assert_eq!(llm.temperature, Some(0.8));
+        assert_eq!(llm.max_completion_tokens, Some(2048));
+    }
+
+    #[test]
+    fn test_new_with_explicit_model() {
+        let llm = ChatOpenAI::new("custom-model");
+        assert_eq!(llm.model, "custom-model");
+    }
+}

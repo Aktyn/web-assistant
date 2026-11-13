@@ -172,4 +172,34 @@ mod tests {
         wd.recovery_count.store(5, Ordering::SeqCst);
         assert_eq!(wd.recovery_count(), 5);
     }
+
+    #[test]
+    fn test_crash_event_handling_variants() {
+        // Test both target crash event names
+        for method in ["Target.targetCrashed", "Inspector.targetCrashed"] {
+            let wd = CrashWatchdog::new_test();
+            let event = serde_json::json!({"method": method, "params": {}});
+            let handled = wd.handle_cdp_event(&event).unwrap();
+            assert!(handled);
+            assert!(wd.is_crashed());
+        }
+    }
+
+    #[test]
+    fn test_missing_method_field_with_params_returns_false() {
+        let wd = CrashWatchdog::new_test();
+        let event = serde_json::json!({"params": {"foo": "bar"}});
+        let handled = wd.handle_cdp_event(&event).unwrap();
+        assert!(!handled);
+    }
+
+    #[test]
+    fn test_multiple_crash_events_increment_counter() {
+        let wd = CrashWatchdog::new_test();
+        let event1 = serde_json::json!({"method": "Target.targetCrashed", "params": {}});
+        let event2 = serde_json::json!({"method": "Inspector.targetCrashed", "params": {}});
+        wd.handle_cdp_event(&event1).unwrap();
+        wd.handle_cdp_event(&event2).unwrap();
+        assert_eq!(wd.crash_count(), 2);
+    }
 }

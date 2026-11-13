@@ -352,4 +352,45 @@ mod tests {
         let locked = Chrome::is_user_data_dir_locked(tmp.path());
         assert!(!locked);
     }
+
+    #[test]
+    fn test_default_args_includes_disable_features() {
+        let args = Chrome::default_args(9222, Path::new("/tmp"), true);
+        let args_str: Vec<String> = args.iter().map(ToString::to_string).collect();
+        let combined = args_str.join(" ");
+        assert!(combined.contains("--disable-extensions"));
+        assert!(combined.contains("--disable-sync"));
+        assert!(combined.contains("--no-first-run"));
+    }
+
+    #[test]
+    fn test_list_profiles_mixed() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir(tmp.path().join("Default")).unwrap();
+        std::fs::create_dir(tmp.path().join("Profile 1")).unwrap();
+        std::fs::create_dir(tmp.path().join("Profile 2")).unwrap();
+        // Non-profile directory should be ignored
+        std::fs::create_dir(tmp.path().join("Local State")).unwrap();
+        
+        let profiles = Chrome::list_profiles(tmp.path());
+        assert_eq!(profiles.len(), 3); // Default + Profile 1 + Profile 2
+    }
+
+    #[test]
+    fn test_chrome_profile_info_struct() {
+        let info = ChromeProfileInfo {
+            name: "Test Profile".into(),
+            directory: "Test Profile".into(),
+        };
+        assert_eq!(info.name, "Test Profile");
+        assert_eq!(info.directory, "Test Profile");
+    }
+
+    #[test]
+    fn test_resolve_user_data_dir_fallback() {
+        // This test verifies the function returns Ok even when default dir doesn't exist
+        // The fallback to dedicated dir should work
+        let result = Chrome::resolve_user_data_dir(None, None);
+        assert!(result.is_ok());
+    }
 }

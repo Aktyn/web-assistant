@@ -176,4 +176,18 @@ mod tests {
         let cloned = config.clone();
         assert_eq!(cloned.workflowsDirectory, config.workflowsDirectory);
     }
+
+    #[test]
+    fn test_config_debug_display() {
+        let config = Config::default();
+        let debug_str = format!("{config:?}");
+        assert!(debug_str.contains("workflowsDirectory"));
+    }
+
+    #[test]
+    fn test_config_default_is_valid_path() {
+        let config = Config::default();
+        // Default should be a relative path
+        assert!(config.workflowsDirectory.is_relative());
+    }
 }

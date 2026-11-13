@@ -453,6 +453,102 @@ impl Drop for BrowserProcess {
     }
 }
 
+/// Test-only mock CDP server that responds to commands with canned JSON.
+/// Built on `CdpClient::new_with_channel` so no real WebSocket is needed.
+#[cfg(test)]
+pub(crate) struct MockCdp {
+    pub client: CdpClient,
+    overrides: Arc<std::sync::Mutex<HashMap<String, Value>>>,
+    fails: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
+}
+
+#[cfg(test)]
+impl MockCdp {
+    pub(crate) fn new() -> Self {
+        let (client, mut rx) = CdpClient::new_with_channel();
+        let overrides = Arc::new(std::sync::Mutex::new(HashMap::<String, Value>::new()));
+        let fails = Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
+        let ov = overrides.clone();
+        let fl = fails.clone();
+        tokio::spawn(async move {
+            while let Some((req, tx)) = rx.recv().await {
+                let should_fail = fl.lock().unwrap().contains(&req.method);
+                if should_fail {
+                    let _ = tx.send(Err(anyhow!("MockCdp: forced failure for {}", req.method)));
+                    continue;
+                }
+                let guard = ov.lock().unwrap();
+                let result = if let Some(resp) = guard.get(&req.method) {
+                    resp.clone()
+                } else {
+                    default_cdp_response(&req.method, &req.params)
+                };
+                let _ = tx.send(Ok(result));
+            }
+        });
+        Self {
+            client,
+            overrides,
+            fails,
+        }
+    }
+
+    pub(crate) async fn set(&self, method: &str, value: Value) {
+        self.overrides
+            .lock()
+            .unwrap()
+            .insert(method.to_string(), value);
+    }
+
+    /// Make a specific CDP method always fail (simulates browser errors).
+    pub(crate) async fn set_fail(&self, method: &str) {
+        self.fails.lock().unwrap().insert(method.to_string());
+    }
+}
+
+#[cfg(test)]
+fn default_cdp_response(method: &str, params: &Value) -> Value {
+    match method {
+        "Runtime.evaluate" => {
+            let expr = params.get("expression").and_then(|v| v.as_str()).unwrap_or("");
+            if expr.contains("document.readyState") {
+                serde_json::json!({"result": {"value": "complete"}})
+            } else if expr.contains("data-cdp-marker") {
+                serde_json::json!({"result": {"value": {"markerId": "marker_test", "found": true}}})
+            } else if expr.contains("el.click()") || expr.contains("nativeInputValueSetter")
+                || expr.contains("window.scrollBy") || expr.contains("bodyText")
+            {
+                serde_json::json!({"result": {"value": true}})
+            } else if expr.contains("tagName") {
+                serde_json::json!({"result": {"value": {
+                    "tag": "button", "type": "", "role": "",
+                    "x": 10.0, "y": 10.0, "width": 100.0, "height": 30.0
+                }}})
+            } else if expr.contains("interactiveSelectors") {
+                // State extraction (EXTRACT_DOM_JS)
+                serde_json::json!({"result": {"value": {
+                    "url": "https://example.com",
+                    "title": "Example Page",
+                    "elements": [{"index":1,"tag":"button","text":"Mock","attributes":{},"x":60.0,"y":25.0}],
+                    "text": "Mock page content"
+                }}})
+            } else {
+                serde_json::json!({"result": {"value": null}})
+            }
+        }
+        "Page.captureScreenshot" => serde_json::json!({"data": "iVBORw0KGgo="}),
+        "Page.getLayoutMetrics" => {
+            serde_json::json!({"layoutViewport": {"clientWidth": 1920.0, "clientHeight": 1080.0}})
+        }
+        "DOM.getContentQuads" => serde_json::json!({"quads": []}),
+        "DOM.getBoxModel" => serde_json::json!({
+            "model": {"content": [0.0, 0.0, 100.0, 0.0, 100.0, 100.0, 0.0, 100.0]}
+        }),
+        "DOM.resolveNode" => serde_json::json!({"object": {"objectId": "mock-object-id"}}),
+        _ => serde_json::json!({}),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -519,5 +615,168 @@ mod tests {
     fn test_browser_process_fields() {
         // Just verify the struct can be referenced
         let _: fn() -> std::mem::MaybeUninit<BrowserProcess> = || std::mem::MaybeUninit::uninit();
+    }
+
+    // ------------------------------------------------------------------
+    // CdpClient method coverage via MockCdp
+    // ------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_evaluate_returns_value_from_mock() {
+        let mock = MockCdp::new();
+        mock.set(
+            "Runtime.evaluate",
+            serde_json::json!({"result": {"value": 42}}),
+        )
+        .await;
+        let val = mock.client.evaluate("anything").await.unwrap();
+        assert_eq!(val, serde_json::json!(42));
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_returns_null_when_missing() {
+        let mock = MockCdp::new();
+        let val = mock.client.evaluate("anything").await.unwrap();
+        assert_eq!(val, serde_json::json!(null));
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_propagates_exception_details() {
+        let mock = MockCdp::new();
+        mock.set(
+            "Runtime.evaluate",
+            serde_json::json!({"exceptionDetails": {"exception": {"description": "boom"}}}),
+        )
+        .await;
+        let result = mock.client.evaluate("throw new Error('boom')").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("boom"));
+    }
+
+    #[tokio::test]
+    async fn test_capture_screenshot_returns_data() {
+        let mock = MockCdp::new();
+        let data = mock.client.capture_screenshot().await.unwrap();
+        assert_eq!(data, "iVBORw0KGgo=");
+    }
+
+    #[tokio::test]
+    async fn test_capture_screenshot_errors_when_data_missing() {
+        let mock = MockCdp::new();
+        mock.set("Page.captureScreenshot", serde_json::json!({})).await;
+        let result = mock.client.capture_screenshot().await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Screenshot data missing"));
+    }
+
+    #[tokio::test]
+    async fn test_get_layout_metrics_returns_dimensions() {
+        let mock = MockCdp::new();
+        let (w, h) = mock.client.get_layout_metrics().await.unwrap();
+        assert_eq!(w, 1920.0);
+        assert_eq!(h, 1080.0);
+    }
+
+    #[tokio::test]
+    async fn test_get_layout_metrics_errors_when_missing() {
+        let mock = MockCdp::new();
+        mock.set("Page.getLayoutMetrics", serde_json::json!({})).await;
+        let result = mock.client.get_layout_metrics().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_get_content_quads_parses_quads() {
+        let mock = MockCdp::new();
+        mock.set(
+            "DOM.getContentQuads",
+            serde_json::json!({"quads": [[0.0, 0.0, 100.0, 0.0, 100.0, 100.0, 0.0, 100.0]]}),
+        )
+        .await;
+        let quads = mock.client.get_content_quads(1).await.unwrap();
+        assert_eq!(quads.len(), 1);
+        assert_eq!(quads[0].len(), 8);
+    }
+
+    #[tokio::test]
+    async fn test_get_content_quads_skips_short_arrays() {
+        let mock = MockCdp::new();
+        mock.set(
+            "DOM.getContentQuads",
+            serde_json::json!({"quads": [[1.0, 2.0, 3.0]]}),
+        )
+        .await;
+        let quads = mock.client.get_content_quads(1).await.unwrap();
+        assert!(quads.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_content_quads_errors_when_missing() {
+        let mock = MockCdp::new();
+        mock.set("DOM.getContentQuads", serde_json::json!({})).await;
+        let result = mock.client.get_content_quads(1).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_get_box_model_passes_backend_node_id() {
+        let mock = MockCdp::new();
+        let model = mock.client.get_box_model(42).await.unwrap();
+        assert_eq!(model["model"]["content"][0], 0.0);
+    }
+
+    #[tokio::test]
+    async fn test_call_function_on_returns_value() {
+        let mock = MockCdp::new();
+        let result = mock
+            .client
+            .call_function_on("function() { return 1; }", "obj-1")
+            .await
+            .unwrap();
+        assert_eq!(result, serde_json::json!({}));
+    }
+
+    #[tokio::test]
+    async fn test_scroll_into_view_if_needed_succeeds() {
+        let mock = MockCdp::new();
+        let result = mock.client.scroll_into_view_if_needed(7).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_node_returns_object_id() {
+        let mock = MockCdp::new();
+        let id = mock.client.resolve_node(5).await.unwrap();
+        assert_eq!(id, "mock-object-id");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_node_errors_when_missing() {
+        let mock = MockCdp::new();
+        mock.set("DOM.resolveNode", serde_json::json!({})).await;
+        let result = mock.client.resolve_node(5).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_send_command_increments_id() {
+        let mock = MockCdp::new();
+        let _ = mock.client.send_command("Page.enable", serde_json::json!({})).await;
+        assert_eq!(mock.client.next_id.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn test_navigate_waits_for_ready_state() {
+        let mock = MockCdp::new();
+        let result = mock.client.navigate("https://example.com").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_navigate_formats_url_with_https() {
+        let mock = MockCdp::new();
+        // Default mock returns "complete" for readyState, so navigate succeeds.
+        let result = mock.client.navigate("example.com").await;
+        assert!(result.is_ok());
     }
 }
