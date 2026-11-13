@@ -283,6 +283,7 @@ fn render_no_selection_info(area: Rect, buf: &mut Buffer) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crossterm::event::KeyCode;
     use crate::tui::common::panel::Panel;
 
     fn empty_core() -> Core {
@@ -373,6 +374,23 @@ mod tests {
         }
     }
 
+    fn core_with_two_workflows() -> Core {
+        use crate::core::workflow::{Workflow, WorkflowDataJson};
+        use std::path::PathBuf;
+
+        let mk = |name: &str, path: &str| {
+            let json = WorkflowDataJson::from_raw(
+                PathBuf::from(path),
+                format!(r#"{{"name":"{name}"}}"#),
+            );
+            Workflow::new(json)
+        };
+        Core {
+            config: crate::core::config::Config::default(),
+            workflows: vec![mk("First", "/tmp/first.json"), mk("Second", "/tmp/second.json")],
+        }
+    }
+
     fn core_with_invalid_workflow() -> Core {
         use crate::core::workflow::{Workflow, WorkflowDataJson};
         use std::path::PathBuf;
@@ -390,43 +408,43 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_update_opens_new_selection() {
-        let core = Arc::new(RwLock::new(empty_core()));
+        let core = Arc::new(RwLock::new(core_with_workflow("My Workflow")));
         let mut panel = WorkflowPanel::new(core);
         assert!(panel.selected_workflow.is_none());
-        panel.update(Some(5));
-        assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 5);
+        panel.update(Some(0));
+        assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 0);
     }
 
     #[test]
     fn test_workflow_panel_update_skips_same_index() {
-        let core = Arc::new(RwLock::new(empty_core()));
+        let core = Arc::new(RwLock::new(core_with_workflow("My Workflow")));
         let mut panel = WorkflowPanel::new(core);
-        panel.update(Some(1));
+        panel.update(Some(0));
         // Update again with the same index — should not re-open (no-op).
-        panel.update(Some(1));
-        assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 1);
+        panel.update(Some(0));
+        assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 0);
     }
 
     #[test]
     fn test_workflow_panel_update_changes_index() {
-        let core = Arc::new(RwLock::new(empty_core()));
+        let core = Arc::new(RwLock::new(core_with_two_workflows()));
         let mut panel = WorkflowPanel::new(core);
+        panel.update(Some(0));
+        assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 0);
+        // Different index triggers re-open.
         panel.update(Some(1));
         assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 1);
-        // Different index triggers re-open.
-        panel.update(Some(2));
-        assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 2);
     }
 
     #[test]
     fn test_workflow_panel_update_none_is_noop() {
-        let core = Arc::new(RwLock::new(empty_core()));
+        let core = Arc::new(RwLock::new(core_with_workflow("My Workflow")));
         let mut panel = WorkflowPanel::new(core);
-        panel.update(Some(3));
+        panel.update(Some(0));
         assert!(panel.selected_workflow.is_some());
         // None means "keep current selection".
         panel.update(None);
-        assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 3);
+        assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 0);
     }
 
     #[test]
@@ -465,7 +483,8 @@ mod tests {
         let core = Arc::new(RwLock::new(core_with_workflow("Hi")));
         let mut panel = WorkflowPanel::new(core);
         panel.update(Some(0));
-        let area = Rect::new(0, 0, 10, 3);
+        // Give enough vertical space for header (2) + content separators.
+        let area = Rect::new(0, 0, 10, 8);
         let mut buf = Buffer::empty(area);
         panel.draw(area, &mut buf, false);
     }
