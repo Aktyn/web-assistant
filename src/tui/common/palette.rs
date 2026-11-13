@@ -21,6 +21,29 @@ pub(crate) const ERROR_FOREGROUND: Color = Color::Rgb(229, 115, 115); // Red 300
 /// Complete reusable style
 pub(crate) const STYLE: Style = Style::new().fg(FOREGROUND).bg(BACKGROUND);
 
+// TODO: new approach to achieve configurable palette
+// #[derive(Debug)]
+// pub(crate) struct TuiPalette {
+// }
+//
+// impl Default for TuiPalette {
+//     fn default() -> Self {
+//         Self {
+//             //TODO
+//         }
+//     }
+// }
+//
+// static PALETTE: OnceLock<TuiPalette> = OnceLock::new();
+//
+// pub fn init(palette: TuiPalette) {
+//     PALETTE.set(palette).expect("palette already set");
+// }
+//
+// pub(crate) fn get() -> &'static TuiPalette {
+//     PALETTE.get_or_init(TuiPalette::default)
+// }
+
 #[cfg(test)]
 mod tests {
     use super::*;

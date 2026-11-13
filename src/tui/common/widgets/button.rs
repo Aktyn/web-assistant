@@ -4,7 +4,7 @@ use ratatui::style::{Color, Stylize as _};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
 
-use super::palette;
+use super::super::palette;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -20,7 +20,7 @@ pub(crate) struct Button<'a> {
 
 impl<'a> Button<'a> {
     pub fn new<T: Into<Line<'a>>>(label: T) -> Self {
-        Button {
+        Self {
             label: label.into(),
             state: State::Normal,
         }

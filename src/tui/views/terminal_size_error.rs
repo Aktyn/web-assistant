@@ -2,7 +2,7 @@ use ratatui::widgets::Widget as _;
 
 use super::View;
 use super::common::consts::MINIMUM_TERMINAL_SIZE;
-use super::common::error_alert::ErrorAlert;
+use super::common::widgets::ErrorAlert;
 
 pub(crate) struct TerminalSizeErrorView {}
 

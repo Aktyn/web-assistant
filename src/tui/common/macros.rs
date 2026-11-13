@@ -15,6 +15,7 @@ macro_rules! move_selection {
             None => 0,
         };
         $self.select(Some(selected));
+        selected
     }};
     ($self:expr, Next, $max:expr) => {{
         let selected = match $self.selected() {
@@ -28,6 +29,7 @@ macro_rules! move_selection {
             None => 0,
         };
         $self.select(Some(selected));
+        selected
     }};
 }
 pub(crate) use move_selection;
