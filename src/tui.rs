@@ -195,7 +195,9 @@ fn smart_event_poll(terminal: &mut DefaultTerminal) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crossterm::event::{Event, KeyCode};
     use crate::core::config::Config;
+    use views::View;
 
     fn empty_core() -> Core {
         Core {
@@ -204,13 +206,37 @@ mod tests {
         }
     }
 
+    /// Returns a `&mut DefaultTerminal` that is never dereferenced by the
+    /// views we exercise (they ignore the `_terminal` parameter).
+    fn no_read_term() -> *mut DefaultTerminal {
+        use std::mem::MaybeUninit;
+        static SLOT: std::sync::OnceLock<MaybeUninit<DefaultTerminal>> =
+            std::sync::OnceLock::new();
+        let slot = SLOT.get_or_init(MaybeUninit::uninit);
+        slot.as_ptr().cast_mut()
+    }
+
+    /// Helper to inspect the concrete type behind the `view` Box<dyn View>.
+    fn view_is<VT: std::any::Any>(app: &TuiApp) -> bool {
+        app.view.as_any().is::<VT>()
+    }
+
+    /// Build a `NoWorkflowsView` whose `pending_action` is set by calling
+    /// `run_button_action` on the given button index.
+    fn no_workflows_view_with_action(
+        core: &Arc<RwLock<Core>>,
+        button_index: usize,
+    ) -> NoWorkflowsView {
+        let mut view = NoWorkflowsView::new(core.clone());
+        view.run_button_action(button_index);
+        view
+    }
+
     #[test]
     fn test_tui_app_new_with_empty_core() {
         let core = empty_core();
         let app = TuiApp::new(core);
         assert!(!app.is_running);
-        // In debug mode show_logs is true; in release it's false.
-        // We can verify the struct exists and has the expected types.
         let _ = app.core;
     }
 
@@ -228,7 +254,7 @@ mod tests {
         let core = empty_core();
         let mut app = TuiApp::new(core);
         app.exit();
-        app.exit(); // idempotent
+        app.exit();
         assert!(!app.is_running);
     }
 
@@ -240,7 +266,6 @@ mod tests {
         let area = Rect::new(0, 0, 80, 12);
         let mut buf = Buffer::empty(area);
         render_logs(area, &mut buf);
-        // Succeeded without panicking.
     }
 
     #[test]
@@ -250,10 +275,87 @@ mod tests {
 
     #[test]
     fn test_palette_colors_are_valid() {
-        // Verify constants resolve without panicking
         let _ = palette::BACKGROUND;
         let _ = palette::FOREGROUND;
         let _ = palette::ACCENT;
         let _ = palette::ERROR_FOREGROUND;
+    }
+
+    // ---- go_to_starting_view / post_update coverage ----
+
+    #[test]
+    fn test_go_to_starting_view_with_empty_core_selects_no_workflows() {
+        let core = empty_core();
+        let mut app = TuiApp::new(core);
+        assert!(view_is::<EmptyView>(&app));
+        app.go_to_starting_view();
+        assert!(view_is::<NoWorkflowsView>(&app));
+    }
+
+    #[test]
+    fn test_go_to_starting_view_with_workflows_selects_workflow_view() {
+        let core = Core {
+            config: Config::default(),
+            workflows: vec![create_test_workflow()],
+        };
+        let mut app = TuiApp::new(core);
+        app.go_to_starting_view();
+        assert!(view_is::<WorkflowView>(&app));
+    }
+
+    #[test]
+    fn test_post_update_quit_action_exits_app() {
+        let core = empty_core();
+        let mut app = TuiApp::new(core);
+        app.is_running = true;
+        let no_wf = no_workflows_view_with_action(&app.core, 1); // index 1 → QuitApp
+        app.view = Box::new(no_wf);
+        app.post_update();
+        assert!(!app.is_running);
+    }
+
+    #[test]
+    fn test_post_update_open_workflow_creator_action_swaps_view() {
+        let core = empty_core();
+        let mut app = TuiApp::new(core);
+        let no_wf = no_workflows_view_with_action(&app.core, 0); // index 0 → OpenWorkflowCreator
+        app.view = Box::new(no_wf);
+        app.post_update();
+        assert!(view_is::<WorkflowCreatorView>(&app));
+    }
+
+    #[test]
+    fn test_post_update_exit_workflow_creator_returns_to_starting_view() {
+        let core = empty_core();
+        let mut app = TuiApp::new(core);
+        // Build a WorkflowCreatorView and press backspace to set ExitWorkflowCreator.
+        let mut creator = WorkflowCreatorView::new();
+        let event = Event::Key(KeyCode::Backspace.into());
+        let _ = creator.handle_event(&event, unsafe { &mut *no_read_term() });
+        app.view = Box::new(creator);
+        app.post_update();
+        // With an empty core, the starting view is NoWorkflowsView.
+        assert!(view_is::<NoWorkflowsView>(&app));
+    }
+
+    #[test]
+    fn test_post_update_none_action_is_noop() {
+        let core = empty_core();
+        let mut app = TuiApp::new(core);
+        app.is_running = true;
+        app.view = Box::new(EmptyView);
+        app.post_update();
+        assert!(app.is_running);
+    }
+
+    /// Build a minimal `Workflow` for tests that need a populated core.
+    fn create_test_workflow() -> crate::core::workflow::Workflow {
+        use crate::core::workflow::{Workflow, WorkflowDataJson};
+        use std::path::PathBuf;
+        let json = WorkflowDataJson::from_raw(
+            PathBuf::from("/tmp/test-workflow.json"),
+            r#"{"name":"Test Workflow"}"#.to_string(),
+        );
+        Workflow::new(json)
     }
 }

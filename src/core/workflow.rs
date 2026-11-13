@@ -51,6 +51,13 @@ impl WorkflowDataJson {
             None
         }
     }
+
+    /// Test-only constructor that builds a `WorkflowDataJson` from raw content
+    /// without touching the filesystem. Available only in test builds.
+    #[cfg(test)]
+    pub(crate) fn from_raw(path: PathBuf, content: String) -> Self {
+        Self { path, content }
+    }
 }
 
 #[cfg(test)]
