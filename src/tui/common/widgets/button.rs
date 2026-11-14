@@ -4,7 +4,7 @@ use ratatui::style::{Color, Stylize as _};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
 
-use super::super::palette;
+use super::super::super::palette;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -40,7 +40,7 @@ impl Widget for Button<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let color = self.color();
         Paragraph::new(self.label)
-            .bg(palette::BACKGROUND)
+            .bg(palette().background)
             .fg(color)
             .bold()
             .centered()
@@ -57,10 +57,10 @@ impl Widget for Button<'_> {
 impl Button<'_> {
     pub(crate) const HEIGHT: u16 = 3;
 
-    const fn color(&self) -> Color {
+    fn color(&self) -> Color {
         match self.state {
-            State::Normal => palette::FOREGROUND,
-            State::Selected => palette::ACCENT,
+            State::Normal => palette().foreground,
+            State::Selected => palette().accent,
         }
     }
 }
@@ -111,13 +111,13 @@ mod tests {
     #[test]
     fn test_button_color_normal() {
         let btn = Button::new("Normal").set_selected(false);
-        assert_eq!(btn.color(), palette::FOREGROUND);
+        assert_eq!(btn.color(), palette().FOREGROUND);
     }
 
     #[test]
     fn test_button_color_selected() {
         let btn = Button::new("Selected").set_selected(true);
-        assert_eq!(btn.color(), palette::ACCENT);
+        assert_eq!(btn.color(), palette().ACCENT);
     }
 
     #[test]

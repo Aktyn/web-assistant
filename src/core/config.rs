@@ -2,10 +2,14 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::path::PathBuf;
 
+use crate::tui;
+
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct Config {
     pub(crate) workflowsDirectory: PathBuf,
+    /// Custom TUI colors
+    pub(crate) tuiColors: Option<tui::common::HexColorsConfig>,
 }
 
 impl Config {
@@ -36,6 +40,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             workflowsDirectory: PathBuf::from("./workflows"),
+            tuiColors: None,
         }
     }
 }

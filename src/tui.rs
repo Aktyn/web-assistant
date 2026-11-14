@@ -1,4 +1,4 @@
-mod common;
+pub(crate) mod common;
 mod views;
 
 use anyhow::{Context, Result};
@@ -14,7 +14,7 @@ use std::time::Duration;
 use tui_logger::TuiLoggerWidget;
 
 use crate::core::Core;
-use common::{consts, macros, palette};
+use common::{consts, init_palette, macros, palette};
 use views::empty::EmptyView;
 use views::no_workflows::NoWorkflowsView;
 use views::terminal_size_error::TerminalSizeErrorView;
@@ -35,7 +35,9 @@ struct TuiApp {
 
 impl TuiApp {
     fn new(core: Core) -> Self {
-        // TODO: initialize palette here
+        if let Some(colors) = &core.config.tuiColors {
+            init_palette(colors);
+        }
 
         let core_arc = Arc::new(RwLock::new(core));
 
@@ -158,7 +160,7 @@ fn clear_terminal(terminal: &mut DefaultTerminal) -> Result<()> {
     terminal
         .draw(|frame| {
             let buffer = frame.buffer_mut();
-            buffer.set_style(*buffer.area(), palette::FOREGROUND);
+            buffer.set_style(*buffer.area(), palette().foreground);
         })
         .context("failed to clear frame")?;
     Ok(())
@@ -175,9 +177,9 @@ fn render_logs(area: Rect, buf: &mut Buffer) {
             Block::default()
                 .title(Line::from(" Logs (press L to toggle) ").centered())
                 .borders(Borders::TOP)
-                .border_style(palette::SEPARATOR_STYLE),
+                .border_style(palette().separator_style),
         )
-        .style(palette::STYLE);
+        .style(palette().style);
     log_widget.render(area, buf);
 }
 

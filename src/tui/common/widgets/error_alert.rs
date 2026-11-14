@@ -22,8 +22,8 @@ impl Widget for ErrorAlert<'_> {
         let centered_area = area.centered(Constraint::Length(60), Constraint::Max(10));
 
         Paragraph::new(self.text)
-            .bg(palette::BACKGROUND)
-            .fg(palette::ERROR_FOREGROUND)
+            .bg(palette().background)
+            .fg(palette().error_foreground)
             .bold()
             .centered()
             .block(
@@ -31,7 +31,7 @@ impl Widget for ErrorAlert<'_> {
                     .title(Line::from("Error").centered())
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .border_style(palette::ERROR_FOREGROUND),
+                    .border_style(palette().error_foreground),
             )
             .render(centered_area, buf);
     }
