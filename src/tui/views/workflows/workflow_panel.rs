@@ -314,25 +314,24 @@ fn render_no_selection_info(area: Rect, buf: &mut Buffer) {
 mod tests {
     use super::*;
     use crate::tui::common::panel::Panel;
+    use crate::workflow::{Workflow, WorkflowDataJson};
     use crossterm::event::KeyCode;
+    use std::path::PathBuf;
 
-    fn empty_core() -> Core {
-        Core {
-            config: crate::core::config::Config::default(),
-            workflows: Vec::new(),
-        }
+    fn empty_workflows() -> Arc<RwLock<Vec<Workflow>>> {
+        Arc::new(RwLock::new(Vec::new()))
     }
 
     #[test]
     fn test_workflow_panel_new() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let _panel = WorkflowPanel::new(core.clone());
+        let workflows = empty_workflows();
+        let _panel = WorkflowPanel::new(workflows.clone());
     }
 
     #[test]
     fn test_workflow_panel_draw_no_panic() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = empty_workflows();
+        let mut panel = WorkflowPanel::new(workflows);
         let area = Rect::new(0, 0, 50, 20);
         let mut buf = Buffer::empty(area);
         panel.draw(area, &mut buf, false);
@@ -340,8 +339,8 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_draw_focused() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = empty_workflows();
+        let mut panel = WorkflowPanel::new(workflows);
         let area = Rect::new(0, 0, 50, 20);
         let mut buf = Buffer::empty(area);
         panel.draw(area, &mut buf, true);
@@ -359,8 +358,8 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_handle_up_event_ok() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = empty_workflows();
+        let mut panel = WorkflowPanel::new(workflows);
         let event = Event::Key(KeyCode::Up.into());
         let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
         assert!(result.is_ok());
@@ -368,8 +367,8 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_handle_mouse_event_ok() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = empty_workflows();
+        let mut panel = WorkflowPanel::new(workflows);
         let event = Event::Mouse(crossterm::event::MouseEvent {
             kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
             column: 0,
@@ -382,63 +381,45 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_draw_with_default_path_no_panic() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = empty_workflows();
+        let mut panel = WorkflowPanel::new(workflows);
         let area = Rect::new(0, 0, 50, 20);
         let mut buf = Buffer::empty(area);
         panel.draw(area, &mut buf, false);
     }
 
-    fn core_with_workflow(name: &str) -> Core {
-        use crate::core::workflow::{Workflow, WorkflowDataJson};
-        use std::path::PathBuf;
-
+    fn workflows_with_one(name: &str) -> Arc<RwLock<Vec<Workflow>>> {
         let json = WorkflowDataJson::from_raw(
             PathBuf::from("/tmp/workflow.json"),
             format!(r#"{{"name":"{name}"}}"#),
         );
         let workflow = Workflow::new(json);
-        Core {
-            config: crate::core::config::Config::default(),
-            workflows: vec![workflow],
-        }
+        Arc::new(RwLock::new(vec![workflow]))
     }
 
-    fn core_with_two_workflows() -> Core {
-        use crate::core::workflow::{Workflow, WorkflowDataJson};
-        use std::path::PathBuf;
-
+    fn workflows_with_two() -> Arc<RwLock<Vec<Workflow>>> {
         let mk = |name: &str, path: &str| {
             let json =
                 WorkflowDataJson::from_raw(PathBuf::from(path), format!(r#"{{"name":"{name}"}}"#));
             Workflow::new(json)
         };
-        Core {
-            config: crate::core::config::Config::default(),
-            workflows: vec![
-                mk("First", "/tmp/first.json"),
-                mk("Second", "/tmp/second.json"),
-            ],
-        }
+        Arc::new(RwLock::new(vec![
+            mk("First", "/tmp/first.json"),
+            mk("Second", "/tmp/second.json"),
+        ]))
     }
 
-    fn core_with_invalid_workflow() -> Core {
-        use crate::core::workflow::{Workflow, WorkflowDataJson};
-        use std::path::PathBuf;
-
+    fn workflows_with_invalid() -> Arc<RwLock<Vec<Workflow>>> {
         let json =
             WorkflowDataJson::from_raw(PathBuf::from("/tmp/bad.json"), "{invalid json".to_string());
         let workflow = Workflow::new(json);
-        Core {
-            config: crate::core::config::Config::default(),
-            workflows: vec![workflow],
-        }
+        Arc::new(RwLock::new(vec![workflow]))
     }
 
     #[test]
     fn test_workflow_panel_update_opens_new_selection() {
-        let core = Arc::new(RwLock::new(core_with_workflow("My Workflow")));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = workflows_with_one("My Workflow");
+        let mut panel = WorkflowPanel::new(workflows);
         assert!(panel.selected_workflow.is_none());
         panel.update(Some(0));
         assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 0);
@@ -446,8 +427,8 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_update_skips_same_index() {
-        let core = Arc::new(RwLock::new(core_with_workflow("My Workflow")));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = workflows_with_one("My Workflow");
+        let mut panel = WorkflowPanel::new(workflows);
         panel.update(Some(0));
         // Update again with the same index — should not re-open (no-op).
         panel.update(Some(0));
@@ -456,8 +437,8 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_update_changes_index() {
-        let core = Arc::new(RwLock::new(core_with_two_workflows()));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = workflows_with_two();
+        let mut panel = WorkflowPanel::new(workflows);
         panel.update(Some(0));
         assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 0);
         // Different index triggers re-open.
@@ -467,8 +448,8 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_update_none_is_noop() {
-        let core = Arc::new(RwLock::new(core_with_workflow("My Workflow")));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = workflows_with_one("My Workflow");
+        let mut panel = WorkflowPanel::new(workflows);
         panel.update(Some(0));
         assert!(panel.selected_workflow.is_some());
         // None means "keep current selection".
@@ -478,8 +459,8 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_draw_with_valid_workflow_no_panic() {
-        let core = Arc::new(RwLock::new(core_with_workflow("My Workflow")));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = workflows_with_one("My Workflow");
+        let mut panel = WorkflowPanel::new(workflows);
         panel.update(Some(0));
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
@@ -488,8 +469,8 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_draw_with_invalid_workflow_renders_error() {
-        let core = Arc::new(RwLock::new(core_with_invalid_workflow()));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = workflows_with_invalid();
+        let mut panel = WorkflowPanel::new(workflows);
         panel.update(Some(0));
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
@@ -498,9 +479,9 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_draw_with_out_of_bounds_index_renders_error() {
-        let core = Arc::new(RwLock::new(core_with_workflow("X")));
-        let mut panel = WorkflowPanel::new(core);
-        // Index 5 does not exist in a single-workflow core.
+        let workflows = workflows_with_one("X");
+        let mut panel = WorkflowPanel::new(workflows);
+        // Index 5 does not exist in a single-workflow list.
         panel.update(Some(5));
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
@@ -509,8 +490,8 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_draw_with_small_area_no_panic() {
-        let core = Arc::new(RwLock::new(core_with_workflow("Hi")));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = workflows_with_one("Hi");
+        let mut panel = WorkflowPanel::new(workflows);
         panel.update(Some(0));
         // Give enough vertical space for header (2) + content separators.
         let area = Rect::new(0, 0, 10, 8);
@@ -520,16 +501,16 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_as_any_mut_returns_self() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = empty_workflows();
+        let mut panel = WorkflowPanel::new(workflows);
         let any = panel.as_any_mut();
         assert!(any.is::<WorkflowPanel>());
     }
 
     #[test]
     fn test_workflow_panel_handle_down_event_ok() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = empty_workflows();
+        let mut panel = WorkflowPanel::new(workflows);
         let event = Event::Key(KeyCode::Down.into());
         let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
         assert!(result.is_ok());
@@ -537,8 +518,8 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_handle_unknown_key_ignored() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut panel = WorkflowPanel::new(core);
+        let workflows = empty_workflows();
+        let mut panel = WorkflowPanel::new(workflows);
         let event = Event::Key(KeyCode::Char('z').into());
         let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
         assert!(result.is_ok());

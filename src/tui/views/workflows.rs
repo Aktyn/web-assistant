@@ -149,18 +149,24 @@ impl View for WorkflowView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::config::Config;
     use crate::tui::views::View;
+    use crate::workflow::{Workflow, WorkflowDataJson};
     use crossterm::event::{Event, KeyCode};
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
     use std::mem::MaybeUninit;
+    use std::path::PathBuf;
 
-    fn empty_core() -> Core {
-        Core {
-            config: Config::default(),
-            workflows: Vec::new(),
-        }
+    fn empty_workflows() -> Arc<RwLock<Vec<Workflow>>> {
+        Arc::new(RwLock::new(Vec::new()))
+    }
+
+    fn make_workflow(name: &str) -> Workflow {
+        let json = WorkflowDataJson::from_raw(
+            PathBuf::from("/tmp/test.json"),
+            format!(r#"{{"name":"{name}"}}"#),
+        );
+        Workflow::new(json)
     }
 
     #[test]
@@ -178,8 +184,8 @@ mod tests {
 
     #[test]
     fn test_workflow_view_new_default_state() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let view = WorkflowView::new(core);
+        let workflows = empty_workflows();
+        let view = WorkflowView::new(workflows);
         // Public state after construction: show_sidebar=true, focused=Sidebar
         assert!(view.show_sidebar);
         assert_eq!(view.focused_panel, WorkflowsPanelType::Sidebar);
@@ -187,8 +193,8 @@ mod tests {
 
     #[test]
     fn test_workflow_view_move_to_next_panel_from_sidebar() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut view = WorkflowView::new(core);
+        let workflows = empty_workflows();
+        let mut view = WorkflowView::new(workflows);
         view.move_to_next_panel();
         assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);
     }
@@ -196,8 +202,8 @@ mod tests {
     #[test]
     fn test_workflow_view_move_to_next_panel_from_panel_empty() {
         // When no workflows exist, moving from Panel stays at Panel
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut view = WorkflowView::new(core);
+        let workflows = empty_workflows();
+        let mut view = WorkflowView::new(workflows);
         // Move to Panel first
         view.move_to_next_panel();
         assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);
@@ -208,15 +214,15 @@ mod tests {
 
     #[test]
     fn test_workflow_view_as_any() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let view = WorkflowView::new(core);
+        let workflows = empty_workflows();
+        let view = WorkflowView::new(workflows);
         assert!(view.as_any().is::<WorkflowView>());
     }
 
     #[test]
     fn test_workflow_view_get_focused_panel_returns_sidebar_when_focused() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let view = WorkflowView::new(core);
+        let workflows = empty_workflows();
+        let view = WorkflowView::new(workflows);
         // Verify show_sidebar starts true and focused_panel is Sidebar
         assert!(view.show_sidebar);
         assert_eq!(view.focused_panel, WorkflowsPanelType::Sidebar);
@@ -224,8 +230,8 @@ mod tests {
 
     #[test]
     fn test_workflow_view_get_focused_panel_returns_panel_after_tab() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut view = WorkflowView::new(core);
+        let workflows = empty_workflows();
+        let mut view = WorkflowView::new(workflows);
         view.move_to_next_panel();
         assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);
     }
@@ -242,8 +248,8 @@ mod tests {
 
     #[test]
     fn test_workflow_view_draw_no_panic() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut view = WorkflowView::new(core);
+        let workflows = empty_workflows();
+        let mut view = WorkflowView::new(workflows);
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
         view.draw(area, &mut buf);
@@ -251,8 +257,8 @@ mod tests {
 
     #[test]
     fn test_workflow_view_handle_event_tab_moves_focus() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut view = WorkflowView::new(core);
+        let workflows = empty_workflows();
+        let mut view = WorkflowView::new(workflows);
         let event = Event::Key(KeyCode::Tab.into());
         // Use a dummy terminal reference — handle_event never reads it for Tab key
         let _ = view.handle_event(&event, unsafe { &mut *no_read_term() });
@@ -261,23 +267,16 @@ mod tests {
 
     #[test]
     fn test_workflow_view_get_action_no_button_pressed_returns_none() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let view = WorkflowView::new(core);
+        let workflows = empty_workflows();
+        let view = WorkflowView::new(workflows);
         // The sidebar has create_workflow_button_pressed = false by default
         assert!(view.get_action().is_none());
     }
 
     #[test]
     fn test_workflow_view_move_back_from_panel_with_workflows() {
-        use crate::core::workflow::{Workflow, WorkflowDataJson};
-        let core = Arc::new(RwLock::new(Core {
-            config: Config::default(),
-            workflows: vec![Workflow::new(WorkflowDataJson::from_raw(
-                "/tmp/test.json".into(),
-                r#"{"name":"test"}"#.to_string(),
-            ))],
-        }));
-        let mut view = WorkflowView::new(core);
+        let workflows = Arc::new(RwLock::new(vec![make_workflow("test")]));
+        let mut view = WorkflowView::new(workflows);
         // Move to panel
         view.move_to_next_panel();
         assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);

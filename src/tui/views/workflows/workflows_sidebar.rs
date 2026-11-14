@@ -143,16 +143,12 @@ impl panel::Panel for WorkflowsSidebar {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::config::Config;
     use crate::tui::common::panel::Panel;
     use crossterm::event::{Event, KeyCode};
     use std::mem::MaybeUninit;
 
-    fn empty_core() -> Core {
-        Core {
-            config: Config::default(),
-            workflows: Vec::new(),
-        }
+    fn empty_workflows() -> Arc<RwLock<Vec<Workflow>>> {
+        Arc::new(RwLock::new(Vec::new()))
     }
 
     /// `handle_event` never reads `_terminal` for the events we exercise. We
@@ -171,15 +167,15 @@ mod tests {
 
     #[test]
     fn test_workflows_sidebar_new_initial_state() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let sidebar = WorkflowsSidebar::new(workflows);
         assert_eq!(sidebar.workflows_list_state.selected(), Some(0));
     }
 
     #[test]
     fn test_workflows_sidebar_draw_no_panic_empty() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         let area = Rect::new(0, 0, 30, 20);
         let mut buf = Buffer::empty(area);
         sidebar.draw(area, &mut buf, false);
@@ -187,8 +183,8 @@ mod tests {
 
     #[test]
     fn test_workflows_sidebar_draw_no_panic_focused() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         let area = Rect::new(0, 0, 30, 20);
         let mut buf = Buffer::empty(area);
         sidebar.draw(area, &mut buf, true);
@@ -196,8 +192,8 @@ mod tests {
 
     #[test]
     fn test_workflows_sidebar_handle_up_event() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(1));
         let key_event = Event::Key(KeyCode::Up.into());
         sidebar
@@ -208,8 +204,8 @@ mod tests {
 
     #[test]
     fn test_workflows_sidebar_handle_down_event_wraps_to_none() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Down.into());
         sidebar
@@ -220,8 +216,8 @@ mod tests {
 
     #[test]
     fn test_workflows_sidebar_handle_j_key() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Char('j').into());
         sidebar
@@ -232,8 +228,8 @@ mod tests {
 
     #[test]
     fn test_workflows_sidebar_handle_k_key_moves_up() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Char('k').into());
         sidebar
@@ -244,8 +240,8 @@ mod tests {
 
     #[test]
     fn test_workflows_sidebar_non_key_event_ignored() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         let mouse_event = Event::Mouse(crossterm::event::MouseEvent {
             kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
             column: 0,
