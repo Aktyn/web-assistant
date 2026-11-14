@@ -464,8 +464,7 @@ mod tests {
                 {"name": "a", "value": "1", "domain": "x", "path": "/", "expires": -1},
                 {"name": "b", "value": "2", "domain": "x", "path": "/", "expires": 9_999_999_999.0}
             ]}),
-        )
-        .await;
+        );
         let cookies = wd.get_cookies().await.unwrap();
         assert_eq!(cookies.len(), 2);
         // Session cookie expires stripped
@@ -477,15 +476,15 @@ mod tests {
     #[tokio::test]
     async fn test_get_cookies_empty_when_missing() {
         let (wd, mock) = mock_storage();
-        mock.set("Storage.getCookies", serde_json::json!({})).await;
+        mock.set("Storage.getCookies", serde_json::json!({}));
         let cookies = wd.get_cookies().await.unwrap();
-        assert!(cookies.is_empty());
+        assert_eq!(cookies.len(), 0);
     }
 
     #[tokio::test]
     async fn test_set_cookies_sends_normalized() {
         let (wd, mock) = mock_storage();
-        mock.set("Storage.setCookies", serde_json::json!({})).await;
+        mock.set("Storage.setCookies", serde_json::json!({}));
         let result = wd
             .set_cookies(&[serde_json::json!({"name": "a", "expires": 0})])
             .await;
@@ -500,8 +499,7 @@ mod tests {
             serde_json::json!({"result": {"value": [
                 {"origin": "https://ex.com", "localStorage": [{"name": "k", "value": "v"}]}
             ]}}),
-        )
-        .await;
+        );
         let items = wd.get_all_storage_items().await.unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].origin, "https://ex.com");
@@ -514,10 +512,9 @@ mod tests {
         mock.set(
             "Runtime.evaluate",
             serde_json::json!({"result": {"value": "not json"}}),
-        )
-        .await;
+        );
         let items = wd.get_all_storage_items().await.unwrap();
-        assert!(items.is_empty());
+        assert_eq!(items.len(), 0);
     }
 
     #[tokio::test]
@@ -526,31 +523,28 @@ mod tests {
         mock.set(
             "Storage.getCookies",
             serde_json::json!({"cookies": [{"name": "c", "value": "v", "domain": "d", "path": "/"}]}),
-        )
-        .await;
+        );
         mock.set(
             "Runtime.evaluate",
             serde_json::json!({"result": {"value": []}}),
-        )
-        .await;
+        );
         let tmp = tempdir().unwrap();
         let path = tmp.path().join("state.json");
         wd.save_storage_state(&path).await.unwrap();
         let content = std::fs::read_to_string(&path).unwrap();
         let state: StorageState = serde_json::from_str(&content).unwrap();
         assert_eq!(state.cookies.len(), 1);
-        assert!(state.origins.is_empty());
+        assert_eq!(state.origins.len(), 0);
     }
 
     #[tokio::test]
     async fn test_load_storage_state_applies_cookies_and_scripts() {
         let (wd, mock) = mock_storage();
-        mock.set("Storage.setCookies", serde_json::json!({})).await;
+        mock.set("Storage.setCookies", serde_json::json!({}));
         mock.set(
             "Runtime.evaluate",
             serde_json::json!({"result": {"value": true}}),
-        )
-        .await;
+        );
 
         let tmp = tempdir().unwrap();
         let path = tmp.path().join("state.json");
@@ -602,8 +596,7 @@ mod tests {
                 {"name": "b", "domain": "y", "path": "/"},
                 {"no_name": true}
             ]}),
-        )
-        .await;
+        );
         let fp = wd.cookie_fingerprint().await.unwrap();
         assert_eq!(fp.len(), 2);
         assert!(fp.contains(&("a".into(), "x".into(), "/".into())));
@@ -613,16 +606,14 @@ mod tests {
     #[tokio::test]
     async fn test_has_cookie_changes_first_call_no_change() {
         let (wd, mock) = mock_storage();
-        mock.set("Storage.getCookies", serde_json::json!({"cookies": []}))
-            .await;
+        mock.set("Storage.getCookies", serde_json::json!({"cookies": []}));
         assert!(!wd.has_cookie_changes().await.unwrap());
     }
 
     #[tokio::test]
     async fn test_has_cookie_changes_detects_change() {
         let (wd, mock) = mock_storage();
-        mock.set("Storage.getCookies", serde_json::json!({"cookies": []}))
-            .await;
+        mock.set("Storage.getCookies", serde_json::json!({"cookies": []}));
         assert!(!wd.has_cookie_changes().await.unwrap());
 
         // Simulate cookie change
@@ -631,8 +622,7 @@ mod tests {
             serde_json::json!({"cookies": [
                 {"name": "new", "domain": "d", "path": "/"}
             ]}),
-        )
-        .await;
+        );
         assert!(wd.has_cookie_changes().await.unwrap());
 
         // Same state again → no change
@@ -642,8 +632,7 @@ mod tests {
     #[tokio::test]
     async fn test_maybe_save_on_change_no_change_returns_false() {
         let (wd, mock) = mock_storage();
-        mock.set("Storage.getCookies", serde_json::json!({"cookies": []}))
-            .await;
+        mock.set("Storage.getCookies", serde_json::json!({"cookies": []}));
         let tmp = tempdir().unwrap();
         let path = tmp.path().join("state.json");
         assert!(!wd.maybe_save_on_change(&path).await.unwrap());
@@ -653,8 +642,7 @@ mod tests {
     #[tokio::test]
     async fn test_maybe_save_on_change_with_change_returns_true() {
         let (wd, mock) = mock_storage();
-        mock.set("Storage.getCookies", serde_json::json!({"cookies": []}))
-            .await;
+        mock.set("Storage.getCookies", serde_json::json!({"cookies": []}));
         let tmp = tempdir().unwrap();
         let path = tmp.path().join("state.json");
         assert!(!wd.maybe_save_on_change(&path).await.unwrap());
@@ -665,8 +653,7 @@ mod tests {
             serde_json::json!({"cookies": [
                 {"name": "new", "domain": "d", "path": "/"}
             ]}),
-        )
-        .await;
+        );
         let saved = wd.maybe_save_on_change(&path).await.unwrap();
         assert!(saved);
         assert!(path.exists());

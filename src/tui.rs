@@ -278,10 +278,11 @@ mod tests {
 
     #[test]
     fn test_palette_colors_are_valid() {
-        let _ = palette::BACKGROUND;
-        let _ = palette::FOREGROUND;
-        let _ = palette::ACCENT;
-        let _ = palette::ERROR_FOREGROUND;
+        let palette = palette();
+        let _ = palette.background;
+        let _ = palette.foreground;
+        let _ = palette.accent;
+        let _ = palette.error_foreground;
     }
 
     // ---- go_to_starting_view / post_update coverage ----

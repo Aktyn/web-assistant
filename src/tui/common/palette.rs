@@ -122,35 +122,87 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_background_is_reset() {
-        assert_eq!(BACKGROUND, Color::Reset);
+    fn test_default_palette_background_is_reset() {
+        assert_eq!(TuiPalette::default().background, Color::Reset);
     }
 
     #[test]
-    fn test_foreground_rgb_value() {
-        assert_eq!(FOREGROUND, Color::Rgb(236, 239, 241));
+    fn test_default_palette_foreground_rgb_value() {
+        assert_eq!(TuiPalette::default().foreground, Color::Rgb(236, 239, 241));
     }
 
     #[test]
-    fn test_accent_teal_value() {
-        assert_eq!(ACCENT, Color::Rgb(77, 182, 172));
+    fn test_default_palette_accent_teal_value() {
+        assert_eq!(TuiPalette::default().accent, Color::Rgb(77, 182, 172));
     }
 
     #[test]
-    fn test_error_foreground_red_value() {
-        assert_eq!(ERROR_FOREGROUND, Color::Rgb(229, 115, 115));
+    fn test_default_palette_error_foreground_red_value() {
+        assert_eq!(
+            TuiPalette::default().error_foreground,
+            Color::Rgb(229, 115, 115)
+        );
     }
 
     #[test]
-    fn test_separator_style_valid() {
-        // SEPARATOR_STYLE should compile and have foreground and background
-        let _ = SEPARATOR_STYLE;
+    fn test_separator_style_has_fg_and_bg() {
+        let style = TuiPalette::default().separator_style;
+        assert!(style.fg.is_some() || style.bg.is_some());
     }
 
     #[test]
     fn test_style_has_fg_and_bg() {
-        // STYLE combines FOREGROUND text with BACKGROUND fill
-        let s = STYLE;
-        assert!(s.fg.is_some() || s.bg.is_some());
+        let style = TuiPalette::default().style;
+        assert!(style.fg.is_some() || style.bg.is_some());
+    }
+
+    #[test]
+    fn test_get_returns_default_palette() {
+        let palette = get();
+        assert_eq!(palette.background, Color::Reset);
+        assert_eq!(palette.foreground, Color::Rgb(236, 239, 241));
+    }
+
+    #[test]
+    fn test_from_config_overrides_background() {
+        let config = HexColorsConfig {
+            background: Some("#1a2b3c".to_string()),
+            foreground: None,
+            border: None,
+            muted_foreground: None,
+            accent: None,
+            error_foreground: None,
+        };
+        let palette = TuiPalette::from_config(&config);
+        assert_eq!(palette.background, Color::Rgb(26, 43, 60));
+    }
+
+    #[test]
+    fn test_from_config_keeps_defaults_for_unset_fields() {
+        let config = HexColorsConfig {
+            background: None,
+            foreground: None,
+            border: None,
+            muted_foreground: None,
+            accent: None,
+            error_foreground: None,
+        };
+        let palette = TuiPalette::from_config(&config);
+        assert_eq!(palette.background, TuiPalette::default().background);
+        assert_eq!(palette.foreground, TuiPalette::default().foreground);
+    }
+
+    #[test]
+    fn test_from_config_parses_short_hex() {
+        let config = HexColorsConfig {
+            background: Some("#fff".to_string()),
+            foreground: None,
+            border: None,
+            muted_foreground: None,
+            accent: None,
+            error_foreground: None,
+        };
+        let palette = TuiPalette::from_config(&config);
+        assert_eq!(palette.background, Color::Rgb(255, 255, 255));
     }
 }
