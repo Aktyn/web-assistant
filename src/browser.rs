@@ -5,7 +5,7 @@ mod dom;
 pub mod watchdogs;
 
 use anyhow::{Context, Result, anyhow};
-use cdp::{BrowserProcess, CdpClient, chrome};
+use cdp::{BrowserProcess, CdpClient};
 use dom::{BrowserState, ElementRect, EnhancedElement};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -607,7 +607,7 @@ impl Browser {
         Ok(())
     }
 
-    /// Test-only constructor that injects a pre-built CdpClient so unit tests
+    /// Test-only constructor that injects a pre-built `CdpClient` so unit tests
     /// can exercise browser methods without a real Chrome process.
     #[cfg(test)]
     pub(crate) fn new_with_client(client: CdpClient) -> Self {
@@ -751,7 +751,7 @@ impl BrowserBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::browser::cdp::{MockCdp, chrome};
+    use crate::browser::cdp::MockCdp;
 
     /// Test helper: build an input JavaScript and return its text for inspection.
     #[allow(clippy::uninlined_format_args)]
@@ -1614,13 +1614,12 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
     // Browser method coverage via MockCdp
     // =========================================================================
 
-    async fn mock_browser_with_state(state_json: serde_json::Value) -> Browser {
+    fn mock_browser_with_state(state_json: &serde_json::Value) -> Browser {
         let mock = MockCdp::new();
         mock.set(
             "Runtime.evaluate",
             serde_json::json!({"result": {"value": state_json}}),
-        )
-        .await;
+        );
         Browser::new_with_client(mock.client)
     }
 
@@ -1632,7 +1631,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
             "elements": [],
             "text": "Hello world"
         });
-        let mut browser = mock_browser_with_state(state_json).await;
+        let mut browser = mock_browser_with_state(&state_json);
         let state = browser.get_state().await.unwrap();
         assert_eq!(state.url, "https://example.com");
         assert_eq!(state.title, "Example");
@@ -1648,7 +1647,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
             "elements": [],
             "text": "cached text"
         });
-        let mut browser = mock_browser_with_state(state_json).await;
+        let mut browser = mock_browser_with_state(&state_json);
         let state = browser.refresh_state().await.unwrap();
         assert_eq!(state.url, "https://cached.example.com");
         // Subsequent get_element should find cached state
@@ -1665,7 +1664,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
             ],
             "text": ""
         });
-        let mut browser = mock_browser_with_state(state_json).await;
+        let mut browser = mock_browser_with_state(&state_json);
         browser.refresh_state().await.unwrap();
         let elem = browser.get_element(1);
         assert!(elem.is_some());
@@ -1682,7 +1681,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
             "elements": [],
             "text": ""
         });
-        let mut browser = mock_browser_with_state(state_json).await;
+        let mut browser = mock_browser_with_state(&state_json);
         let result = browser.navigate("example.com").await;
         assert!(result.is_ok());
     }
@@ -1695,7 +1694,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
             "elements": [],
             "text": ""
         });
-        let mut browser = mock_browser_with_state(state_json).await;
+        let mut browser = mock_browser_with_state(&state_json);
         let result = browser.navigate("https://example.com").await;
         assert!(result.is_ok());
     }
@@ -1708,7 +1707,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
             "elements": [],
             "text": ""
         });
-        let mut browser = mock_browser_with_state(state_json).await;
+        let mut browser = mock_browser_with_state(&state_json);
         let result = browser.navigate("about:blank").await;
         assert!(result.is_ok());
     }
@@ -1719,8 +1718,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         mock.set(
             "Runtime.evaluate",
             serde_json::json!({"result": {"value": "hello"}}),
-        )
-        .await;
+        );
         let mut browser = Browser::new_with_client(mock.client);
         let val = browser.evaluate("1+1").await.unwrap();
         assert_eq!(val, serde_json::json!("hello"));
@@ -1768,7 +1766,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         let state_json = serde_json::json!({
             "url": "u", "title": "t", "elements": [], "text": ""
         });
-        let mut browser = mock_browser_with_state(state_json).await;
+        let mut browser = mock_browser_with_state(&state_json);
         let result = browser.scroll(500).await;
         assert!(result.is_ok());
     }
@@ -1878,7 +1876,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         // Verifies Chrome::default_args includes expected flags
         let port = cdp::get_available_port().unwrap();
         let temp_dir = tempfile::tempdir().unwrap();
-        let args = chrome::Chrome::default_args(port, temp_dir.path(), true);
+        let args = cdp::chrome::Chrome::default_args(port, temp_dir.path(), true);
         let args_str: Vec<String> = args.iter().map(ToString::to_string).collect();
         let combined = args_str.join(" ");
         assert!(combined.contains("--no-sandbox"));

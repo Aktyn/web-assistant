@@ -493,7 +493,7 @@ impl MockCdp {
         }
     }
 
-    pub(crate) async fn set(&self, method: &str, value: Value) {
+    pub(crate) fn set(&self, method: &str, value: Value) {
         self.overrides
             .lock()
             .unwrap()
@@ -501,7 +501,7 @@ impl MockCdp {
     }
 
     /// Make a specific CDP method always fail (simulates browser errors).
-    pub(crate) async fn set_fail(&self, method: &str) {
+    pub(crate) fn set_fail(&self, method: &str) {
         self.fails.lock().unwrap().insert(method.to_string());
     }
 }
@@ -632,8 +632,7 @@ mod tests {
         mock.set(
             "Runtime.evaluate",
             serde_json::json!({"result": {"value": 42}}),
-        )
-        .await;
+        );
         let val = mock.client.evaluate("anything").await.unwrap();
         assert_eq!(val, serde_json::json!(42));
     }
@@ -651,8 +650,7 @@ mod tests {
         mock.set(
             "Runtime.evaluate",
             serde_json::json!({"exceptionDetails": {"exception": {"description": "boom"}}}),
-        )
-        .await;
+        );
         let result = mock.client.evaluate("throw new Error('boom')").await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("boom"));
@@ -668,8 +666,7 @@ mod tests {
     #[tokio::test]
     async fn test_capture_screenshot_errors_when_data_missing() {
         let mock = MockCdp::new();
-        mock.set("Page.captureScreenshot", serde_json::json!({}))
-            .await;
+        mock.set("Page.captureScreenshot", serde_json::json!({}));
         let result = mock.client.capture_screenshot().await;
         assert!(result.is_err());
         assert!(
@@ -691,8 +688,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_layout_metrics_errors_when_missing() {
         let mock = MockCdp::new();
-        mock.set("Page.getLayoutMetrics", serde_json::json!({}))
-            .await;
+        mock.set("Page.getLayoutMetrics", serde_json::json!({}));
         let result = mock.client.get_layout_metrics().await;
         assert!(result.is_err());
     }
@@ -703,8 +699,7 @@ mod tests {
         mock.set(
             "DOM.getContentQuads",
             serde_json::json!({"quads": [[0.0, 0.0, 100.0, 0.0, 100.0, 100.0, 0.0, 100.0]]}),
-        )
-        .await;
+        );
         let quads = mock.client.get_content_quads(1).await.unwrap();
         assert_eq!(quads.len(), 1);
         assert_eq!(quads[0].len(), 8);
@@ -716,16 +711,15 @@ mod tests {
         mock.set(
             "DOM.getContentQuads",
             serde_json::json!({"quads": [[1.0, 2.0, 3.0]]}),
-        )
-        .await;
+        );
         let quads = mock.client.get_content_quads(1).await.unwrap();
-        assert!(quads.is_empty());
+        assert_eq!(quads.len(), 0);
     }
 
     #[tokio::test]
     async fn test_get_content_quads_errors_when_missing() {
         let mock = MockCdp::new();
-        mock.set("DOM.getContentQuads", serde_json::json!({})).await;
+        mock.set("DOM.getContentQuads", serde_json::json!({}));
         let result = mock.client.get_content_quads(1).await;
         assert!(result.is_err());
     }
@@ -765,7 +759,7 @@ mod tests {
     #[tokio::test]
     async fn test_resolve_node_errors_when_missing() {
         let mock = MockCdp::new();
-        mock.set("DOM.resolveNode", serde_json::json!({})).await;
+        mock.set("DOM.resolveNode", serde_json::json!({}));
         let result = mock.client.resolve_node(5).await;
         assert!(result.is_err());
     }
@@ -793,5 +787,33 @@ mod tests {
         // Default mock returns "complete" for readyState, so navigate succeeds.
         let result = mock.client.navigate("example.com").await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_set_fail_forces_method_errors() {
+        let mock = MockCdp::new();
+        mock.set_fail("Page.enable");
+        let result = mock
+            .client
+            .send_command("Page.enable", serde_json::json!({}))
+            .await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("MockCdp: forced failure")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_set_fail_only_affects_targeted_method() {
+        let mock = MockCdp::new();
+        mock.set_fail("Page.enable");
+        let other = mock
+            .client
+            .send_command("Page.navigate", serde_json::json!({}))
+            .await;
+        assert!(other.is_ok());
     }
 }

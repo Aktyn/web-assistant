@@ -177,6 +177,7 @@ mod tests {
     fn test_config_struct_clone() {
         let config = Config {
             workflowsDirectory: PathBuf::from("/some/path"),
+            tuiColors: None,
         };
         let cloned = config.clone();
         assert_eq!(cloned.workflowsDirectory, config.workflowsDirectory);
