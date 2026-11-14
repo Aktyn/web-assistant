@@ -25,6 +25,7 @@ crossterm = "0.29.0"
 clap = { version = "4.6.7", features = ["derive"] }
 tui-logger = "0.18.3"
 log = "0.4.35"
+documented = "0.10.0"
 
 [dev-dependencies]
 tempfile = "3"

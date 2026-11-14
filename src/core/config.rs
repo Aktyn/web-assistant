@@ -1,3 +1,4 @@
+use documented::DocumentedFields;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::path::PathBuf;
@@ -5,10 +6,13 @@ use std::path::PathBuf;
 use crate::tui;
 
 #[allow(non_snake_case)]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields)]
+#[documented_fields(default = "Field not documented")]
 pub(crate) struct Config {
+    /// Path to directory containing workflow files.
     pub(crate) workflowsDirectory: PathBuf,
-    /// Custom TUI colors
+    /// Optional map of hex colors to use when rendering TUI.
+    /// See *`HexColorsConfig`* for list of color names.
     pub(crate) tuiColors: Option<tui::common::HexColorsConfig>,
 }
 
