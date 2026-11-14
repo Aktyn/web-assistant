@@ -1,20 +1,17 @@
 pub mod agent;
 pub mod browser;
 mod cli;
-mod core;
+mod config;
 pub mod llm;
 mod tui;
 mod utils;
+pub mod workflow;
 
 use anyhow::Result;
 use documented::DocumentedFields;
 use std::io::{Write, stdout};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::thread;
-use std::time::Duration;
 
-use core::config;
+use config::Config;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -43,10 +40,18 @@ async fn main() -> Result<()> {
     // }
 
     match &cli.command {
+        Some(cli::Commands::Run { workflow }) => {
+            log::info!("Running workflow: {workflow}");
+            //TODO: Implement inline workflow execution
+
+            // let config_path = config_path.expect("Config path is required");
+            // let config = Config::new(config_path).await;
+        }
+
         Some(cli::Commands::InitConfig { output_path }) => {
             stdout().write_all(b"Initializing config...\n").ok();
 
-            config::init_default_config(output_path.clone()).await;
+            config::create_default_config(output_path.clone()).await;
 
             stdout()
                 .write_all(
@@ -55,11 +60,12 @@ async fn main() -> Result<()> {
                 )
                 .ok();
         }
+
         Some(cli::Commands::ExplainConfig {}) => {
             tui::inline::print_struct(&tui::inline::StructDocs {
                 description: "Config must be a json file with the following fields:",
-                field_names: core::config::Config::FIELD_NAMES,
-                field_docs: core::config::Config::FIELD_DOCS,
+                field_names: Config::FIELD_NAMES,
+                field_docs: Config::FIELD_DOCS,
             });
 
             stdout().write_all(b"\n\n").ok();
@@ -70,46 +76,20 @@ async fn main() -> Result<()> {
                 field_docs: tui::common::HexColorsConfig::FIELD_DOCS,
             });
         }
+
         None => {
             //NOTE: TUI logger is being initialized here to catch early core logs
             tui_logger::init_logger(tui_logger::LevelFilter::Trace).unwrap();
             tui_logger::set_default_level(tui_logger::LevelFilter::Trace);
 
-            let done_loading = Arc::new(AtomicUsize::new(0));
-            let done_loading_thread = Arc::clone(&done_loading);
-            let loading_thread_handle = thread::spawn(move || {
-                run_loading_animation(&done_loading_thread);
-            });
+            let config_path = cli.config_path.expect("Config path is required");
+            let config = config::load_config(&config_path).await;
 
-            let core = core::Core::new(cli).await;
-
-            done_loading.store(1, Ordering::SeqCst);
-            loading_thread_handle.join().unwrap();
-
-            for workflow in &core.workflows {
-                log::info!("Workflow: {workflow:?}");
-            }
-
-            return tui::render_tui(core);
+            return tui::render_tui(config).await;
         }
     }
 
     Ok(())
-}
-
-fn run_loading_animation(done: &Arc<AtomicUsize>) {
-    let label = "Starting Web Assistant";
-    let spinner = ['—', '\\', '|', '/'];
-    let mut step = 0usize;
-
-    while done.load(Ordering::SeqCst) == 0 {
-        let indicator = spinner[step % spinner.len()];
-        let line = format!("\r {indicator} {label}");
-        stdout().write_all(line.as_bytes()).ok();
-        stdout().flush().ok();
-        step = step.wrapping_add(1);
-        thread::sleep(Duration::from_millis(250));
-    }
 }
 
 // An example left for future reference

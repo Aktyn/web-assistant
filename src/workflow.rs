@@ -2,9 +2,12 @@ use serde::Deserialize;
 use std::path::PathBuf;
 use tokio::fs::DirEntry;
 
+use crate::utils;
+
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct WorkflowData {
-    pub(crate) name: String,
+    pub name: String,
+    pub description: Option<String>,
 }
 
 #[derive(Debug)]
@@ -58,6 +61,24 @@ impl WorkflowDataJson {
     pub(crate) fn from_raw(path: PathBuf, content: String) -> Self {
         Self { path, content }
     }
+}
+
+pub(crate) async fn load_from_directory(workflows_directory: &PathBuf) -> Vec<Workflow> {
+    assert!(
+        !workflows_directory.exists() || workflows_directory.is_dir(),
+        "Workflows path already exists but is not a directory: \"{}\"",
+        workflows_directory.display()
+    );
+
+    let json_files = utils::read_json_files(workflows_directory).await;
+    let mut workflows = Vec::with_capacity(json_files.len());
+    for entry in &json_files {
+        if let Some(json) = WorkflowDataJson::new(entry).await {
+            workflows.push(Workflow::new(json));
+        }
+    }
+
+    workflows
 }
 
 #[cfg(test)]

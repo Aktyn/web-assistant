@@ -40,4 +40,4 @@ strip = true
 print_stdout = "deny"
 print_stderr = "deny"
 unused_self = "warn"
-pedantic = "warn"
+pedantic = { level = "warn", priority = -1 }

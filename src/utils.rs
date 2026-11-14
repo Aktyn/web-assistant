@@ -1,3 +1,8 @@
+use std::{ffi::OsStr, path::PathBuf};
+use tokio::fs::DirEntry;
+
+//TODO: organize these utils into text utils and file utils
+
 #[must_use]
 pub fn truncate_text(text: &str, limit: usize, suffix: Option<&str>) -> String {
     truncate(text, limit, suffix, false)
@@ -29,6 +34,46 @@ fn truncate(text: &str, limit: usize, suffix: Option<&str>, from_left: bool) -> 
     } else {
         format!("{}{}", text.chars().take(keep).collect::<String>(), suffix_)
     }
+}
+
+/// Returns list of JSON files found in the given directory
+pub async fn read_json_files(directory_path: &PathBuf) -> Vec<DirEntry> {
+    if !directory_path.exists() {
+        return vec![];
+    }
+
+    let mut dir = match tokio::fs::read_dir(directory_path).await {
+        Ok(dir) => dir,
+        Err(e) => {
+            log::error!("error reading workflows directory: {e}");
+            return vec![];
+        }
+    };
+
+    let mut entries = Vec::new();
+    loop {
+        match dir.next_entry().await {
+            Ok(Some(entry)) => {
+                if filter_entry_by_extension(&entry, "json").await {
+                    entries.push(entry);
+                }
+            }
+            Ok(None) => break,
+            Err(e) => {
+                log::error!("error reading directory entry: {e}");
+            }
+        }
+    }
+    entries
+}
+
+async fn filter_entry_by_extension(entry: &DirEntry, extension: &str) -> bool {
+    let is_file = match entry.file_type().await {
+        Ok(file_type) => file_type.is_file(),
+        Err(_) => return false,
+    };
+
+    is_file && entry.path().extension() == Some(OsStr::new(extension))
 }
 
 #[cfg(test)]
