@@ -14,8 +14,18 @@ pub(crate) struct TextField {
 }
 
 impl TextField {
-    pub fn new(label: String, value: String) -> Self {
+    pub(crate) fn new(label: String, value: String) -> Self {
         Self { label, value }
+    }
+
+    /// Return the estimated width for current value
+    pub(crate) fn estimate_width(&self) -> u16 {
+        u16::try_from(self.value.len() + 2).unwrap_or(u16::MAX)
+    }
+
+    #[allow(clippy::unused_self)]
+    pub(crate) fn estimate_height(&self) -> u16 {
+        3
     }
 
     pub(crate) fn draw(&self, area: Rect, buf: &mut Buffer) {
@@ -24,9 +34,8 @@ impl TextField {
         let constrained = Rect::new(
             area.x,
             area.y,
-            area.width
-                .min(u16::try_from(value.len() + 2).unwrap_or(u16::MAX)),
-            area.height.min(3),
+            area.width.min(self.estimate_width()),
+            area.height.min(self.estimate_height()),
         );
 
         Paragraph::new(utils::truncate_text(

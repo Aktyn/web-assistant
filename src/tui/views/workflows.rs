@@ -7,10 +7,9 @@ use ratatui::layout::Layout;
 use ratatui::widgets::Widget;
 use std::sync::{Arc, RwLock};
 
-use super::common::{macros, panel};
+use super::common::{macros, panel, widgets};
 use super::{View, ViewAction};
-use crate::core::Core;
-use crate::tui::common::widgets;
+use crate::workflow::Workflow;
 use workflow_panel::WorkflowPanel;
 use workflows_sidebar::WorkflowsSidebar;
 
@@ -21,7 +20,7 @@ enum WorkflowsPanelType {
 }
 
 pub(crate) struct WorkflowView {
-    core: Arc<RwLock<Core>>,
+    workflows: Arc<RwLock<Vec<Workflow>>>,
     panel: Box<dyn panel::Panel>,
     sidebar: Box<dyn panel::Panel>,
     show_sidebar: bool,
@@ -29,14 +28,14 @@ pub(crate) struct WorkflowView {
 }
 
 impl WorkflowView {
-    pub(crate) fn new(core: Arc<RwLock<Core>>) -> Self {
-        let core_sidebar_arc = core.clone();
-        let core_panel_arc = core.clone();
+    pub(crate) fn new(workflows: Arc<RwLock<Vec<Workflow>>>) -> Self {
+        let workflows_sidebar_arc = workflows.clone();
+        let workflows_panel_arc = workflows.clone();
 
         Self {
-            core,
-            sidebar: Box::new(WorkflowsSidebar::new(core_sidebar_arc)),
-            panel: Box::new(WorkflowPanel::new(core_panel_arc)),
+            workflows,
+            sidebar: Box::new(WorkflowsSidebar::new(workflows_sidebar_arc)),
+            panel: Box::new(WorkflowPanel::new(workflows_panel_arc)),
             show_sidebar: true,
             focused_panel: WorkflowsPanelType::Sidebar,
         }
@@ -46,7 +45,7 @@ impl WorkflowView {
         match self.focused_panel {
             WorkflowsPanelType::Sidebar => self.focused_panel = WorkflowsPanelType::Panel,
             WorkflowsPanelType::Panel => {
-                if macros::workflows_count!(self.core) > 0 {
+                if macros::workflows_count!(self.workflows) > 0 {
                     self.focused_panel = WorkflowsPanelType::Sidebar;
                 }
             }
@@ -100,10 +99,12 @@ impl View for WorkflowView {
         event: &crossterm::event::Event,
         terminal: &mut ratatui::DefaultTerminal,
     ) -> anyhow::Result<()> {
+        self.get_focused_panel().handle_event(event, terminal)?;
+
         if let Some(key) = event.as_key_event() {
             match key.code {
                 KeyCode::Char('s') => {
-                    if macros::workflows_count!(self.core) > 0 {
+                    if macros::workflows_count!(self.workflows) > 0 {
                         self.show_sidebar = !self.show_sidebar;
                     } else {
                         self.show_sidebar = false;
@@ -127,8 +128,6 @@ impl View for WorkflowView {
                 _ => {}
             }
         }
-
-        self.get_focused_panel().handle_event(event, terminal)?;
 
         Ok(())
     }

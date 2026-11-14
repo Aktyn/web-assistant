@@ -15,11 +15,13 @@ use std::{
 };
 
 use super::super::common::{macros, palette, panel, widgets::Button};
-use crate::core::{self, Core};
-use crate::utils;
+use crate::{
+    utils,
+    workflow::{Workflow, WorkflowState},
+};
 
 pub(crate) struct WorkflowsSidebar {
-    core: Arc<RwLock<Core>>,
+    workflows: Arc<RwLock<Vec<Workflow>>>,
     pub(super) workflows_list_state: ListState,
     pub(super) create_workflow_button_pressed: bool,
 }
@@ -27,9 +29,9 @@ pub(crate) struct WorkflowsSidebar {
 impl WorkflowsSidebar {
     pub(super) const WIDTH: u16 = 30;
 
-    pub(super) fn new(core: Arc<RwLock<Core>>) -> Self {
+    pub(super) fn new(workflows: Arc<RwLock<Vec<Workflow>>>) -> Self {
         Self {
-            core,
+            workflows,
             workflows_list_state: ListState::default().with_selected(Some(0)),
             create_workflow_button_pressed: false,
         }
@@ -45,13 +47,13 @@ impl panel::Panel for WorkflowsSidebar {
         buf.set_style(area, palette().background_style);
 
         let items = self
-            .core
+            .workflows
             .read()
-            .map(|core| {
-                core.workflows
+            .map(|workflows| {
+                workflows
                     .iter()
                     .map(|w| match &w.state {
-                        core::workflow::WorkflowState::Data(data) => {
+                        WorkflowState::Data(data) => {
                             let label = utils::truncate_text(
                                 &data.name,
                                 WorkflowsSidebar::WIDTH as usize,
@@ -59,7 +61,7 @@ impl panel::Panel for WorkflowsSidebar {
                             );
                             ListItem::new(label).bold()
                         }
-                        core::workflow::WorkflowState::Error(_) => {
+                        WorkflowState::Error(_) => {
                             let text = vec![
                                 utils::truncate_text(
                                     "Invalid workflow file found",
@@ -95,7 +97,6 @@ impl panel::Panel for WorkflowsSidebar {
         let list = List::new(items)
             .style(palette().style)
             .highlight_style(Modifier::REVERSED);
-        // .highlight_symbol("");
 
         StatefulWidget::render(list, list_area, buf, &mut self.workflows_list_state);
 
@@ -115,7 +116,7 @@ impl panel::Panel for WorkflowsSidebar {
                     macros::move_selection!(self.workflows_list_state, Previous);
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    let workflows_count = macros::workflows_count!(self.core);
+                    let workflows_count = macros::workflows_count!(self.workflows);
                     macros::move_selection!(self.workflows_list_state, Next, workflows_count);
                     if self.workflows_list_state.selected() == Some(workflows_count) {
                         self.workflows_list_state.select(None);

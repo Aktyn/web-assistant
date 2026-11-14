@@ -14,7 +14,8 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tui_logger::TuiLoggerWidget;
 
-use crate::core::Core;
+use crate::config::Config;
+use crate::workflow::{self, Workflow};
 use common::{consts, init_palette, macros, palette};
 use views::empty::EmptyView;
 use views::no_workflows::NoWorkflowsView;
@@ -22,28 +23,39 @@ use views::terminal_size_error::TerminalSizeErrorView;
 use views::workflow_creator::WorkflowCreatorView;
 use views::workflows::WorkflowView;
 
-pub fn render_tui(core: Core) -> Result<()> {
-    let app = TuiApp::new(core);
+/// Initializes the TUI and runs it
+/// Note that asynchronization occurs only during the app initialization
+pub async fn render_tui(config: Config) -> Result<()> {
+    let app = TuiApp::new(config).await;
     ratatui::run(|terminal| app.run(terminal))
 }
 
 struct TuiApp {
-    core: Arc<RwLock<Core>>,
+    config: Arc<RwLock<Config>>,
+    workflows: Arc<RwLock<Vec<Workflow>>>,
     is_running: bool,
     show_logs: bool,
     view: Box<dyn views::View>,
 }
 
 impl TuiApp {
-    fn new(core: Core) -> Self {
-        if let Some(colors) = &core.config.tuiColors {
+    async fn new(config: Config) -> Self {
+        if let Some(colors) = &config.tuiColors {
             init_palette(colors);
         }
 
-        let core_arc = Arc::new(RwLock::new(core));
+        let workflows = workflow::load_from_directory(&config.workflowsDirectory).await;
+
+        for workflow in &workflows {
+            log::info!("Workflow: {workflow:?}");
+        }
+
+        let workflows_arc = Arc::new(RwLock::new(workflows));
+        let config_arc = Arc::new(RwLock::new(config));
 
         Self {
-            core: core_arc,
+            config: config_arc,
+            workflows: workflows_arc,
             is_running: false,
             show_logs: cfg!(debug_assertions),
             view: Box::new(EmptyView),
@@ -133,9 +145,9 @@ impl TuiApp {
     }
 
     fn go_to_starting_view(&mut self) {
-        match macros::workflows_count!(self.core) {
-            0 => self.view = Box::new(NoWorkflowsView::new(self.core.clone())),
-            _ => self.view = Box::new(WorkflowView::new(self.core.clone())),
+        match macros::workflows_count!(&self.workflows) {
+            0 => self.view = Box::new(NoWorkflowsView::new(self.config.clone())),
+            _ => self.view = Box::new(WorkflowView::new(self.workflows.clone())),
         }
     }
 

@@ -13,12 +13,12 @@ use std::sync::{Arc, RwLock};
 use super::common::widgets::{Button, ButtonData, ErrorAlert};
 use super::common::{palette, utils};
 use super::{View, ViewAction};
-use crate::core::Core;
+use crate::config::Config;
 
 type ThisButtonData = ButtonData<ViewAction>;
 
 pub(crate) struct NoWorkflowsView {
-    core: Arc<RwLock<Core>>,
+    config: Arc<RwLock<Config>>,
     /// Used for navigating over option buttons
     list_state: ListState,
     buttons: [ThisButtonData; 2],
@@ -26,9 +26,9 @@ pub(crate) struct NoWorkflowsView {
 }
 
 impl NoWorkflowsView {
-    pub(crate) fn new(core: Arc<RwLock<Core>>) -> Self {
+    pub(crate) fn new(config: Arc<RwLock<Config>>) -> Self {
         Self {
-            core,
+            config,
             list_state: ListState::default(),
             buttons: [
                 ThisButtonData::new("Create new workflow", ViewAction::OpenWorkflowCreator),
@@ -93,9 +93,9 @@ impl NoWorkflowsView {
 impl View for NoWorkflowsView {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         let workflows_directory = self
-            .core
+            .config
             .read()
-            .map(|core| core.config.workflowsDirectory.display().to_string());
+            .map(|config| config.workflowsDirectory.display().to_string());
 
         match workflows_directory {
             Ok(directory_path) => {

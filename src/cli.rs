@@ -1,13 +1,13 @@
-use crate::core::config;
-
 use clap::{Parser, Subcommand, ValueHint::FilePath};
 use std::path::PathBuf;
 
+use crate::config;
+
 #[derive(Parser)]
 #[command(version, about = "If no command is provided, the TUI will be launched", long_about = None)]
-pub struct Cli {
+pub(crate) struct Cli {
     /// Relative or absolute path to config file
-    #[arg(short, long, value_name = "FILE", default_value = config::DEFAULT_CONFIG_FILE, value_hint=FilePath)]
+    #[arg(short, long, value_name = "file", default_value = config::DEFAULT_CONFIG_FILE, value_hint=FilePath)]
     pub config_path: Option<PathBuf>,
 
     #[command(subcommand)]
@@ -15,7 +15,14 @@ pub struct Cli {
 }
 
 #[derive(Subcommand)]
-pub enum Commands {
+pub(crate) enum Commands {
+    /// Runs a workflow
+    Run {
+        /// Workflow name or path to workflow file
+        #[arg(short, long, name = "name or file")]
+        workflow: String,
+    },
+
     /// Initializes default config.json
     InitConfig {
         /// Custom path to where config file will be created
@@ -26,7 +33,7 @@ pub enum Commands {
     ExplainConfig {},
 }
 
-pub fn get_cli() -> Cli {
+pub(crate) fn get_cli() -> Cli {
     Cli::parse()
 }
 

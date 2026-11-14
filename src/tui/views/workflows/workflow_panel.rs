@@ -4,7 +4,7 @@ use ratatui::{
     buffer::Buffer,
     layout::{
         Constraint::{self, Fill, Length, Ratio},
-        Layout, Rect,
+        Layout, Offset, Rect,
     },
     text::ToLine as _,
     widgets::{ListState, Paragraph, Widget},
@@ -14,17 +14,18 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use super::super::common::widgets::{Button, ButtonData, ErrorAlert, TextField};
-use super::super::common::{palette, panel, utils};
-use crate::{
-    core::{Core, workflow},
-    tui::common::widgets,
-    utils::truncate_text_left,
+use super::super::common::widgets::{Button, ButtonData, ErrorAlert, Separator, TextField};
+use super::super::common::{
+    palette, panel,
+    utils::{NavigationEvent, handle_navigation_event},
 };
+use crate::utils;
+use crate::workflow::{Workflow, WorkflowState};
 
 #[derive(Debug)]
 struct ValidWorkflowState {
     name_field: TextField,
+    description_field: Option<TextField>,
 }
 
 #[derive(Debug)]
@@ -50,7 +51,7 @@ enum WorkflowAction {
 type ThisButtonData = ButtonData<WorkflowAction>;
 
 pub(crate) struct WorkflowPanel {
-    core: Arc<RwLock<Core>>,
+    workflows: Arc<RwLock<Vec<Workflow>>>,
     selected_workflow: Option<WorkflowSelection>,
     /// Used for navigating over option buttons
     list_state: ListState,
@@ -58,9 +59,9 @@ pub(crate) struct WorkflowPanel {
 }
 
 impl WorkflowPanel {
-    pub(super) fn new(core: Arc<RwLock<Core>>) -> Self {
+    pub(super) fn new(workflows: Arc<RwLock<Vec<Workflow>>>) -> Self {
         Self {
-            core,
+            workflows,
             selected_workflow: None,
             list_state: ListState::default().with_selected(Some(0)),
             buttons: [
@@ -88,22 +89,27 @@ impl WorkflowPanel {
     fn open_workflow(&mut self, index: usize) {
         log::info!("Opening workflow: {index:?}");
 
-        match self.core.read() {
-            Ok(unlocked_core) => {
-                if let Some(workflow) = unlocked_core.workflows.get(index) {
+        match self.workflows.read() {
+            Ok(unlocked_workflows) => {
+                if let Some(workflow) = unlocked_workflows.get(index) {
                     self.selected_workflow = Some(WorkflowSelection {
                         index,
                         workflow_file: workflow.file_path.clone(),
                         state: match &workflow.state {
-                            workflow::WorkflowState::Data(data) => {
+                            WorkflowState::Data(data) => {
                                 WorkflowSelectionState::Valid(ValidWorkflowState {
                                     name_field: TextField::new(
                                         "Name".to_string(),
                                         data.name.clone(),
                                     ),
+                                    description_field: data.description.clone().map(
+                                        |description| {
+                                            TextField::new("Description".to_string(), description)
+                                        },
+                                    ),
                                 })
                             }
-                            workflow::WorkflowState::Error(error) => {
+                            WorkflowState::Error(error) => {
                                 let error_message = error.to_string();
                                 log::warn!("Invalid workflow: {error_message}");
                                 WorkflowSelectionState::Error(error_message)
@@ -169,7 +175,7 @@ impl WorkflowPanel {
         Paragraph::new(format!(
             "{}{}",
             label,
-            truncate_text_left(
+            utils::truncate_text_left(
                 absolute_path_str,
                 (path_area.width as usize).saturating_sub(label.len()),
                 None
@@ -178,11 +184,11 @@ impl WorkflowPanel {
         .style(palette().style)
         .render(path_area, buf);
 
-        widgets::Separator::new(widgets::Separator::HORIZONTAL).render(options_separator_area, buf);
+        Separator::new(Separator::HORIZONTAL).render(options_separator_area, buf);
 
         self.render_selected_workflow_options(selection, options_area, buf);
 
-        widgets::Separator::new(widgets::Separator::HORIZONTAL).render(state_separator_area, buf);
+        Separator::new(Separator::HORIZONTAL).render(state_separator_area, buf);
 
         render_workflow_state(&selection.state, content_area, buf);
     }
@@ -228,9 +234,9 @@ impl panel::Panel for WorkflowPanel {
     ) -> anyhow::Result<()> {
         if let Some(key) = event.as_key_event() {
             let navigation =
-                utils::handle_navigation_event(key, &mut self.list_state, self.buttons.len() - 1);
+                handle_navigation_event(key, &mut self.list_state, self.buttons.len() - 1);
             if let Some(event) = navigation
-                && let utils::NavigationEvent::Select(selected) = event
+                && let NavigationEvent::Select(selected) = event
             {
                 self.run_button_action(selected);
             }
@@ -264,7 +270,31 @@ fn render_workflow_state(state: &WorkflowSelectionState, area: Rect, buf: &mut B
 }
 
 fn render_valid_workflow(workflow: &ValidWorkflowState, area: Rect, buf: &mut Buffer) {
-    workflow.name_field.draw(area, buf);
+    let mut offset_y: u16 = 0;
+    let mut offset_x: u16 = 0;
+
+    for field in [
+        Some(&workflow.name_field),
+        workflow.description_field.as_ref(),
+    ]
+    .iter()
+    .flatten()
+    {
+        let required_width = field.estimate_width();
+        if offset_x + required_width >= area.width {
+            offset_x = 0;
+            offset_y += field.estimate_height();
+        }
+
+        field.draw(
+            area.offset(Offset {
+                x: offset_x.into(),
+                y: offset_y.into(),
+            }),
+            buf,
+        );
+        offset_x += required_width;
+    }
 }
 
 fn render_no_selection_info(area: Rect, buf: &mut Buffer) {
