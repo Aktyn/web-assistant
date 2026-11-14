@@ -7,7 +7,8 @@ mod tui;
 mod utils;
 
 use anyhow::Result;
-use std::io::Write;
+use documented::DocumentedFields;
+use std::io::{Write, stdout};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
@@ -43,18 +44,31 @@ async fn main() -> Result<()> {
 
     match &cli.command {
         Some(cli::Commands::InitConfig { output_path }) => {
-            std::io::stdout()
-                .write_all(b"Initializing config...\n")
-                .ok();
+            stdout().write_all(b"Initializing config...\n").ok();
 
             config::init_default_config(output_path.clone()).await;
 
-            std::io::stdout()
+            stdout()
                 .write_all(
                     format!(r"The default config was successfully saved to {output_path:?}")
                         .as_bytes(),
                 )
                 .ok();
+        }
+        Some(cli::Commands::ExplainConfig {}) => {
+            tui::inline::print_struct(&tui::inline::StructDocs {
+                description: "Config must be a json file with the following fields:",
+                field_names: core::config::Config::FIELD_NAMES,
+                field_docs: core::config::Config::FIELD_DOCS,
+            });
+
+            stdout().write_all(b"\n\n").ok();
+
+            tui::inline::print_struct(&tui::inline::StructDocs {
+                description: "HexColorsConfig object. All fields are optional.",
+                field_names: tui::common::HexColorsConfig::FIELD_NAMES,
+                field_docs: tui::common::HexColorsConfig::FIELD_DOCS,
+            });
         }
         None => {
             //NOTE: TUI logger is being initialized here to catch early core logs
@@ -91,8 +105,8 @@ fn run_loading_animation(done: &Arc<AtomicUsize>) {
     while done.load(Ordering::SeqCst) == 0 {
         let indicator = spinner[step % spinner.len()];
         let line = format!("\r {indicator} {label}");
-        std::io::stdout().write_all(line.as_bytes()).ok();
-        std::io::stdout().flush().ok();
+        stdout().write_all(line.as_bytes()).ok();
+        stdout().flush().ok();
         step = step.wrapping_add(1);
         thread::sleep(Duration::from_millis(250));
     }

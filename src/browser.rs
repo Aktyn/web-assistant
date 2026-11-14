@@ -5,7 +5,7 @@ mod dom;
 pub mod watchdogs;
 
 use anyhow::{Context, Result, anyhow};
-use cdp::{BrowserProcess, CdpClient, chrome};
+use cdp::{BrowserProcess, CdpClient};
 use dom::{BrowserState, ElementRect, EnhancedElement};
 use std::path::{Path, PathBuf};
 use std::time::Duration;

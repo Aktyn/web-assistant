@@ -6,7 +6,6 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(version, about = "If no command is provided, the TUI will be launched", long_about = None)]
 pub struct Cli {
-    // pub name: Option<String>,
     /// Relative or absolute path to config file
     #[arg(short, long, value_name = "FILE", default_value = config::DEFAULT_CONFIG_FILE, value_hint=FilePath)]
     pub config_path: Option<PathBuf>,
@@ -23,8 +22,8 @@ pub enum Commands {
         #[arg(short, long, default_value = config::DEFAULT_CONFIG_FILE, value_hint=FilePath)]
         output_path: Option<PathBuf>,
     },
-    //TODO:
-    // ExplainConfig {},
+    /// Explains the config file
+    ExplainConfig {},
 }
 
 pub fn get_cli() -> Cli {

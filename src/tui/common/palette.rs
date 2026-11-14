@@ -1,3 +1,4 @@
+use documented::DocumentedFields;
 use ratatui::style::Color;
 use ratatui::style::Style;
 use serde::Deserialize;
@@ -30,7 +31,8 @@ fn parse_hex_string(hex_string: Option<&HexString>) -> Option<Color> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields)]
+#[documented_fields(default = "Hex color string")]
 pub(crate) struct HexColorsConfig {
     background: Option<HexString>,
     foreground: Option<HexString>,
