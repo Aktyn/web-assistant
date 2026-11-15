@@ -46,6 +46,7 @@ async fn main() -> Result<()> {
 
             // let config_path = config_path.expect("Config path is required");
             // let config = Config::new(config_path).await;
+            // workflows::load_from_file(cli...)
         }
 
         Some(cli::Commands::InitConfig { output_path }) => {

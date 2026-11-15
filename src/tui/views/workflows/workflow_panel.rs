@@ -1,26 +1,54 @@
+mod workflow_delete;
+mod workflow_preview;
+
 use crossterm::event::Event;
 use ratatui::{
     DefaultTerminal,
     buffer::Buffer,
     layout::{
-        Constraint::{self, Fill, Length, Ratio},
-        Layout, Offset, Rect,
+        Constraint::{self, Fill, Length},
+        Layout, Rect,
     },
-    text::ToLine as _,
-    widgets::{ListState, Paragraph, Widget},
+    widgets::{Paragraph, Widget},
 };
 use std::{
     path::PathBuf,
     sync::{Arc, RwLock},
 };
 
-use super::super::common::widgets::{Button, ButtonData, ErrorAlert, Separator, TextField};
-use super::super::common::{
-    palette, panel,
-    utils::{NavigationEvent, handle_navigation_event},
-};
+use super::super::common::widgets::{Separator, TextField};
+use super::super::common::{palette, panel};
 use crate::utils;
 use crate::workflow::{Workflow, WorkflowState};
+use workflow_delete::WorkflowDelete;
+use workflow_preview::WorkflowPreview;
+
+#[derive(PartialEq)]
+enum WorkflowAction {
+    BackToPreview,
+    OpenFile,
+    Edit,
+    Delete,
+    Execution,
+    ConfirmDelete,
+}
+
+pub(super) enum WorkflowPanelMode {
+    Preview(WorkflowPreview),
+    Edit,
+    Run,
+    Delete(WorkflowDelete),
+}
+
+trait WorkflowPanelModeView {
+    fn render(&self, selection: &WorkflowSelection, area: Rect, buf: &mut Buffer);
+    fn handle_event(
+        &mut self,
+        event: &Event,
+        _terminal: &mut DefaultTerminal,
+        selection: &WorkflowSelection,
+    ) -> Option<WorkflowAction>;
+}
 
 #[derive(Debug)]
 struct ValidWorkflowState {
@@ -37,25 +65,14 @@ enum WorkflowSelectionState {
 struct WorkflowSelection {
     /// Index of the workflow in the list of workflows
     index: usize,
-    workflow_file: PathBuf,
+    workflow_file: Option<PathBuf>,
     state: WorkflowSelectionState,
 }
-
-enum WorkflowAction {
-    OpenFile,
-    Edit,
-    Delete,
-    Run,
-}
-
-type ThisButtonData = ButtonData<WorkflowAction>;
 
 pub(crate) struct WorkflowPanel {
     workflows: Arc<RwLock<Vec<Workflow>>>,
     selected_workflow: Option<WorkflowSelection>,
-    /// Used for navigating over option buttons
-    list_state: ListState,
-    buttons: [ThisButtonData; 4],
+    pub(super) mode: WorkflowPanelMode,
 }
 
 impl WorkflowPanel {
@@ -63,13 +80,7 @@ impl WorkflowPanel {
         Self {
             workflows,
             selected_workflow: None,
-            list_state: ListState::default().with_selected(Some(0)),
-            buttons: [
-                ThisButtonData::new("Open file", WorkflowAction::OpenFile),
-                ThisButtonData::new("Edit", WorkflowAction::Edit),
-                ThisButtonData::new("Delete", WorkflowAction::Delete),
-                ThisButtonData::new("Run", WorkflowAction::Run),
-            ],
+            mode: WorkflowPanelMode::Preview(WorkflowPreview::new()),
         }
     }
 
@@ -86,7 +97,7 @@ impl WorkflowPanel {
         }
     }
 
-    fn open_workflow(&mut self, index: usize) {
+    pub(super) fn open_workflow(&mut self, index: usize) {
         log::info!("Opening workflow: {index:?}");
 
         match self.workflows.read() {
@@ -116,6 +127,15 @@ impl WorkflowPanel {
                             }
                         },
                     });
+
+                    let is_draft = self
+                        .selected_workflow
+                        .as_ref()
+                        .is_some_and(|w| w.workflow_file.is_none());
+
+                    if is_draft {
+                        self.mode = WorkflowPanelMode::Edit;
+                    }
                 } else {
                     log::error!("Cannot get workflow with index: {index}");
                 }
@@ -126,91 +146,80 @@ impl WorkflowPanel {
         }
     }
 
-    fn render_selected_workflow_options(
-        &self,
-        _selection: &WorkflowSelection,
-        area: Rect,
-        buf: &mut Buffer,
-    ) {
-        let button_areas: [Rect; 4] = area.layout(&Layout::horizontal([Ratio(1, 4); 4]));
-
-        assert!(
-            button_areas.len() == self.buttons.len(),
-            "button_areas.len() != self.buttons.len()"
-        );
-
-        self.buttons.iter().enumerate().for_each(|(index, button)| {
-            Button::new(button.label.to_line())
-                .set_selected(self.list_state.selected() == Some(index))
-                .render(button_areas[index], buf);
-        });
-    }
-
     fn render_selected_workflow(
         &self,
         selection: &WorkflowSelection,
         area: Rect,
         buf: &mut Buffer,
     ) {
-        let [
-            path_area,
-            options_separator_area,
-            options_area,
-            state_separator_area,
-            content_area,
-        ] = area.layout(&Layout::vertical([
-            Length(1),
-            Length(1),
-            Length(OPTIONS_HEIGHT),
-            Length(1),
-            Fill(1),
-        ]));
+        let [path_area, options_separator_area, mode_area] =
+            area.layout(&Layout::vertical([Length(1), Length(1), Fill(1)]));
 
-        let path = &selection.workflow_file;
-        let absolute_path =
-            std::path::absolute(selection.workflow_file.as_path()).unwrap_or(path.clone());
-        let absolute_path_str = absolute_path.to_str().unwrap_or("");
-        let label = "Workflow file: ";
+        if let Some(workflow_file) = &selection.workflow_file {
+            let absolute_path =
+                std::path::absolute(workflow_file.as_path()).unwrap_or(workflow_file.clone());
+            let absolute_path_str = absolute_path.to_str().unwrap_or("");
+            let label = "Workflow file: ";
 
-        Paragraph::new(format!(
-            "{}{}",
-            label,
-            utils::truncate_text_left(
-                absolute_path_str,
-                (path_area.width as usize).saturating_sub(label.len()),
-                None
-            )
-        ))
-        .style(palette().style)
-        .render(path_area, buf);
+            Paragraph::new(format!(
+                "{}{}",
+                label,
+                utils::truncate_text_left(
+                    absolute_path_str,
+                    (path_area.width as usize).saturating_sub(label.len()),
+                    None
+                )
+            ))
+            .style(palette().style)
+            .render(path_area, buf);
+        } else {
+            Paragraph::new("Draft workflow")
+                .style(palette().accent)
+                .render(path_area, buf);
+        }
 
         Separator::new(Separator::HORIZONTAL).render(options_separator_area, buf);
 
-        self.render_selected_workflow_options(selection, options_area, buf);
-
-        Separator::new(Separator::HORIZONTAL).render(state_separator_area, buf);
-
-        render_workflow_state(&selection.state, content_area, buf);
+        match &self.mode {
+            WorkflowPanelMode::Preview(preview) => preview.render(selection, mode_area, buf),
+            WorkflowPanelMode::Edit => todo!(),
+            WorkflowPanelMode::Run => todo!(),
+            WorkflowPanelMode::Delete(workflow_delete) => {
+                workflow_delete.render(selection, mode_area, buf);
+            }
+        }
     }
 
-    fn run_button_action(&mut self, selected: usize) {
-        assert!(
-            selected < self.buttons.len(),
-            "selected >= self.buttons.len()"
-        );
+    fn run_workflow_action(&mut self, action: &WorkflowAction) {
+        let Some(selected_workflow) = &self.selected_workflow else {
+            return;
+        };
 
-        log::info!("@@@@@ {selected}");
-
-        match self.buttons[selected].action {
-            WorkflowAction::OpenFile => todo!(),
-            WorkflowAction::Edit => todo!(),
-            WorkflowAction::Delete => todo!(),
-            WorkflowAction::Run => todo!(),
+        match action {
+            WorkflowAction::OpenFile => {
+                if let Some(file_path) = selected_workflow.workflow_file.as_ref()
+                    && let Err(err) = utils::open_file(file_path)
+                {
+                    log::error!("Failed to open file: {err}");
+                }
+            }
+            WorkflowAction::Edit => {
+                self.mode = WorkflowPanelMode::Edit;
+            }
+            WorkflowAction::Delete => self.mode = WorkflowPanelMode::Delete(WorkflowDelete::new()),
+            WorkflowAction::Execution => {
+                self.mode = WorkflowPanelMode::Run;
+            }
+            WorkflowAction::ConfirmDelete => {
+                todo!();
+                // self.mode = WorkflowPanelMode::Preview(WorkflowPreview::new());
+            }
+            WorkflowAction::BackToPreview => {
+                self.mode = WorkflowPanelMode::Preview(WorkflowPreview::new());
+            }
         }
     }
 }
-
-const OPTIONS_HEIGHT: u16 = 3;
 
 impl panel::Panel for WorkflowPanel {
     fn draw(&mut self, area: Rect, buf: &mut Buffer, focused: bool) {
@@ -227,21 +236,26 @@ impl panel::Panel for WorkflowPanel {
         }
     }
 
-    fn handle_event(
-        &mut self,
-        event: &Event,
-        _terminal: &mut DefaultTerminal,
-    ) -> anyhow::Result<()> {
-        if let Some(key) = event.as_key_event() {
-            let navigation =
-                handle_navigation_event(key, &mut self.list_state, self.buttons.len() - 1);
-            if let Some(event) = navigation
-                && let NavigationEvent::Select(selected) = event
-            {
-                self.run_button_action(selected);
+    fn handle_event(&mut self, event: &Event, terminal: &mut DefaultTerminal) -> bool {
+        let Some(selection) = &self.selected_workflow else {
+            return false;
+        };
+
+        let action: Option<WorkflowAction> = match &mut self.mode {
+            WorkflowPanelMode::Preview(preview) => preview.handle_event(event, terminal, selection),
+            // WorkflowPanelMode::Edit => todo!(),
+            // WorkflowPanelMode::Run => todo!(),
+            WorkflowPanelMode::Delete(workflow_delete) => {
+                workflow_delete.handle_event(event, terminal, selection)
             }
+            _ => None,
+        };
+        if let Some(action) = action {
+            self.run_workflow_action(&action);
+            return true;
         }
-        Ok(())
+
+        false
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -250,50 +264,6 @@ impl panel::Panel for WorkflowPanel {
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
-    }
-}
-
-fn render_workflow_state(state: &WorkflowSelectionState, area: Rect, buf: &mut Buffer) {
-    match state {
-        WorkflowSelectionState::Valid(valid_workflow_selection) => {
-            render_valid_workflow(valid_workflow_selection, area, buf);
-        }
-        WorkflowSelectionState::Error(error) => {
-            let text = vec![
-                "The file is invalid".into(),
-                error.clone().into(),
-                "Please edit the file to fix it".into(),
-            ];
-            ErrorAlert::new(text).render(area, buf);
-        }
-    }
-}
-
-fn render_valid_workflow(workflow: &ValidWorkflowState, area: Rect, buf: &mut Buffer) {
-    let mut offset_y: u16 = 0;
-    let mut offset_x: u16 = 0;
-
-    for field in [
-        Some(&workflow.name_field),
-        workflow.description_field.as_ref(),
-    ]
-    .iter()
-    .flatten()
-    {
-        let required_width = field.estimate_width();
-        if offset_x + required_width >= area.width {
-            offset_x = 0;
-            offset_y += field.estimate_height();
-        }
-
-        field.draw(
-            area.offset(Offset {
-                x: offset_x.into(),
-                y: offset_y.into(),
-            }),
-            buf,
-        );
-        offset_x += required_width;
     }
 }
 

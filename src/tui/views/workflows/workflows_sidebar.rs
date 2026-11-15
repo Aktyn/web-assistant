@@ -50,6 +50,7 @@ impl panel::Panel for WorkflowsSidebar {
             .workflows
             .read()
             .map(|workflows| {
+                log::info!("Workflows: {:?}", workflows.len());
                 workflows
                     .iter()
                     .map(|w| match &w.state {
@@ -62,6 +63,10 @@ impl panel::Panel for WorkflowsSidebar {
                             ListItem::new(label).bold()
                         }
                         WorkflowState::Error(_) => {
+                            let file_path = w
+                                .file_path
+                                .as_ref()
+                                .expect("Workflow that failed to load must have a file path");
                             let text = vec![
                                 utils::truncate_text(
                                     "Invalid workflow file found",
@@ -72,9 +77,9 @@ impl panel::Panel for WorkflowsSidebar {
                                 utils::truncate_text(
                                     &format!(
                                         "{}",
-                                        w.file_path
+                                        file_path
                                             .file_name()
-                                            .unwrap_or(OsStr::new(&w.file_path))
+                                            .unwrap_or(OsStr::new(&file_path))
                                             .display()
                                     ),
                                     WorkflowsSidebar::WIDTH as usize,
@@ -105,15 +110,12 @@ impl panel::Panel for WorkflowsSidebar {
             .render(buttons_area, buf);
     }
 
-    fn handle_event(
-        &mut self,
-        event: &Event,
-        _terminal: &mut DefaultTerminal,
-    ) -> anyhow::Result<()> {
+    fn handle_event(&mut self, event: &Event, _terminal: &mut DefaultTerminal) -> bool {
         if let Some(key) = event.as_key_event() {
             match key.code {
                 KeyCode::Up | KeyCode::Char('k') => {
                     macros::move_selection!(self.workflows_list_state, Previous);
+                    return true;
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
                     let workflows_count = macros::workflows_count!(self.workflows);
@@ -121,6 +123,7 @@ impl panel::Panel for WorkflowsSidebar {
                     if self.workflows_list_state.selected() == Some(workflows_count) {
                         self.workflows_list_state.select(None);
                     }
+                    return true;
                 }
                 KeyCode::Enter | KeyCode::Char(' ') => {
                     self.create_workflow_button_pressed = self.is_create_workflow_button_selected();
@@ -128,7 +131,7 @@ impl panel::Panel for WorkflowsSidebar {
                 _ => {}
             }
         }
-        Ok(())
+        false
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

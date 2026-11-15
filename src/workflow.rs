@@ -19,7 +19,8 @@ pub(crate) enum WorkflowState {
 #[derive(Debug)]
 pub(crate) struct Workflow {
     pub(crate) state: WorkflowState,
-    pub(crate) file_path: PathBuf,
+    /// No file path indicates draft workflow
+    pub(crate) file_path: Option<PathBuf>,
 }
 
 impl Workflow {
@@ -27,12 +28,22 @@ impl Workflow {
         match serde_json::from_str(json.content.as_str()) {
             Ok(data) => Workflow {
                 state: WorkflowState::Data(data),
-                file_path: json.path,
+                file_path: Some(json.path),
             },
             Err(e) => Workflow {
                 state: WorkflowState::Error(e),
-                file_path: json.path,
+                file_path: Some(json.path),
             },
+        }
+    }
+
+    pub(crate) fn new_draft() -> Self {
+        Workflow {
+            state: WorkflowState::Data(WorkflowData {
+                name: "Draft workflow".to_string(),
+                description: None,
+            }),
+            file_path: None,
         }
     }
 }
@@ -101,7 +112,7 @@ mod tests {
             }
             WorkflowState::Error(_) => panic!("Expected Data variant"),
         }
-        assert_eq!(workflow.file_path, path);
+        assert_eq!(workflow.file_path, Some(path));
     }
 
     #[tokio::test]

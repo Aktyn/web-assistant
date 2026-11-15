@@ -20,7 +20,6 @@ use common::{consts, init_palette, macros, palette};
 use views::empty::EmptyView;
 use views::no_workflows::NoWorkflowsView;
 use views::terminal_size_error::TerminalSizeErrorView;
-use views::workflow_creator::WorkflowCreatorView;
 use views::workflows::WorkflowView;
 
 /// Initializes the TUI and runs it
@@ -86,6 +85,11 @@ impl TuiApp {
         }
 
         let event = event::read()?;
+        let prevent_propagation = self.view.handle_event(&event, terminal);
+
+        if prevent_propagation {
+            return Ok(());
+        }
 
         match event {
             Event::Key(key) => match key.code {
@@ -101,8 +105,6 @@ impl TuiApp {
             }
             _ => {}
         }
-
-        self.view.handle_event(&event, terminal)?;
 
         Ok(())
     }
@@ -134,11 +136,10 @@ impl TuiApp {
     fn post_update(&mut self) {
         match self.view.get_action() {
             Some(views::ViewAction::QuitApp) => self.exit(),
-            Some(views::ViewAction::OpenWorkflowCreator) => {
-                self.view = Box::new(WorkflowCreatorView::new());
-            }
-            Some(views::ViewAction::ExitWorkflowCreator) => {
-                self.go_to_starting_view();
+            Some(views::ViewAction::CreateWorkflow) => {
+                let mut workflow_view = WorkflowView::new(self.workflows.clone());
+                workflow_view.create_workflow();
+                self.view = Box::new(workflow_view);
             }
             None => (),
         }
@@ -173,7 +174,7 @@ fn clear_terminal(terminal: &mut DefaultTerminal) -> Result<()> {
     terminal
         .draw(|frame| {
             let buffer = frame.buffer_mut();
-            buffer.set_style(*buffer.area(), palette().foreground);
+            buffer.set_style(*buffer.area(), palette().style);
         })
         .context("failed to clear frame")?;
     Ok(())
@@ -332,27 +333,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_post_update_open_workflow_creator_action_swaps_view() {
+    async fn test_post_update_create_workflow_action_swaps_to_workflow_view() {
         let config = empty_config();
         let mut app = TuiApp::new(config).await;
-        let no_wf = no_workflows_view_with_action(&app.config, 0); // index 0 → OpenWorkflowCreator
+        let no_wf = no_workflows_view_with_action(&app.config, 0); // index 0 → CreateWorkflow
         app.view = Box::new(no_wf);
         app.post_update();
-        assert!(view_is::<WorkflowCreatorView>(&app));
-    }
-
-    #[tokio::test]
-    async fn test_post_update_exit_workflow_creator_returns_to_starting_view() {
-        let config = empty_config();
-        let mut app = TuiApp::new(config).await;
-        // Build a WorkflowCreatorView and press backspace to set ExitWorkflowCreator.
-        let mut creator = WorkflowCreatorView::new();
-        let event = Event::Key(KeyCode::Backspace.into());
-        let _ = creator.handle_event(&event, unsafe { &mut *no_read_term() });
-        app.view = Box::new(creator);
-        app.post_update();
-        // With an empty config, the starting view is NoWorkflowsView.
-        assert!(view_is::<NoWorkflowsView>(&app));
+        assert!(view_is::<WorkflowView>(&app));
     }
 
     #[tokio::test]

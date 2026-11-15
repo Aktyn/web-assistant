@@ -1,4 +1,8 @@
-use std::{ffi::OsStr, path::PathBuf};
+use anyhow::{Result, anyhow};
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
 use tokio::fs::DirEntry;
 
 //TODO: organize these utils into text utils and file utils
@@ -74,6 +78,31 @@ async fn filter_entry_by_extension(entry: &DirEntry, extension: &str) -> bool {
     };
 
     is_file && entry.path().extension() == Some(OsStr::new(extension))
+}
+
+/// Runs system command that opens given file in its default application
+/// # Errors
+/// Returns an error if the command fails
+pub fn open_file(path: &Path) -> Result<std::process::Child> {
+    let absolute_path = path
+        .canonicalize()
+        .map_err(|e| anyhow!("failed to get absolute path of \"{}\": {e}", path.display()))?;
+
+    let cmd = || {
+        if cfg!(target_os = "windows") {
+            "start"
+        } else if cfg!(target_os = "linux") {
+            "xdg-open"
+        } else {
+            "open"
+        }
+    };
+
+    std::process::Command::new(cmd())
+        .arg(&absolute_path)
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| anyhow!("failed to open \"{}\": {e}", absolute_path.display()))
 }
 
 #[cfg(test)]
