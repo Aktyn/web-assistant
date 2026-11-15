@@ -233,4 +233,51 @@ mod tests {
         let result = truncate_text_left(text, 3, None);
         assert_eq!(result, "...");
     }
+
+    /// Test that truncation preserves ASCII character boundaries.
+    #[test]
+    fn test_truncate_text_boundary_preservation() {
+        let text = "abcdef";
+        // limit=4, suffix=".." → keep=2 chars + ".."
+        let result = truncate_text(text, 4, Some(".."));
+        assert_eq!(result, "ab..");
+    }
+
+    /// Test left-truncation boundary preservation.
+    #[test]
+    fn test_truncate_text_left_boundary_preservation() {
+        let text = "abcdef";
+        let result = truncate_text_left(text, 4, Some(".."));
+        assert_eq!(result, "..ef");
+    }
+
+    /// Edge case: limit equals suffix length returns just suffix.
+    #[test]
+    fn test_truncate_text_limit_equals_suffix_len() {
+        let text = "longer than suffix";
+        let result = truncate_text(text, 4, Some("----"));
+        assert_eq!(result, "----");
+    }
+
+    /// Empty text should always return empty regardless of settings.
+    #[test]
+    fn test_truncate_empty_text_any_settings() {
+        assert_eq!(truncate_text("", 5, Some("x")), "");
+        assert_eq!(truncate_text_left("", 5, Some("x")), "");
+    }
+
+    /// Single char with limit 1 returns the char unchanged.
+    #[test]
+    fn test_single_char_returns_as_is() {
+        assert_eq!(truncate_text("a", 1, None), "a");
+        assert_eq!(truncate_text_left("a", 1, None), "a");
+    }
+
+    /// Large limit beyond string length returns original.
+    #[test]
+    fn test_large_limit_returns_original() {
+        let text = "short";
+        assert_eq!(truncate_text(text, 100, None), text);
+        assert_eq!(truncate_text_left(text, 100, None), text);
+    }
 }

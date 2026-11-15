@@ -199,9 +199,8 @@ mod tests {
         let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(1));
         let key_event = Event::Key(KeyCode::Up.into());
-        sidebar
-            .handle_event(&key_event, unsafe { &mut *no_read_term() })
-            .unwrap();
+        let handled = sidebar.handle_event(&key_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
         assert_eq!(sidebar.workflows_list_state.selected(), Some(0));
     }
 
@@ -211,9 +210,8 @@ mod tests {
         let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Down.into());
-        sidebar
-            .handle_event(&key_event, unsafe { &mut *no_read_term() })
-            .unwrap();
+        let handled = sidebar.handle_event(&key_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
         assert_eq!(sidebar.workflows_list_state.selected(), None);
     }
 
@@ -223,9 +221,8 @@ mod tests {
         let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Char('j').into());
-        sidebar
-            .handle_event(&key_event, unsafe { &mut *no_read_term() })
-            .unwrap();
+        let handled = sidebar.handle_event(&key_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
         assert_eq!(sidebar.workflows_list_state.selected(), None);
     }
 
@@ -235,9 +232,8 @@ mod tests {
         let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Char('k').into());
-        sidebar
-            .handle_event(&key_event, unsafe { &mut *no_read_term() })
-            .unwrap();
+        let handled = sidebar.handle_event(&key_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
         assert_eq!(sidebar.workflows_list_state.selected(), Some(0));
     }
 
@@ -252,6 +248,6 @@ mod tests {
             modifiers: crossterm::event::KeyModifiers::NONE,
         });
         let result = sidebar.handle_event(&mouse_event, unsafe { &mut *no_read_term() });
-        assert!(result.is_ok());
+        assert!(!result);
     }
 }

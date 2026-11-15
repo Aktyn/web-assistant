@@ -139,7 +139,7 @@ mod tests {
     use super::*;
     use crate::tui::views::View;
 
-fn empty_config() -> Config {
+    fn empty_config() -> Config {
         Config::default()
     }
 

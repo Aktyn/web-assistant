@@ -23,8 +23,8 @@ use crate::workflow::{Workflow, WorkflowState};
 use workflow_delete::WorkflowDelete;
 use workflow_preview::WorkflowPreview;
 
-#[derive(PartialEq)]
-enum WorkflowAction {
+#[derive(PartialEq, Eq, Debug)]
+pub(super) enum WorkflowAction {
     BackToPreview,
     OpenFile,
     Edit,
@@ -51,22 +51,22 @@ trait WorkflowPanelModeView {
 }
 
 #[derive(Debug)]
-struct ValidWorkflowState {
-    name_field: TextField,
-    description_field: Option<TextField>,
+pub(super) struct ValidWorkflowState {
+    pub(super) name_field: TextField,
+    pub(super) description_field: Option<TextField>,
 }
 
 #[derive(Debug)]
-enum WorkflowSelectionState {
+pub(super) enum WorkflowSelectionState {
     Valid(ValidWorkflowState),
     Error(String),
 }
 
-struct WorkflowSelection {
+pub(super) struct WorkflowSelection {
     /// Index of the workflow in the list of workflows
-    index: usize,
-    workflow_file: Option<PathBuf>,
-    state: WorkflowSelectionState,
+    pub(super) index: usize,
+    pub(super) workflow_file: Option<PathBuf>,
+    pub(super) state: WorkflowSelectionState,
 }
 
 pub(crate) struct WorkflowPanel {
@@ -327,16 +327,17 @@ mod tests {
     }
 
     #[test]
-    fn test_workflow_panel_handle_up_event_ok() {
+    fn test_workflow_panel_handle_up_event_without_selection_is_noop() {
         let workflows = empty_workflows();
         let mut panel = WorkflowPanel::new(workflows);
         let event = Event::Key(KeyCode::Up.into());
         let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
-        assert!(result.is_ok());
+        // Without a selected workflow, events are ignored.
+        assert!(!result);
     }
 
     #[test]
-    fn test_workflow_panel_handle_mouse_event_ok() {
+    fn test_workflow_panel_handle_mouse_event_without_selection_is_noop() {
         let workflows = empty_workflows();
         let mut panel = WorkflowPanel::new(workflows);
         let event = Event::Mouse(crossterm::event::MouseEvent {
@@ -346,7 +347,7 @@ mod tests {
             modifiers: crossterm::event::KeyModifiers::NONE,
         });
         let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
-        assert!(result.is_ok());
+        assert!(!result);
     }
 
     #[test]
@@ -478,20 +479,20 @@ mod tests {
     }
 
     #[test]
-    fn test_workflow_panel_handle_down_event_ok() {
+    fn test_workflow_panel_handle_down_event_without_selection_is_noop() {
         let workflows = empty_workflows();
         let mut panel = WorkflowPanel::new(workflows);
         let event = Event::Key(KeyCode::Down.into());
         let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
-        assert!(result.is_ok());
+        assert!(!result);
     }
 
     #[test]
-    fn test_workflow_panel_handle_unknown_key_ignored() {
+    fn test_workflow_panel_handle_unknown_key_without_selection_is_noop() {
         let workflows = empty_workflows();
         let mut panel = WorkflowPanel::new(workflows);
         let event = Event::Key(KeyCode::Char('z').into());
         let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
-        assert!(result.is_ok());
+        assert!(!result);
     }
 }

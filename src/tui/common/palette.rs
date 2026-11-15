@@ -177,6 +177,7 @@ mod tests {
             border: None,
             muted_foreground: None,
             accent: None,
+            disabled: None,
             error_foreground: None,
         };
         let palette = TuiPalette::from_config(&config);
@@ -191,6 +192,7 @@ mod tests {
             border: None,
             muted_foreground: None,
             accent: None,
+            disabled: None,
             error_foreground: None,
         };
         let palette = TuiPalette::from_config(&config);
@@ -206,6 +208,7 @@ mod tests {
             border: None,
             muted_foreground: None,
             accent: None,
+            disabled: None,
             error_foreground: None,
         };
         let palette = TuiPalette::from_config(&config);
