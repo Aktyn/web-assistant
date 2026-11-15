@@ -31,7 +31,7 @@ impl NoWorkflowsView {
             config,
             list_state: ListState::default(),
             buttons: [
-                ThisButtonData::new("Create new workflow", ViewAction::OpenWorkflowCreator),
+                ThisButtonData::new("Create new workflow", ViewAction::CreateWorkflow),
                 ThisButtonData::new("Quit app", ViewAction::QuitApp),
             ],
             pending_action: None,
@@ -111,7 +111,7 @@ impl View for NoWorkflowsView {
         &mut self,
         event: &crossterm::event::Event,
         _terminal: &mut ratatui::DefaultTerminal,
-    ) -> anyhow::Result<()> {
+    ) -> bool {
         if let Some(key) = event.as_key_event() {
             let navigation =
                 utils::handle_navigation_event(key, &mut self.list_state, self.buttons.len() - 1);
@@ -122,7 +122,7 @@ impl View for NoWorkflowsView {
             }
         }
 
-        Ok(())
+        false
     }
 
     fn get_action(&self) -> Option<super::ViewAction> {
@@ -139,28 +139,7 @@ mod tests {
     use super::*;
     use crate::tui::views::View;
 
-    #[test]
-    fn test_view_action_variants() {
-        assert_eq!(format!("{:?}", ViewAction::QuitApp), "QuitApp");
-        assert_eq!(
-            format!("{:?}", ViewAction::OpenWorkflowCreator),
-            "OpenWorkflowCreator"
-        );
-        assert_eq!(
-            format!("{:?}", ViewAction::ExitWorkflowCreator),
-            "ExitWorkflowCreator"
-        );
-        assert_ne!(ViewAction::QuitApp, ViewAction::OpenWorkflowCreator);
-    }
-
-    #[test]
-    fn test_view_action_clone_copy() {
-        let original = ViewAction::OpenWorkflowCreator;
-        let copied = original;
-        assert_eq!(original, copied);
-    }
-
-    fn empty_config() -> Config {
+fn empty_config() -> Config {
         Config::default()
     }
 
@@ -177,7 +156,7 @@ mod tests {
         let config = Arc::new(RwLock::new(empty_config()));
         let mut view = NoWorkflowsView::new(config);
         view.run_button_action(0);
-        assert_eq!(view.pending_action, Some(ViewAction::OpenWorkflowCreator));
+        assert_eq!(view.pending_action, Some(ViewAction::CreateWorkflow));
         view.run_button_action(1);
         assert_eq!(view.pending_action, Some(ViewAction::QuitApp));
     }

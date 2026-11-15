@@ -12,8 +12,8 @@ use super::palette;
 
 pub(crate) trait Panel {
     fn draw(&mut self, area: Rect, buf: &mut Buffer, focused: bool);
-    fn handle_event(&mut self, event: &Event, terminal: &mut DefaultTerminal)
-    -> anyhow::Result<()>;
+    /// Should return true if event was handled internally and should not be propagated further
+    fn handle_event(&mut self, event: &Event, terminal: &mut DefaultTerminal) -> bool;
 
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;

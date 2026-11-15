@@ -7,10 +7,10 @@ use ratatui::layout::Layout;
 use ratatui::widgets::Widget;
 use std::sync::{Arc, RwLock};
 
+use super::View;
 use super::common::{macros, panel, widgets};
-use super::{View, ViewAction};
 use crate::workflow::Workflow;
-use workflow_panel::WorkflowPanel;
+use workflow_panel::{WorkflowPanel, WorkflowPanelMode};
 use workflows_sidebar::WorkflowsSidebar;
 
 #[derive(PartialEq, Debug)]
@@ -46,16 +46,46 @@ impl WorkflowView {
             WorkflowsPanelType::Sidebar => self.focused_panel = WorkflowsPanelType::Panel,
             WorkflowsPanelType::Panel => {
                 if macros::workflows_count!(self.workflows) > 0 {
-                    self.focused_panel = WorkflowsPanelType::Sidebar;
+                    self.focus_sidebar();
                 }
             }
         }
+    }
+    fn move_to_previous_panel(&mut self) {
+        //NOTE: this works as long as there are only 2 panels
+        self.move_to_next_panel();
     }
 
     fn get_focused_panel(&mut self) -> &mut dyn panel::Panel {
         match self.focused_panel {
             WorkflowsPanelType::Sidebar => self.sidebar.as_mut(),
             WorkflowsPanelType::Panel => self.panel.as_mut(),
+        }
+    }
+
+    pub(crate) fn create_workflow(&mut self) {
+        {
+            let Ok(mut workflows_write_guard) = self.workflows.write() else {
+                return;
+            };
+            workflows_write_guard.insert(0, Workflow::new_draft());
+        }
+
+        if let Some(sidebar) = self.sidebar.as_any_mut().downcast_mut::<WorkflowsSidebar>()
+            && let Some(panel) = self.panel.as_any_mut().downcast_mut::<WorkflowPanel>()
+        {
+            sidebar.workflows_list_state.select_first();
+            panel.open_workflow(0);
+            self.focused_panel = WorkflowsPanelType::Panel;
+        }
+    }
+
+    fn focus_sidebar(&mut self) {
+        self.focused_panel = WorkflowsPanelType::Sidebar;
+        if let Some(panel) = self.panel.as_any_mut().downcast_mut::<WorkflowPanel>()
+            && let WorkflowPanelMode::Preview(preview) = &mut panel.mode
+        {
+            preview.list_state.select(None);
         }
     }
 }
@@ -98,8 +128,20 @@ impl View for WorkflowView {
         &mut self,
         event: &crossterm::event::Event,
         terminal: &mut ratatui::DefaultTerminal,
-    ) -> anyhow::Result<()> {
-        self.get_focused_panel().handle_event(event, terminal)?;
+    ) -> bool {
+        let prevent_propagation = self.get_focused_panel().handle_event(event, terminal);
+
+        if let Some(sidebar) = self.sidebar.as_any_mut().downcast_mut::<WorkflowsSidebar>()
+            && sidebar.create_workflow_button_pressed
+        {
+            sidebar.create_workflow_button_pressed = false;
+            self.create_workflow();
+            return true;
+        }
+
+        if prevent_propagation {
+            return true;
+        }
 
         if let Some(key) = event.as_key_event() {
             match key.code {
@@ -112,32 +154,35 @@ impl View for WorkflowView {
                 }
                 KeyCode::Tab => {
                     self.move_to_next_panel();
-                    return Ok(());
+                    return true;
+                }
+                KeyCode::BackTab => {
+                    self.move_to_previous_panel();
+                    return true;
                 }
                 KeyCode::Enter | KeyCode::Char(' ')
                     if (self.focused_panel == WorkflowsPanelType::Sidebar) =>
                 {
                     self.focused_panel = WorkflowsPanelType::Panel;
-                    return Ok(());
+                    if let Some(panel) = self.panel.as_any_mut().downcast_mut::<WorkflowPanel>()
+                        && let WorkflowPanelMode::Preview(preview) = &mut panel.mode
+                    {
+                        preview.list_state.select(Some(0));
+                    }
+                    return true;
                 }
                 KeyCode::Backspace if (self.focused_panel == WorkflowsPanelType::Panel) => {
-                    self.focused_panel = WorkflowsPanelType::Sidebar;
-                    return Ok(());
+                    self.focus_sidebar();
+                    return true;
                 }
-
                 _ => {}
             }
         }
 
-        Ok(())
+        prevent_propagation
     }
 
     fn get_action(&self) -> Option<super::ViewAction> {
-        if let Some(sidebar) = self.sidebar.as_any().downcast_ref::<WorkflowsSidebar>()
-            && sidebar.create_workflow_button_pressed
-        {
-            return Some(ViewAction::OpenWorkflowCreator);
-        }
         None
     }
 
@@ -283,5 +328,63 @@ mod tests {
         // Moving again from Panel should return to Sidebar (workflows_count > 0)
         view.move_to_next_panel();
         assert_eq!(view.focused_panel, WorkflowsPanelType::Sidebar);
+    }
+/// Drive the *real* create-workflow path: select the "+ Create new
+    /// workflow" button (list selection `None`) and press Enter, then draw.
+    /// The draft must appear in the rendered buffer from this single event —
+    /// no second key press should be required.
+    #[test]
+    fn test_create_workflow_via_enter_renders_draft() {
+        let workflows = empty_workflows();
+        let mut view = WorkflowView::new(workflows);
+        // With no workflows, the list selection is `Some(0)` by default, which
+        // is *not* the create button. Select `None` to land on the create
+        // button while the sidebar is still focused.
+        view.sidebar
+            .as_any_mut()
+            .downcast_mut::<WorkflowsSidebar>()
+            .unwrap()
+            .workflows_list_state
+            .select(None);
+
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buf = Buffer::empty(area);
+        view.draw(area, &mut buf);
+        let before: String = buf.content().iter().map(|c| c.symbol()).collect::<String>();
+        assert!(
+            !before.contains("Draft Workflow"),
+            "draft should not exist before pressing Enter"
+        );
+
+        // Pressing Enter on the create button must create the draft inline —
+        // `handle_event` is the only call, mirroring the real event loop.
+        let enter = Event::Key(KeyCode::Enter.into());
+        view.handle_event(&enter, unsafe { &mut *no_read_term() })
+            .unwrap();
+
+        let mut buf2 = Buffer::empty(area);
+        view.draw(area, &mut buf2);
+        let after: String = buf2
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+        assert!(
+            after.contains("Draft Workflow"),
+            "draft workflow should appear after pressing Enter on the create button, got: {after:?}"
+        );
+    }
+
+    /// Pressing Enter on a real workflow item (not the create button) must
+    /// move focus to the panel, not create a draft.
+    #[test]
+    fn test_enter_on_workflow_item_moves_focus_to_panel() {
+        let workflows = Arc::new(RwLock::new(vec![make_workflow("test")]));
+        let mut view = WorkflowView::new(workflows);
+        assert_eq!(view.focused_panel, WorkflowsPanelType::Sidebar);
+        let enter = Event::Key(KeyCode::Enter.into());
+        view.handle_event(&enter, unsafe { &mut *no_read_term() })
+            .unwrap();
+        assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);
     }
 }

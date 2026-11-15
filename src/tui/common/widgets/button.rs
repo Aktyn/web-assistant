@@ -16,6 +16,7 @@ enum State {
 pub(crate) struct Button<'a> {
     label: Line<'a>,
     state: State,
+    disabled: bool,
 }
 
 impl<'a> Button<'a> {
@@ -23,6 +24,7 @@ impl<'a> Button<'a> {
         Self {
             label: label.into(),
             state: State::Normal,
+            disabled: false,
         }
     }
 
@@ -32,6 +34,11 @@ impl<'a> Button<'a> {
         } else {
             State::Normal
         };
+        self
+    }
+
+    pub const fn set_disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
         self
     }
 }
@@ -58,6 +65,9 @@ impl Button<'_> {
     pub(crate) const HEIGHT: u16 = 3;
 
     fn color(&self) -> Color {
+        if self.disabled {
+            return palette().disabled;
+        }
         match self.state {
             State::Normal => palette().foreground,
             State::Selected => palette().accent,
