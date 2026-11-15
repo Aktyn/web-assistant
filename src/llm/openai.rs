@@ -209,7 +209,6 @@ mod tests {
             env::set_var("OPENAI_API_KEY", "env-key-123");
             env::set_var("OPENAI_BASE_URL", "http://env.example.com/v1");
         }
-        let llm = ChatOpenAI::builder().build().unwrap();
         // Builder prioritizes explicit params over env vars, but falls back correctly
         let llm_from_env = ChatOpenAI::builder().model("gpt-4").build().unwrap();
         assert_eq!(llm_from_env.model, "gpt-4");

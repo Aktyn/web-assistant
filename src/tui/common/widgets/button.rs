@@ -111,13 +111,13 @@ mod tests {
     #[test]
     fn test_button_color_normal() {
         let btn = Button::new("Normal").set_selected(false);
-        assert_eq!(btn.color(), palette().FOREGROUND);
+        assert_eq!(btn.color(), palette().foreground);
     }
 
     #[test]
     fn test_button_color_selected() {
         let btn = Button::new("Selected").set_selected(true);
-        assert_eq!(btn.color(), palette().ACCENT);
+        assert_eq!(btn.color(), palette().accent);
     }
 
     #[test]

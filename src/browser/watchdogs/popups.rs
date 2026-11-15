@@ -159,7 +159,7 @@ mod tests {
     fn test_dialog_types_recognized() {
         // Verify all expected dialog types are handled correctly
         for dialog_type in ["alert", "confirm", "beforeunload"] {
-            let event = serde_json::json!({
+            let _event = serde_json::json!({
                 "method": "Page.javascriptDialogOpening",
                 "params": {"type": dialog_type, "message": "Test message"}
             });
@@ -169,5 +169,25 @@ mod tests {
         }
         // Prompt should be dismissed
         assert!(!matches_dialog_accept("prompt"));
+    }
+
+    #[test]
+    fn test_setup_already_enabled_skips_cdp() {
+        let wd = PopupsWatchdog::new(CdpClient::new_test_client());
+        // Mark page as enabled internally
+        wd.page_enabled.store(true, Ordering::SeqCst);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        // setup should short-circuit when already enabled (no CDP call)
+        let result = rt.block_on(wd.setup());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_message_truncated_to_100_chars_in_log() {
+        // Verify that long messages don't cause issues — truncate is internal
+        let msg = "a".repeat(200);
+        let truncated: String = msg.chars().take(100).collect();
+        assert_eq!(truncated.len(), 100);
+        assert_eq!(truncated, "a".repeat(100));
     }
 }

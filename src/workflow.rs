@@ -160,6 +160,7 @@ mod tests {
     fn test_workflow_state_debug() {
         let data = WorkflowData {
             name: "My Workflow".to_string(),
+            description: Some("description".to_string()),
         };
         let state = WorkflowState::Data(data);
         let debug_str = format!("{state:?}");
@@ -170,6 +171,7 @@ mod tests {
     fn test_workflow_state_variant_match() {
         let state = WorkflowState::Data(WorkflowData {
             name: "ok".to_string(),
+            description: None,
         });
         match state {
             WorkflowState::Data(d) => assert_eq!(d.name, "ok"),
@@ -181,6 +183,7 @@ mod tests {
     fn test_workflow_data_clone() {
         let data = WorkflowData {
             name: "clone-test".to_string(),
+            description: Some("test description".to_string()),
         };
         let cloned = data.clone();
         assert_eq!(data.name, cloned.name);

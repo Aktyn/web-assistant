@@ -160,25 +160,22 @@ mod tests {
         assert_eq!(original, copied);
     }
 
-    fn empty_core() -> Core {
-        Core {
-            config: crate::core::config::Config::default(),
-            workflows: Vec::new(),
-        }
+    fn empty_config() -> Config {
+        Config::default()
     }
 
     #[test]
     fn test_no_workflows_view_new_pending_action() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let view = NoWorkflowsView::new(core);
+        let config = Arc::new(RwLock::new(empty_config()));
+        let view = NoWorkflowsView::new(config);
         assert_eq!(view.pending_action, None);
         assert!(view.list_state.selected().is_none());
     }
 
     #[test]
     fn test_run_button_action_sets_correct_choice() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut view = NoWorkflowsView::new(core);
+        let config = Arc::new(RwLock::new(empty_config()));
+        let mut view = NoWorkflowsView::new(config);
         view.run_button_action(0);
         assert_eq!(view.pending_action, Some(ViewAction::OpenWorkflowCreator));
         view.run_button_action(1);
@@ -188,8 +185,8 @@ mod tests {
     #[test]
     #[should_panic(expected = "selected >= self.buttons.len()")]
     fn test_run_button_action_out_of_bounds_panics() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut view = NoWorkflowsView::new(core);
+        let config = Arc::new(RwLock::new(empty_config()));
+        let mut view = NoWorkflowsView::new(config);
         view.run_button_action(5); // invalid index
     }
 
@@ -203,9 +200,9 @@ mod tests {
 
     /// Render test with valid area - checks no panics during draw
     #[test]
-    fn test_no_workflows_view_draw_with_valid_core() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut view = NoWorkflowsView::new(core);
+    fn test_no_workflows_view_draw_with_valid_config() {
+        let config = Arc::new(RwLock::new(Config::default()));
+        let mut view = NoWorkflowsView::new(config);
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
         view.draw(area, &mut buf);
@@ -214,8 +211,8 @@ mod tests {
 
     #[test]
     fn test_no_workflows_view_as_any() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let view = NoWorkflowsView::new(core);
+        let config = Arc::new(RwLock::new(Config::default()));
+        let view = NoWorkflowsView::new(config);
         assert!(view.as_any().is::<NoWorkflowsView>());
     }
 }

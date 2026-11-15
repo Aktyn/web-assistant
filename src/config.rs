@@ -10,7 +10,7 @@ use std::time::Duration;
 use crate::tui;
 
 #[allow(non_snake_case)]
-#[derive(Debug, Serialize, Deserialize, DocumentedFields)]
+#[derive(Debug, Clone, Serialize, Deserialize, DocumentedFields)]
 #[documented_fields(default = "Field not documented")]
 pub(crate) struct Config {
     /// Path to directory containing workflow files.
@@ -223,6 +223,7 @@ mod tests {
     fn test_config_struct_clone() {
         let config = Config {
             workflowsDirectory: PathBuf::from("/some/path"),
+            tuiColors: None,
         };
         let cloned = config.clone();
         assert_eq!(cloned.workflowsDirectory, config.workflowsDirectory);
