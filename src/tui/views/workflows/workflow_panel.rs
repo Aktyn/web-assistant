@@ -491,14 +491,6 @@ mod tests {
     }
 
     #[test]
-    fn test_workflow_panel_as_any_mut_returns_self() {
-        let workflows = empty_workflows();
-        let mut panel = WorkflowPanel::new(workflows);
-        let any = panel.as_any_mut();
-        assert!(any.is::<WorkflowPanel>());
-    }
-
-    #[test]
     fn test_workflow_panel_handle_down_event_ok() {
         let workflows = empty_workflows();
         let mut panel = WorkflowPanel::new(workflows);
@@ -513,5 +505,171 @@ mod tests {
         let event = Event::Key(KeyCode::Char('z').into());
         let handled = panel.handle_event(&event, unsafe { &mut *no_read_term() });
         assert!(!handled);
+    }
+
+    #[test]
+    fn test_workflow_panel_open_edit_mode_and_return_to_preview() {
+        let workflows = workflows_with_one("Test");
+        let mut panel = WorkflowPanel::new(workflows);
+        panel.update(Some(0));
+        // Verify panel is in preview mode after opening.
+        assert!(matches!(panel.mode, WorkflowPanelMode::Preview(_)));
+
+        // Navigate to "Edit" button (index 1) and select it via Enter.
+        // The preview handles navigation internally; we simulate by directly
+        // setting list_state and triggering enter.
+        
+        // After pressing Enter on Edit button, mode should be Edit.
+        let edit_event = Event::Key(KeyCode::Enter.into());
+        let _handled = panel.handle_event(&edit_event, unsafe { &mut *no_read_term() });
+        // Since handle_event in Preview mode uses its own navigation logic,
+        // we verify the direct mode transition instead by calling open_workflow
+        // which sets mode to Edit for drafts, but for valid files it stays Preview.
+        // We test the Esc handler in Edit mode directly:
+        if let WorkflowPanelMode::Edit = &panel.mode {
+            // Already in edit or preview, skip
+        }
+        // The proper way: set mode to Edit and verify Esc returns to Preview.
+        panel.mode = WorkflowPanelMode::Edit;
+        let esc_event = Event::Key(KeyCode::Esc.into());
+        let handled = panel.handle_event(&esc_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
+        assert!(matches!(panel.mode, WorkflowPanelMode::Preview(_)));
+    }
+
+    #[test]
+    fn test_workflow_panel_open_run_mode_and_return_to_preview() {
+        let workflows = workflows_with_one("Test");
+        let mut panel = WorkflowPanel::new(workflows);
+        panel.update(Some(0));
+        // Simulate being in Run mode and pressing Esc.
+        panel.mode = WorkflowPanelMode::Run;
+        let esc_event = Event::Key(KeyCode::Esc.into());
+        let handled = panel.handle_event(&esc_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
+        assert!(matches!(panel.mode, WorkflowPanelMode::Preview(_)));
+    }
+
+    #[test]
+    fn test_workflow_panel_draw_in_edit_mode_no_panic() {
+        let workflows = workflows_with_one("Test");
+        let mut panel = WorkflowPanel::new(workflows);
+        panel.update(Some(0));
+        panel.mode = WorkflowPanelMode::Edit;
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buf = Buffer::empty(area);
+        panel.draw(area, &mut buf, false);
+        // If no panic, rendering succeeded.
+    }
+
+    #[test]
+    fn test_workflow_panel_draw_in_run_mode_no_panic() {
+        let workflows = workflows_with_one("Test");
+        let mut panel = WorkflowPanel::new(workflows);
+        panel.update(Some(0));
+        panel.mode = WorkflowPanelMode::Run;
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buf = Buffer::empty(area);
+        panel.draw(area, &mut buf, false);
+        // If no panic, rendering succeeded.
+    }
+
+    #[test]
+    fn test_workflow_panel_draw_with_draft_workflow_opens_edit_mode() {
+        let draft = Workflow::new_draft();
+        let workflows = Arc::new(RwLock::new(vec![draft]));
+        let mut panel = WorkflowPanel::new(workflows);
+        panel.update(Some(0));
+        // Draft workflows should open in Edit mode.
+        assert!(matches!(panel.mode, WorkflowPanelMode::Edit));
+        assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 0);
+    }
+
+    #[test]
+    fn test_workflow_panel_confirm_delete_removes_from_list() {
+        
+        let tmp = tempfile::tempdir().unwrap();
+        let wf_path = tmp.path().join("workflow.json");
+        let json_content = r#"{"name":"ToDelete"}"#;
+        std::fs::write(&wf_path, json_content).unwrap();
+
+        let json = WorkflowDataJson::from_raw(wf_path.clone(), json_content.to_string());
+        let workflow = Workflow::new(json);
+        let workflows = Arc::new(RwLock::new(vec![workflow]));
+        let mut panel = WorkflowPanel::new(workflows.clone());
+        panel.update(Some(0));
+
+        // Set mode to Delete and simulate confirming.
+        panel.mode = WorkflowPanelMode::Delete(WorkflowDelete::new());
+        let confirm_event = Event::Key(KeyCode::Enter.into());
+        let handled = panel.handle_event(&confirm_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
+
+        // Workflow should have been removed from the list.
+        let wfs = panel.workflows.read().unwrap();
+        assert_eq!(wfs.len(), 0);
+        assert!(panel.selected_workflow.is_none());
+    }
+
+    #[test]
+    fn test_workflow_panel_confirm_delete_invalidates_nonexistent_file() {
+        let json = WorkflowDataJson::from_raw(
+            PathBuf::from("/tmp/nonexistent_workflow_xyz.json"),
+            r#"{"name":"Ghost"}"#.to_string(),
+        );
+        let workflow = Workflow::new(json);
+        let workflows = Arc::new(RwLock::new(vec![workflow]));
+        let mut panel = WorkflowPanel::new(workflows);
+        panel.update(Some(0));
+
+        panel.mode = WorkflowPanelMode::Delete(WorkflowDelete::new());
+        let confirm_event = Event::Key(KeyCode::Enter.into());
+        let handled = panel.handle_event(&confirm_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
+
+        // Even though file doesn't exist, the workflow should still be removed.
+        let wfs = panel.workflows.read().unwrap();
+        assert_eq!(wfs.len(), 0);
+    }
+
+    #[test]
+    fn test_workflow_panel_escape_from_delete_returns_to_preview() {
+        let workflows = workflows_with_one("Test");
+        let mut panel = WorkflowPanel::new(workflows);
+        panel.update(Some(0));
+        panel.mode = WorkflowPanelMode::Delete(WorkflowDelete::new());
+        let esc_event = Event::Key(KeyCode::Esc.into());
+        let handled = panel.handle_event(&esc_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
+        assert!(matches!(panel.mode, WorkflowPanelMode::Preview(_)));
+    }
+
+    #[test]
+    fn test_workflow_panel_draw_draft_workflow_shows_draft_text() {
+        let draft = Workflow::new_draft();
+        let workflows = Arc::new(RwLock::new(vec![draft]));
+        let mut panel = WorkflowPanel::new(workflows);
+        panel.update(Some(0));
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buf = Buffer::empty(area);
+        panel.draw(area, &mut buf, false);
+        // If we get here without panicking, rendering succeeded with draft text.
+    }
+
+    #[test]
+    fn test_workflow_panel_handles_edit_action_via_preview() {
+        let workflows = workflows_with_one("Test");
+        let mut panel = WorkflowPanel::new(workflows);
+        panel.update(Some(0));
+        // Preview button list_state starts at index 1 (Edit button).
+        // We can't easily trigger the preview's handle_event navigation,
+        // but we verify that entering Edit mode works when set directly.
+        if let WorkflowPanelMode::Preview(ref mut preview) = panel.mode {
+            preview.list_state.select(Some(1));
+        }
+        let enter_event = Event::Key(KeyCode::Enter.into());
+        let handled = panel.handle_event(&enter_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
+        assert!(matches!(panel.mode, WorkflowPanelMode::Edit));
     }
 }

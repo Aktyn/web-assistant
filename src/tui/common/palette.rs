@@ -187,4 +187,67 @@ mod tests {
         let palette = TuiPalette::from_config(&config);
         assert_eq!(palette.background, Color::Rgb(255, 255, 255));
     }
+
+    #[test]
+    fn test_from_config_invalid_hex_falls_back_to_default() {
+        let config = HexColorsConfig {
+            background: Some("not-a-hex".to_string()),
+            ..Default::default()
+        };
+        let palette = TuiPalette::from_config(&config);
+        assert_eq!(palette.background, TuiPalette::default().background);
+    }
+
+    #[test]
+    fn test_from_config_invalid_hex_length_falls_back_to_default() {
+        let config = HexColorsConfig {
+            background: Some("#12345".to_string()),
+            ..Default::default()
+        };
+        let palette = TuiPalette::from_config(&config);
+        assert_eq!(palette.background, TuiPalette::default().background);
+    }
+
+    #[test]
+    fn test_from_config_invalid_hex_digits_falls_back_to_default() {
+        let config = HexColorsConfig {
+            background: Some("#zzzzzz".to_string()),
+            ..Default::default()
+        };
+        let palette = TuiPalette::from_config(&config);
+        assert_eq!(palette.background, TuiPalette::default().background);
+    }
+
+    #[test]
+    fn test_from_config_overrides_multiple_fields() {
+        let config = HexColorsConfig {
+            background: Some("#000000".to_string()),
+            foreground: Some("#ffffff".to_string()),
+            border: Some("#ff0000".to_string()),
+            muted_foreground: Some("#00ff00".to_string()),
+            accent: Some("#0000ff".to_string()),
+            disabled: Some("#aaaaaa".to_string()),
+            error_foreground: Some("#bb0000".to_string()),
+            success_foreground: Some("#00bb00".to_string()),
+        };
+        let palette = TuiPalette::from_config(&config);
+        assert_eq!(palette.background, Color::Rgb(0, 0, 0));
+        assert_eq!(palette.foreground, Color::Rgb(255, 255, 255));
+        assert_eq!(palette.border, Color::Rgb(255, 0, 0));
+        assert_eq!(palette.muted_foreground, Color::Rgb(0, 255, 0));
+        assert_eq!(palette.accent, Color::Rgb(0, 0, 255));
+        assert_eq!(palette.disabled, Color::Rgb(170, 170, 170));
+        assert_eq!(palette.error_foreground, Color::Rgb(187, 0, 0));
+        assert_eq!(palette.success_foreground, Color::Rgb(0, 187, 0));
+    }
+
+    #[test]
+    fn test_parse_hex_color_without_hash_prefix() {
+        let config = HexColorsConfig {
+            background: Some("abc".to_string()),
+            ..Default::default()
+        };
+        let palette = TuiPalette::from_config(&config);
+        assert_eq!(palette.background, Color::Rgb(170, 187, 204));
+    }
 }

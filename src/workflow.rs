@@ -53,6 +53,7 @@ impl Workflow {
 }
 
 #[cfg(test)]
+#[allow(clippy::match_wildcard_for_single_variants)]
 mod tests {
     use super::*;
     #[tokio::test]

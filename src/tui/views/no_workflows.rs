@@ -81,9 +81,11 @@ impl NoWorkflowsView {
     }
 
     pub(crate) fn run_button_action(&mut self, selected: usize) {
-        if let Some(button) = self.buttons.get(selected) {
-            self.pending_action = Some(button.action);
-        }
+        assert!(
+            selected < self.buttons.len(),
+            "selected >= self.buttons.len()"
+        );
+        self.pending_action = Some(self.buttons[selected].action);
     }
 }
 

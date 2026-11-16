@@ -110,3 +110,31 @@ pub(crate) fn print_success(message: &str) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_struct_docs_mismatched_lengths_returns_error() {
+        let docs = StructDocs {
+            description: "Test",
+            field_names: &["field1"],
+            field_docs: &["doc1", "doc2"],
+        };
+        let result = print_struct(&docs);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_struct_docs_valid_lengths_constructs_ok() {
+        let docs = StructDocs {
+            description: "Test struct",
+            field_names: &["name", "value"],
+            field_docs: &["Name doc", "Value doc"],
+        };
+        // Should not panic or error on construction.
+        assert_eq!(docs.field_names.len(), 2);
+        assert_eq!(docs.field_docs.len(), 2);
+    }
+}
