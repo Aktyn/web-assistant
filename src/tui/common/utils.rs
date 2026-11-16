@@ -1,6 +1,30 @@
-use super::macros;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::widgets::ListState;
+use std::sync::RwLock;
+
+use crate::workflow::Workflow;
+
+pub(crate) fn workflows_count(workflows: &RwLock<Vec<Workflow>>) -> usize {
+    workflows.read().map_or(0, |w| w.len())
+}
+
+pub(crate) fn move_selection_previous(list_state: &mut ListState) -> usize {
+    let selected = match list_state.selected() {
+        Some(current) => current.saturating_sub(1),
+        None => 0,
+    };
+    list_state.select(Some(selected));
+    selected
+}
+
+pub(crate) fn move_selection_next(list_state: &mut ListState, max: usize) -> usize {
+    let selected = match list_state.selected() {
+        Some(current) => (current + 1).min(max),
+        None => 0,
+    };
+    list_state.select(Some(selected));
+    selected
+}
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum NavigationEvent {
@@ -18,22 +42,16 @@ pub(crate) fn handle_navigation_event(
 ) -> Option<NavigationEvent> {
     match key.code {
         KeyCode::Left | KeyCode::Up | KeyCode::Char('h') | KeyCode::BackTab => {
-            let selected = macros::move_selection!(list_state, Previous);
-            return Some(NavigationEvent::Previous(selected));
+            let selected = move_selection_previous(list_state);
+            Some(NavigationEvent::Previous(selected))
         }
         KeyCode::Right | KeyCode::Down | KeyCode::Char('l') | KeyCode::Tab => {
-            let selected = macros::move_selection!(list_state, Next, max_selection);
-            return Some(NavigationEvent::Next(selected));
+            let selected = move_selection_next(list_state, max_selection);
+            Some(NavigationEvent::Next(selected))
         }
-        KeyCode::Enter | KeyCode::Char(' ') => {
-            if let Some(selected) = list_state.selected() {
-                return Some(NavigationEvent::Select(selected));
-            }
-        }
-        _ => {}
+        KeyCode::Enter | KeyCode::Char(' ') => list_state.selected().map(NavigationEvent::Select),
+        _ => None,
     }
-
-    None
 }
 
 #[cfg(test)]

@@ -56,22 +56,20 @@ impl CrashWatchdog {
 
     /// Handle a crash-related CDP event.
     ///
-    /// # Errors
-    ///
-    /// This function never returns an error.
-    pub fn handle_cdp_event(&self, event: &Value) -> Result<bool> {
+    /// Returns `true` if the event was a crash event and was handled.
+    pub fn handle_cdp_event(&self, event: &Value) -> bool {
         let Some(method) = event.get("method").and_then(|m| m.as_str()) else {
-            return Ok(false);
+            return false;
         };
 
         if method == "Inspector.targetCrashed" || method == "Target.targetCrashed" {
             error!("🚨 CrashWatchdog: Target crashed!");
             self.crashed.store(true, Ordering::SeqCst);
             self.crash_count.fetch_add(1, Ordering::SeqCst);
-            return Ok(true);
+            return true;
         }
 
-        Ok(false)
+        false
     }
 
     /// Heartbeat ping to check if page is responsive

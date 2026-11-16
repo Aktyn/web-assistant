@@ -5,4 +5,4 @@ pub(super) mod panel;
 pub(super) mod utils;
 pub(super) mod widgets;
 
-pub(crate) use palette::{HexColorsConfig, get as palette, init as init_palette};
+pub(crate) use palette::{get as palette, init as init_palette};

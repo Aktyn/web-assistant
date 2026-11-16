@@ -158,7 +158,8 @@ impl ChatOpenAIBuilder {
         self
     }
 
-    pub fn build(self) -> Result<ChatOpenAI> {
+    #[must_use]
+    pub fn build(self) -> ChatOpenAI {
         let model = self.model.unwrap_or_else(|| "auto".to_string());
         let api_key = self
             .api_key
@@ -171,14 +172,14 @@ impl ChatOpenAIBuilder {
             .trim_end_matches('/')
             .to_string();
 
-        Ok(ChatOpenAI {
+        ChatOpenAI {
             model,
             api_key,
             base_url,
             temperature: self.temperature.or(Some(0.2)),
             max_completion_tokens: self.max_completion_tokens.or(Some(4096)),
             client: Client::new(),
-        })
+        }
     }
 }
 

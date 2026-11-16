@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::fs::DirEntry;
 
 use crate::utils;
@@ -10,12 +10,10 @@ pub struct WorkflowDataJson {
 
 impl WorkflowDataJson {
     pub(crate) async fn new(entry: &DirEntry) -> Option<Self> {
-        if entry.path().extension().and_then(|ext| ext.to_str()) == Some("json") {
-            let content = tokio::fs::read_to_string(entry.path()).await.ok()?;
-            Some(Self {
-                path: entry.path(),
-                content,
-            })
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+            let content = tokio::fs::read_to_string(&path).await.ok()?;
+            Some(Self { path, content })
         } else {
             None
         }
@@ -29,12 +27,14 @@ impl WorkflowDataJson {
     }
 }
 
-pub async fn load_from_directory(workflows_directory: &PathBuf) -> Vec<super::Workflow> {
-    assert!(
-        !workflows_directory.exists() || workflows_directory.is_dir(),
-        "Workflows path already exists but is not a directory: \"{}\"",
-        workflows_directory.display()
-    );
+pub async fn load_from_directory(workflows_directory: &Path) -> Vec<super::Workflow> {
+    if workflows_directory.exists() && !workflows_directory.is_dir() {
+        log::error!(
+            "Workflows path exists but is not a directory: \"{}\"",
+            workflows_directory.display()
+        );
+        return vec![];
+    }
 
     let json_files = utils::read_json_files(workflows_directory).await;
     let mut workflows = Vec::with_capacity(json_files.len());

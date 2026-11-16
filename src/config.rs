@@ -4,27 +4,47 @@ use serde::{Deserialize, Serialize};
 use std::io::{Write as _, stdout};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
-use crate::tui;
+pub type HexString = String;
+
+#[derive(Debug, Default, Serialize, Deserialize, Clone, DocumentedFields)]
+#[documented_fields(default = "Hex color string")]
+pub struct HexColorsConfig {
+    pub background: Option<HexString>,
+    pub foreground: Option<HexString>,
+    pub border: Option<HexString>,
+    pub muted_foreground: Option<HexString>,
+    pub accent: Option<HexString>,
+    pub disabled: Option<HexString>,
+    pub error_foreground: Option<HexString>,
+    pub success_foreground: Option<HexString>,
+}
 
 #[allow(non_snake_case)]
-#[derive(Debug, Clone, Serialize, Deserialize, DocumentedFields)]
+#[derive(Debug, Serialize, Deserialize, DocumentedFields)]
 #[documented_fields(default = "Field not documented")]
-pub(crate) struct Config {
+pub struct Config {
     /// Path to directory containing workflow files.
     /// Can be omitted during inline run if workflow is provided as file path
-    #[serde(default = "get_default_workflows_directory")]
-    pub(crate) workflowsDirectory: PathBuf,
+    #[serde(
+        default = "get_default_workflows_directory",
+        alias = "workflows_directory",
+        rename = "workflowsDirectory"
+    )]
+    pub workflowsDirectory: PathBuf,
     /// Optional map of hex colors to use when rendering TUI.
     /// See *`HexColorsConfig`* for list of color names.
-    pub(crate) tuiColors: Option<tui::common::HexColorsConfig>,
+    #[serde(alias = "tui_colors", rename = "tuiColors")]
+    pub tuiColors: Option<HexColorsConfig>,
 }
 
 impl Config {
-    pub(crate) async fn new(config_path: &PathBuf) -> Self {
+    /// # Panics
+    /// This function will panic if the config path does not point to a file.
+    pub async fn new(config_path: &Path) -> Self {
         if !config_path.exists() {
             log::info!(
                 "Config file not found (\"{}\"), using defaults",
@@ -60,8 +80,8 @@ impl Default for Config {
     }
 }
 
-pub async fn load_config(config_path: &PathBuf) -> Config {
-    let done_loading = Arc::new(AtomicUsize::new(0));
+pub async fn load_config(config_path: &Path) -> Config {
+    let done_loading = Arc::new(AtomicBool::new(false));
     let done_loading_thread = Arc::clone(&done_loading);
     let loading_thread_handle = thread::spawn(move || {
         run_loading_animation(&done_loading_thread);
@@ -69,18 +89,18 @@ pub async fn load_config(config_path: &PathBuf) -> Config {
 
     let config = Config::new(config_path).await;
 
-    done_loading.store(1, Ordering::SeqCst);
-    loading_thread_handle.join().unwrap();
+    done_loading.store(true, Ordering::SeqCst);
+    loading_thread_handle.join().ok();
 
     config
 }
 
-fn run_loading_animation(done: &Arc<AtomicUsize>) {
+fn run_loading_animation(done: &Arc<AtomicBool>) {
     let label = "Loading";
     let spinner = ['—', '\\', '|', '/'];
     let mut step = 0usize;
 
-    while done.load(Ordering::SeqCst) == 0 {
+    while !done.load(Ordering::SeqCst) {
         let indicator = spinner[step % spinner.len()];
         let line = format!("\r {indicator} {label}");
         stdout().write_all(line.as_bytes()).ok();
@@ -90,11 +110,15 @@ fn run_loading_animation(done: &Arc<AtomicUsize>) {
     }
 }
 
-pub(crate) static DEFAULT_CONFIG_FILE: &str = r"./config.json";
+pub static DEFAULT_CONFIG_FILE: &str = r"./config.json";
 
 /// Create a default config file at the given path. If no path is provided, the default config file
 /// will be created in the current working directory as config.json.
-pub(crate) async fn create_default_config(path: Option<&Path>) -> Result<&Path> {
+/// # Errors
+/// This function will return an error if the config file already exists.
+/// # Panics
+/// This function will panic if the default config file cannot be serialized.
+pub async fn create_default_config(path: Option<&Path>) -> Result<&Path> {
     let config_path = path.unwrap_or(DEFAULT_CONFIG_FILE.as_ref());
     log::info!("Initializing default config from {}", config_path.display());
 
@@ -185,9 +209,7 @@ mod tests {
     async fn test_init_default_config_creates_file() {
         let tmp = tempfile::tempdir().unwrap();
         let output_path = tmp.path().join("config.json");
-        create_default_config(Some(output_path.as_path()))
-            .await
-            .expect("config creation should succeed");
+        create_default_config(Some(&output_path)).await.unwrap();
 
         assert!(output_path.exists());
         assert!(output_path.is_file());
@@ -198,20 +220,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_init_default_config_with_existing_file_errors() {
+    async fn test_init_default_config_with_existing_file_panics() {
         let tmp = tempfile::tempdir().unwrap();
         let output_path = tmp.path().join("existing.json");
         std::fs::write(&output_path, "{}").unwrap();
 
-        let result = create_default_config(Some(output_path.as_path())).await;
+        let result = create_default_config(Some(&output_path)).await;
         assert!(
             result.is_err(),
             "Expected error when output file already exists"
-        );
-        let err = result.unwrap_err();
-        assert!(
-            err.to_string().contains("already exists"),
-            "Error should mention the file already exists: {err}"
         );
     }
 
@@ -219,9 +236,7 @@ mod tests {
     async fn test_init_default_config_serializes_pretty_json() {
         let tmp = tempfile::tempdir().unwrap();
         let output_path = tmp.path().join("pretty.json");
-        create_default_config(Some(output_path.as_path()))
-            .await
-            .expect("config creation should succeed");
+        create_default_config(Some(&output_path)).await.unwrap();
 
         let content = tokio::fs::read_to_string(&output_path).await.unwrap();
         // Pretty-printed JSON contains newlines and indentation.

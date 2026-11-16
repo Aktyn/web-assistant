@@ -264,7 +264,7 @@ impl Chrome {
 }
 
 fn dirs_home() -> Option<PathBuf> {
-    std::env::var("HOME").ok().map(PathBuf::from)
+    crate::utils::home_dir()
 }
 
 #[cfg(test)]

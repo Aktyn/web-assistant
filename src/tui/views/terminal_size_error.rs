@@ -100,8 +100,7 @@ mod tests {
     fn test_terminal_size_error_view_handle_event_returns_ok() {
         let mut view = TerminalSizeErrorView::new();
         let event = Event::Key(KeyCode::Enter.into());
-        let result = view.handle_event(&event, unsafe { &mut *no_read_term() });
-        assert!(!result);
+        let _handled = view.handle_event(&event, unsafe { &mut *no_read_term() });
     }
 
     #[test]

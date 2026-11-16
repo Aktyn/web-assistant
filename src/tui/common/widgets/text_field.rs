@@ -3,9 +3,9 @@ use ratatui::layout::Rect;
 use ratatui::style::Stylize as _;
 use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
-use web_assistant::utils;
 
 use super::super::palette;
+use crate::utils;
 
 #[derive(Debug, Clone)]
 pub(crate) struct TextField {
@@ -29,8 +29,6 @@ impl TextField {
     }
 
     pub(crate) fn draw(&self, area: Rect, buf: &mut Buffer) {
-        let value = self.value.clone();
-
         let constrained = Rect::new(
             area.x,
             area.y,
@@ -39,7 +37,7 @@ impl TextField {
         );
 
         Paragraph::new(utils::truncate_text(
-            &value,
+            &self.value,
             constrained.width.saturating_sub(2).into(),
             None,
         ))

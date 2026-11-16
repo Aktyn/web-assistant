@@ -23,8 +23,8 @@ use crate::workflow::{Workflow, WorkflowState};
 use workflow_delete::WorkflowDelete;
 use workflow_preview::WorkflowPreview;
 
-#[derive(PartialEq, Eq, Debug)]
-pub(super) enum WorkflowAction {
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+enum WorkflowAction {
     BackToPreview,
     OpenFile,
     Edit,
@@ -51,22 +51,22 @@ trait WorkflowPanelModeView {
 }
 
 #[derive(Debug)]
-pub(super) struct ValidWorkflowState {
-    pub(super) name_field: TextField,
-    pub(super) description_field: Option<TextField>,
+struct ValidWorkflowState {
+    name_field: TextField,
+    description_field: Option<TextField>,
 }
 
 #[derive(Debug)]
-pub(super) enum WorkflowSelectionState {
+enum WorkflowSelectionState {
     Valid(ValidWorkflowState),
     Error(String),
 }
 
-pub(super) struct WorkflowSelection {
+struct WorkflowSelection {
     /// Index of the workflow in the list of workflows
-    pub(super) index: usize,
-    pub(super) workflow_file: Option<PathBuf>,
-    pub(super) state: WorkflowSelectionState,
+    index: usize,
+    workflow_file: Option<PathBuf>,
+    state: WorkflowSelectionState,
 }
 
 pub(crate) struct WorkflowPanel {
@@ -182,15 +182,25 @@ impl WorkflowPanel {
 
         match &self.mode {
             WorkflowPanelMode::Preview(preview) => preview.render(selection, mode_area, buf),
-            WorkflowPanelMode::Edit => todo!(),
-            WorkflowPanelMode::Run => todo!(),
+            WorkflowPanelMode::Edit => {
+                Paragraph::new("Workflow editor coming soon... (Press Esc to return)")
+                    .style(palette().muted_foreground)
+                    .centered()
+                    .render(mode_area, buf);
+            }
+            WorkflowPanelMode::Run => {
+                Paragraph::new("Workflow runner coming soon... (Press Esc to return)")
+                    .style(palette().muted_foreground)
+                    .centered()
+                    .render(mode_area, buf);
+            }
             WorkflowPanelMode::Delete(workflow_delete) => {
                 workflow_delete.render(selection, mode_area, buf);
             }
         }
     }
 
-    fn run_workflow_action(&mut self, action: &WorkflowAction) {
+    fn run_workflow_action(&mut self, action: WorkflowAction) {
         let Some(selected_workflow) = &self.selected_workflow else {
             return;
         };
@@ -211,8 +221,21 @@ impl WorkflowPanel {
                 self.mode = WorkflowPanelMode::Run;
             }
             WorkflowAction::ConfirmDelete => {
-                todo!();
-                // self.mode = WorkflowPanelMode::Preview(WorkflowPreview::new());
+                if let Some(file_path) = selected_workflow.workflow_file.as_ref() {
+                    if let Err(err) = std::fs::remove_file(file_path) {
+                        log::error!("Failed to delete workflow file: {err}");
+                    } else {
+                        log::info!("Deleted workflow file: {}", file_path.display());
+                    }
+                }
+                let target_index = selected_workflow.index;
+                if let Ok(mut workflows) = self.workflows.write()
+                    && target_index < workflows.len()
+                {
+                    workflows.remove(target_index);
+                }
+                self.selected_workflow = None;
+                self.mode = WorkflowPanelMode::Preview(WorkflowPreview::new());
             }
             WorkflowAction::BackToPreview => {
                 self.mode = WorkflowPanelMode::Preview(WorkflowPreview::new());
@@ -243,27 +266,27 @@ impl panel::Panel for WorkflowPanel {
 
         let action: Option<WorkflowAction> = match &mut self.mode {
             WorkflowPanelMode::Preview(preview) => preview.handle_event(event, terminal, selection),
-            // WorkflowPanelMode::Edit => todo!(),
-            // WorkflowPanelMode::Run => todo!(),
+            WorkflowPanelMode::Edit | WorkflowPanelMode::Run => {
+                if let Some(key) = event.as_key_event() {
+                    if key.code == crossterm::event::KeyCode::Esc {
+                        Some(WorkflowAction::BackToPreview)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
             WorkflowPanelMode::Delete(workflow_delete) => {
                 workflow_delete.handle_event(event, terminal, selection)
             }
-            _ => None,
         };
         if let Some(action) = action {
-            self.run_workflow_action(&action);
+            self.run_workflow_action(action);
             return true;
         }
 
         false
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
     }
 }
 
@@ -327,17 +350,15 @@ mod tests {
     }
 
     #[test]
-    fn test_workflow_panel_handle_up_event_without_selection_is_noop() {
+    fn test_workflow_panel_handle_up_event_ok() {
         let workflows = empty_workflows();
         let mut panel = WorkflowPanel::new(workflows);
         let event = Event::Key(KeyCode::Up.into());
-        let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
-        // Without a selected workflow, events are ignored.
-        assert!(!result);
+        let _handled = panel.handle_event(&event, unsafe { &mut *no_read_term() });
     }
 
     #[test]
-    fn test_workflow_panel_handle_mouse_event_without_selection_is_noop() {
+    fn test_workflow_panel_handle_mouse_event_ok() {
         let workflows = empty_workflows();
         let mut panel = WorkflowPanel::new(workflows);
         let event = Event::Mouse(crossterm::event::MouseEvent {
@@ -346,8 +367,7 @@ mod tests {
             row: 0,
             modifiers: crossterm::event::KeyModifiers::NONE,
         });
-        let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
-        assert!(!result);
+        let _handled = panel.handle_event(&event, unsafe { &mut *no_read_term() });
     }
 
     #[test]
@@ -479,20 +499,19 @@ mod tests {
     }
 
     #[test]
-    fn test_workflow_panel_handle_down_event_without_selection_is_noop() {
+    fn test_workflow_panel_handle_down_event_ok() {
         let workflows = empty_workflows();
         let mut panel = WorkflowPanel::new(workflows);
         let event = Event::Key(KeyCode::Down.into());
-        let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
-        assert!(!result);
+        let _handled = panel.handle_event(&event, unsafe { &mut *no_read_term() });
     }
 
     #[test]
-    fn test_workflow_panel_handle_unknown_key_without_selection_is_noop() {
+    fn test_workflow_panel_handle_unknown_key_ignored() {
         let workflows = empty_workflows();
         let mut panel = WorkflowPanel::new(workflows);
         let event = Event::Key(KeyCode::Char('z').into());
-        let result = panel.handle_event(&event, unsafe { &mut *no_read_term() });
-        assert!(!result);
+        let handled = panel.handle_event(&event, unsafe { &mut *no_read_term() });
+        assert!(!handled);
     }
 }

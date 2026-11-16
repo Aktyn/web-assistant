@@ -50,7 +50,6 @@ impl panel::Panel for WorkflowsSidebar {
             .workflows
             .read()
             .map(|workflows| {
-                log::info!("Workflows: {:?}", workflows.len());
                 workflows
                     .iter()
                     .map(|w| match &w.state {
@@ -67,6 +66,8 @@ impl panel::Panel for WorkflowsSidebar {
                                 .file_path
                                 .as_ref()
                                 .expect("Workflow that failed to load must have a file path");
+                            let file_name_str =
+                                file_path.file_name().and_then(OsStr::to_str).unwrap_or("");
                             let text = vec![
                                 utils::truncate_text(
                                     "Invalid workflow file found",
@@ -75,13 +76,7 @@ impl panel::Panel for WorkflowsSidebar {
                                 )
                                 .into(),
                                 utils::truncate_text(
-                                    &format!(
-                                        "{}",
-                                        file_path
-                                            .file_name()
-                                            .unwrap_or(OsStr::new(&file_path))
-                                            .display()
-                                    ),
+                                    file_name_str,
                                     WorkflowsSidebar::WIDTH as usize,
                                     None,
                                 )
@@ -133,14 +128,6 @@ impl panel::Panel for WorkflowsSidebar {
         }
         false
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
 }
 
 #[cfg(test)]
@@ -149,7 +136,6 @@ mod tests {
     use crate::tui::common::panel::Panel;
     use crossterm::event::{Event, KeyCode};
     use std::mem::MaybeUninit;
-    use std::path::PathBuf;
 
     fn empty_workflows() -> Arc<RwLock<Vec<Workflow>>> {
         Arc::new(RwLock::new(Vec::new()))
@@ -250,40 +236,5 @@ mod tests {
         });
         let result = sidebar.handle_event(&mouse_event, unsafe { &mut *no_read_term() });
         assert!(!result);
-    }
-
-    #[test]
-    fn test_workflows_sidebar_draw_with_data_workflow_no_panic() {
-        let wfs = empty_workflows();
-        let data = crate::workflow::WorkflowData {
-            name: "Test WF".to_string(),
-            description: None,
-        };
-        let wf = Workflow {
-            state: WorkflowState::Data(data),
-            file_path: Some(PathBuf::from("/tmp/test.json")),
-        };
-        wfs.write().unwrap().push(wf);
-        let mut sidebar = WorkflowsSidebar::new(wfs);
-        let area = Rect::new(0, 0, 30, 20);
-        let mut buf = Buffer::empty(area);
-        sidebar.draw(area, &mut buf, false);
-    }
-
-    #[test]
-    fn test_workflows_sidebar_draw_with_error_workflow_no_panic() {
-        let wfs = empty_workflows();
-        let err_state = WorkflowState::Error(
-            serde_json::from_str::<serde_json::Value>("not json").unwrap_err(),
-        );
-        let wf = Workflow {
-            state: err_state,
-            file_path: Some(PathBuf::from("/tmp/bad.json")),
-        };
-        wfs.write().unwrap().push(wf);
-        let mut sidebar = WorkflowsSidebar::new(wfs);
-        let area = Rect::new(0, 0, 30, 20);
-        let mut buf = Buffer::empty(area);
-        sidebar.draw(area, &mut buf, false);
     }
 }

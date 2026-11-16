@@ -1,3 +1,4 @@
+//TODO: remove `pub` from module declarations
 pub mod agent;
 pub mod browser;
 mod cli;
@@ -55,15 +56,15 @@ async fn run_cli(cli: &cli::Cli) -> Result<()> {
 }
 
 async fn run_workflow(workflow_path_or_name: &str, cli: &cli::Cli) -> Result<()> {
-    dbg!(workflow_path_or_name);
+    log::info!("Running workflow: {workflow_path_or_name}");
 
     let config_path = cli
         .config_path
         .as_ref()
         .context("Config path is required")?;
     let config = config::load_config(config_path).await;
-    dbg!(&config);
-    //TODO: Implement inline workflow execution
+    log::info!("Loaded config: {config:?}");
+    // TODO: Implement inline workflow execution
     // let workflow = workflow::load_from_file(workflow).await;
 
     Ok(())
@@ -74,7 +75,9 @@ async fn init_config(output_path: Option<&PathBuf>) -> Result<()> {
 
     let config_path = config::create_default_config(output_path.map(PathBuf::as_path)).await?;
 
-    let absolute_path = config_path.canonicalize().unwrap_or(PathBuf::from(""));
+    let absolute_path = config_path
+        .canonicalize()
+        .unwrap_or_else(|_| config_path.to_path_buf());
     tui::inline::print_success(&format!(
         r"The default config was successfully saved to: {}",
         absolute_path.display()
@@ -92,13 +95,13 @@ fn explain_config() -> Result<()> {
 
     tui::inline::print_struct(&tui::inline::StructDocs {
         description: "HexColorsConfig object. All fields are optional.",
-        field_names: tui::common::HexColorsConfig::FIELD_NAMES,
-        field_docs: tui::common::HexColorsConfig::FIELD_DOCS,
+        field_names: config::HexColorsConfig::FIELD_NAMES,
+        field_docs: config::HexColorsConfig::FIELD_DOCS,
     })
 }
 
 async fn run_tui(cli: &cli::Cli) -> Result<()> {
-    //NOTE: TUI logger is being initialized here to catch early core logs
+    // NOTE: TUI logger is initialized here to catch early core logs
     tui_logger::init_logger(tui_logger::LevelFilter::Trace)?;
     tui_logger::set_default_level(tui_logger::LevelFilter::Trace);
 
