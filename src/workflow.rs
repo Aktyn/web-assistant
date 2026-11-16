@@ -1,21 +1,15 @@
+mod workflow_data;
 mod workflow_loader;
+mod workflow_runtime;
 
-use serde::Deserialize;
 use std::path::PathBuf;
 
-#[cfg(test)]
-pub(crate) use workflow_loader::WorkflowDataJson;
-pub use workflow_loader::load_from_directory;
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct WorkflowData {
-    pub name: String,
-    pub description: Option<String>,
-}
+use workflow_data::WorkflowData;
+pub use workflow_loader::{load_from_directory, load_from_file};
 
 #[derive(Debug)]
 pub enum WorkflowState {
-    Data(WorkflowData),
+    Valid(WorkflowData),
     Error(serde_json::Error),
 }
 
@@ -27,10 +21,11 @@ pub struct Workflow {
 }
 
 impl Workflow {
-    pub(crate) fn new(json: workflow_loader::WorkflowDataJson) -> Self {
+    #[must_use]
+    pub(crate) fn new(json: workflow_loader::JsonFile) -> Self {
         match serde_json::from_str(&json.content) {
             Ok(data) => Workflow {
-                state: WorkflowState::Data(data),
+                state: WorkflowState::Valid(data),
                 file_path: Some(json.path),
             },
             Err(e) => Workflow {
@@ -43,12 +38,17 @@ impl Workflow {
     #[must_use]
     pub fn new_draft() -> Self {
         Workflow {
-            state: WorkflowState::Data(WorkflowData {
+            state: WorkflowState::Valid(WorkflowData {
                 name: "Draft workflow".to_string(),
                 description: None,
+                steps: vec![],
             }),
             file_path: None,
         }
+    }
+
+    fn is_draft(&self) -> bool {
+        self.file_path.is_none()
     }
 }
 
@@ -56,6 +56,7 @@ impl Workflow {
 #[allow(clippy::match_wildcard_for_single_variants)]
 mod tests {
     use super::*;
+    use workflow_loader::WorkflowDataJson;
     #[tokio::test]
     async fn test_workflow_data_json_valid_file() {
         let json_content = "{\"name\": \"Test Workflow\"}";
@@ -68,7 +69,7 @@ mod tests {
         };
         let workflow = Workflow::new(json);
         match &workflow.state {
-            WorkflowState::Data(data) => {
+            WorkflowState::Valid(data) => {
                 assert_eq!(data.name, "Test Workflow");
             }
             WorkflowState::Error(_) => panic!("Expected Data variant"),
@@ -85,7 +86,7 @@ mod tests {
         let workflow = Workflow::new(json);
         match &workflow.state {
             WorkflowState::Error(_) => {} // expected
-            WorkflowState::Data(_) => panic!("Expected Error variant"),
+            WorkflowState::Valid(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -98,7 +99,7 @@ mod tests {
         let workflow = Workflow::new(json);
         match &workflow.state {
             WorkflowState::Error(_) => {} // missing required `name` field → deserialize error
-            WorkflowState::Data(_) => panic!("Expected Error variant"),
+            WorkflowState::Valid(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -111,7 +112,7 @@ mod tests {
         let workflow = Workflow::new(json);
         match &workflow.state {
             WorkflowState::Error(_) => {}
-            WorkflowState::Data(_) => panic!("Expected Error variant"),
+            WorkflowState::Valid(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -124,7 +125,7 @@ mod tests {
         let workflow = Workflow::new(json);
         match &workflow.state {
             WorkflowState::Error(_) => {}
-            WorkflowState::Data(_) => panic!("Expected Error variant"),
+            WorkflowState::Valid(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -134,19 +135,19 @@ mod tests {
             name: "My Workflow".to_string(),
             description: Some("description".to_string()),
         };
-        let state = WorkflowState::Data(data);
+        let state = WorkflowState::Valid(data);
         let debug_str = format!("{state:?}");
         assert!(debug_str.contains("My Workflow"));
     }
 
     #[test]
     fn test_workflow_state_variant_match() {
-        let state = WorkflowState::Data(WorkflowData {
+        let state = WorkflowState::Valid(WorkflowData {
             name: "ok".to_string(),
             description: None,
         });
         match state {
-            WorkflowState::Data(d) => assert_eq!(d.name, "ok"),
+            WorkflowState::Valid(d) => assert_eq!(d.name, "ok"),
             WorkflowState::Error(_) => panic!("Expected Data"),
         }
     }
@@ -166,7 +167,7 @@ mod tests {
         let draft = Workflow::new_draft();
         assert!(draft.file_path.is_none());
         match &draft.state {
-            WorkflowState::Data(d) => {
+            WorkflowState::Valid(d) => {
                 assert_eq!(d.name, "Draft workflow");
                 assert!(d.description.is_none());
             }
@@ -188,13 +189,13 @@ mod tests {
                 let err_str = e.to_string();
                 assert!(!err_str.is_empty(), "error message should not be empty");
             }
-            WorkflowState::Data(_) => panic!("Expected Error variant"),
+            WorkflowState::Valid(_) => panic!("Expected Error variant"),
         }
     }
 
     #[test]
     fn test_workflow_state_debug_display() {
-        let state = WorkflowState::Data(WorkflowData {
+        let state = WorkflowState::Valid(WorkflowData {
             name: "Test".to_string(),
             description: None,
         });
@@ -226,7 +227,7 @@ mod tests {
         let workflows = load_from_directory(&tmp.path().to_path_buf()).await;
         assert_eq!(workflows.len(), 1);
         match &workflows[0].state {
-            WorkflowState::Data(d) => {
+            WorkflowState::Valid(d) => {
                 assert_eq!(d.name, "MyWorkflow");
                 assert_eq!(d.description.as_deref(), Some("desc"));
             }

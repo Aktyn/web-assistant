@@ -1,5 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
-
 pub mod judge;
 pub mod prompts;
 mod variable_detector;
@@ -34,7 +32,7 @@ impl Agent {
         Self {
             task: task.into(),
             llm,
-            browser: Browser::new(None),
+            browser: Browser::default(),
             system_prompt: SystemPrompt::default(),
             max_steps: 20,
             history: AgentHistoryList::new(),

@@ -94,7 +94,7 @@ impl View for NoWorkflowsView {
         let workflows_directory = self
             .config
             .read()
-            .map(|config| config.workflowsDirectory.display().to_string());
+            .map(|config| config.workflows_directory.display().to_string());
 
         match workflows_directory {
             Ok(directory_path) => {

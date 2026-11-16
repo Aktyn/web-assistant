@@ -107,7 +107,7 @@ impl WorkflowPanel {
                         index,
                         workflow_file: workflow.file_path.clone(),
                         state: match &workflow.state {
-                            WorkflowState::Data(data) => {
+                            WorkflowState::Valid(data) => {
                                 WorkflowSelectionState::Valid(ValidWorkflowState {
                                     name_field: TextField::new(
                                         "Name".to_string(),
@@ -518,7 +518,7 @@ mod tests {
         // Navigate to "Edit" button (index 1) and select it via Enter.
         // The preview handles navigation internally; we simulate by directly
         // setting list_state and triggering enter.
-        
+
         // After pressing Enter on Edit button, mode should be Edit.
         let edit_event = Event::Key(KeyCode::Enter.into());
         let _handled = panel.handle_event(&edit_event, unsafe { &mut *no_read_term() });
@@ -587,7 +587,6 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_confirm_delete_removes_from_list() {
-        
         let tmp = tempfile::tempdir().unwrap();
         let wf_path = tmp.path().join("workflow.json");
         let json_content = r#"{"name":"ToDelete"}"#;

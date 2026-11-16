@@ -1,22 +1,31 @@
+use anyhow::{Result, anyhow};
 use std::path::{Path, PathBuf};
-use tokio::fs::DirEntry;
 
 use crate::utils;
 
-pub struct WorkflowDataJson {
+pub(crate) struct JsonFile {
     pub path: PathBuf,
     pub content: String,
 }
 
-impl WorkflowDataJson {
-    pub(crate) async fn new(entry: &DirEntry) -> Option<Self> {
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
-            let content = tokio::fs::read_to_string(&path).await.ok()?;
-            Some(Self { path, content })
-        } else {
-            None
+impl JsonFile {
+    async fn new(path: &Path) -> Result<Self> {
+        if !path.exists() {
+            anyhow::bail!("File does not exist: \"{}\"", path.display());
         }
+        if !path.is_file() {
+            anyhow::bail!("Given path doesn't point to a file: \"{}\"", path.display());
+        }
+
+        if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+            let content = tokio::fs::read_to_string(&path).await?;
+            return Ok(Self {
+                path: path.to_path_buf(),
+                content,
+            });
+        }
+
+        Err(anyhow!("Wrong file extension: \"{}\"", path.display()))
     }
 
     /// Test-only constructor that builds a `WorkflowDataJson` from raw content
@@ -27,24 +36,36 @@ impl WorkflowDataJson {
     }
 }
 
-pub async fn load_from_directory(workflows_directory: &Path) -> Vec<super::Workflow> {
+/// # Errors
+/// This function will return an error if the file does not exist or is not a valid json file.
+pub async fn load_from_file(workflow_file: &Path) -> Result<super::Workflow> {
+    let json = JsonFile::new(workflow_file).await?;
+    Ok(super::Workflow::new(json))
+}
+
+/// # Errors
+/// This function will return an error if the directory does not exist or is not a directory.
+pub async fn load_from_directory(workflows_directory: &Path) -> Result<Vec<super::Workflow>> {
     if workflows_directory.exists() && !workflows_directory.is_dir() {
-        log::error!(
+        anyhow::bail!(
             "Workflows path exists but is not a directory: \"{}\"",
             workflows_directory.display()
         );
-        return vec![];
     }
 
-    let json_files = utils::read_json_files(workflows_directory).await;
+    let json_files = utils::read_json_files(workflows_directory).await?;
     let mut workflows = Vec::with_capacity(json_files.len());
     for entry in &json_files {
-        if let Some(json) = WorkflowDataJson::new(entry).await {
-            workflows.push(super::Workflow::new(json));
+        match JsonFile::new(&entry.path()).await {
+            Ok(json) => workflows.push(super::Workflow::new(json)),
+            Err(e) => log::error!(
+                "Error loading workflow from file: \"{}\": {}",
+                entry.path().display(),
+                e
+            ),
         }
     }
-
-    workflows
+    Ok(workflows)
 }
 
 #[cfg(test)]
@@ -65,7 +86,7 @@ mod tests {
         let workflows = load_from_directory(tmp.path()).await;
         assert_eq!(workflows.len(), 1);
         match &workflows[0].state {
-            WorkflowState::Data(data) => {
+            WorkflowState::Valid(data) => {
                 assert_eq!(data.name, "Test Workflow");
                 assert_eq!(data.description.as_deref(), Some("A test"));
             }
@@ -129,14 +150,14 @@ mod tests {
         let workflows = load_from_directory(tmp.path()).await;
         assert_eq!(workflows.len(), 1);
         match &workflows[0].state {
-            WorkflowState::Data(data) => assert_eq!(data.name, "Top"),
+            WorkflowState::Valid(data) => assert_eq!(data.name, "Top"),
             _ => panic!("Expected Data variant"),
         }
     }
 
     #[test]
     fn test_workflow_data_json_from_raw() {
-        let json = WorkflowDataJson::from_raw(
+        let json = JsonFile::from_raw(
             PathBuf::from("/tmp/raw-test.json"),
             "{\"name\": \"Raw\"}".to_string(),
         );

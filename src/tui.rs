@@ -39,11 +39,17 @@ struct TuiApp {
 
 impl TuiApp {
     async fn new(config: Config) -> Self {
-        if let Some(colors) = &config.tuiColors {
+        if let Some(colors) = &config.tui_colors {
             init_palette(colors);
         }
 
-        let workflows = workflow::load_from_directory(&config.workflowsDirectory).await;
+        let workflows = match workflow::load_from_directory(&config.workflows_directory).await {
+            Ok(workflows) => workflows,
+            Err(e) => {
+                log::error!("Error loading workflows: {e}");
+                vec![]
+            }
+        };
 
         for workflow in &workflows {
             log::info!("Workflow: {workflow:?}");
