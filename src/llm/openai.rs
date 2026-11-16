@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_builder_default_model() {
-        let llm = ChatOpenAI::builder().build().unwrap();
+        let llm = ChatOpenAI::builder().build();
         assert_eq!(llm.model, "auto");
     }
 
@@ -211,7 +211,7 @@ mod tests {
             env::set_var("OPENAI_BASE_URL", "http://env.example.com/v1");
         }
         // Builder prioritizes explicit params over env vars, but falls back correctly
-        let llm_from_env = ChatOpenAI::builder().model("gpt-4").build().unwrap();
+        let llm_from_env = ChatOpenAI::builder().model("gpt-4").build();
         assert_eq!(llm_from_env.model, "gpt-4");
         // Clean up
         unsafe {
@@ -224,8 +224,7 @@ mod tests {
     fn test_builder_trims_trailing_slashes() {
         let llm = ChatOpenAI::builder()
             .base_url("http://example.com/")
-            .build()
-            .unwrap();
+            .build();
         assert_eq!(llm.base_url, "http://example.com");
     }
 
@@ -237,8 +236,7 @@ mod tests {
             .base_url("http://localhost:11434/v1")
             .temperature(0.8)
             .max_completion_tokens(2048)
-            .build()
-            .unwrap();
+            .build();
         assert_eq!(llm.model, "claude-3");
         assert_eq!(llm.api_key, "my-secret");
         assert_eq!(llm.base_url, "http://localhost:11434/v1");

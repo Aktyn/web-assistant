@@ -234,4 +234,74 @@ mod tests {
             "Authentication required but missing credentials."
         );
     }
+
+    #[test]
+    fn test_parse_judgement_with_plain_backtick_block() {
+        let raw = r#"```
+        {
+            "reasoning": "Plain backtick block",
+            "verdict": true,
+            "failure_reason": "",
+            "impossible_task": false,
+            "reached_captcha": false
+        }
+        ```"#;
+
+        let result = parse_judgement_response(raw).unwrap();
+        assert!(result.verdict);
+        assert_eq!(result.reasoning, "Plain backtick block");
+    }
+
+    #[test]
+    fn test_parse_judgement_with_plain_braces() {
+        let raw = r#"{
+            "reasoning": "Direct JSON without codeblock",
+            "verdict": false,
+            "failure_reason": "Task incomplete",
+            "impossible_task": false,
+            "reached_captcha": false
+        }"#;
+
+        let result = parse_judgement_response(raw).unwrap();
+        assert!(!result.verdict);
+        assert_eq!(result.failure_reason, "Task incomplete");
+    }
+
+    #[test]
+    fn test_construct_judge_messages_without_ground_truth() {
+        let messages = construct_judge_messages(
+            "Find Rust docs",
+            "Rust is a systems language",
+            &["Step 1: Opened browser".to_string()],
+            None,
+        );
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, "system");
+        assert!(messages[0].content.contains("evaluation_framework"));
+        assert!(!messages[0].content.contains("<ground_truth>"));
+        assert_eq!(messages[1].role, "user");
+        assert!(messages[1].content.contains("Find Rust docs"));
+        assert!(messages[1].content.contains("Step 1: Opened browser"));
+    }
+
+    #[test]
+    fn test_construct_judge_messages_with_ground_truth() {
+        let messages = construct_judge_messages(
+            "Find Rust docs",
+            "Rust is a systems language",
+            &[
+                "Step 1: Opened browser".to_string(),
+                "Step 2: Found documentation".to_string(),
+            ],
+            Some("Rust is a compiled systems programming language"),
+        );
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, "system");
+        assert!(messages[0].content.contains("GROUND TRUTH"));
+        assert!(messages[0].content.contains("ABSOLUTE precedence"));
+        assert_eq!(messages[1].role, "user");
+        assert!(messages[1].content.contains("<ground_truth>"));
+        assert!(messages[1].content.contains("compiled systems programming"));
+        assert!(messages[1].content.contains("Step 2: Found documentation"));
+    }
 }

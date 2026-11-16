@@ -126,7 +126,7 @@ mod tests {
             "method": "Target.targetCrashed",
             "params": {}
         });
-        let handled = wd.handle_cdp_event(&event).unwrap();
+        let handled = wd.handle_cdp_event(&event);
         assert!(handled);
         assert!(wd.is_crashed());
         assert_eq!(wd.crash_count(), 1);
@@ -139,7 +139,7 @@ mod tests {
             "method": "Inspector.targetCrashed",
             "params": {}
         });
-        let handled = wd.handle_cdp_event(&event).unwrap();
+        let handled = wd.handle_cdp_event(&event);
         assert!(handled);
         assert!(wd.is_crashed());
     }
@@ -151,7 +151,7 @@ mod tests {
             "method": "Page.loadEventFired",
             "params": {}
         });
-        let handled = wd.handle_cdp_event(&event).unwrap();
+        let handled = wd.handle_cdp_event(&event);
         assert!(!handled);
         assert!(!wd.is_crashed());
     }
@@ -160,7 +160,7 @@ mod tests {
     fn test_missing_method_field_returns_false() {
         let wd = CrashWatchdog::new_test();
         let event = serde_json::json!({"params": {}});
-        let handled = wd.handle_cdp_event(&event).unwrap();
+        let handled = wd.handle_cdp_event(&event);
         assert!(!handled);
     }
 
@@ -177,7 +177,7 @@ mod tests {
         for method in ["Target.targetCrashed", "Inspector.targetCrashed"] {
             let wd = CrashWatchdog::new_test();
             let event = serde_json::json!({"method": method, "params": {}});
-            let handled = wd.handle_cdp_event(&event).unwrap();
+            let handled = wd.handle_cdp_event(&event);
             assert!(handled);
             assert!(wd.is_crashed());
         }
@@ -187,7 +187,7 @@ mod tests {
     fn test_missing_method_field_with_params_returns_false() {
         let wd = CrashWatchdog::new_test();
         let event = serde_json::json!({"params": {"foo": "bar"}});
-        let handled = wd.handle_cdp_event(&event).unwrap();
+        let handled = wd.handle_cdp_event(&event);
         assert!(!handled);
     }
 
@@ -196,8 +196,8 @@ mod tests {
         let wd = CrashWatchdog::new_test();
         let event1 = serde_json::json!({"method": "Target.targetCrashed", "params": {}});
         let event2 = serde_json::json!({"method": "Inspector.targetCrashed", "params": {}});
-        wd.handle_cdp_event(&event1).unwrap();
-        wd.handle_cdp_event(&event2).unwrap();
+        wd.handle_cdp_event(&event1);
+        wd.handle_cdp_event(&event2);
         assert_eq!(wd.crash_count(), 2);
     }
 }

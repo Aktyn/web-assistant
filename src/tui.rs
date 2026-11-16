@@ -221,15 +221,6 @@ mod tests {
         Config::default()
     }
 
-    /// Returns a `&mut DefaultTerminal` that is never dereferenced by the
-    /// views we exercise (they ignore the `_terminal` parameter).
-    fn no_read_term() -> *mut DefaultTerminal {
-        use std::mem::MaybeUninit;
-        static SLOT: std::sync::OnceLock<MaybeUninit<DefaultTerminal>> = std::sync::OnceLock::new();
-        let slot = SLOT.get_or_init(MaybeUninit::uninit);
-        slot.as_ptr().cast_mut()
-    }
-
     /// Helper to inspect the concrete type behind the `view` Box<dyn View>.
     fn view_is<VT: std::any::Any>(app: &TuiApp) -> bool {
         app.view.as_any().is::<VT>()
@@ -346,6 +337,42 @@ mod tests {
         let mut app = TuiApp::new(config).await;
         app.is_running = true;
         app.view = Box::new(EmptyView);
+        app.post_update();
+        assert!(app.is_running);
+    }
+
+    /// Ensure that creating a ``TuiApp`` loads workflows from an empty directory
+    /// without panicking and ends up on ``NoWorkflowsView`` after ``go_to_starting_view``.
+    #[tokio::test]
+    async fn test_tui_app_new_loads_empty_workflows() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = Config {
+            workflowsDirectory: tmp.path().to_path_buf(),
+            tuiColors: None,
+        };
+        let app = TuiApp::new(config).await;
+        // Should not panic during construction.
+        assert!(!app.is_running);
+        // Starting view should be NoWorkflowsView since no workflows were found.
+        let json = WorkflowDataJson::from_raw(
+            PathBuf::from("/tmp/workflow.json"),
+            r#"{"name":"W"}"#.to_string(),
+        );
+        let workflow = Workflow::new(json);
+        let mut app2 = TuiApp::new(Config::default()).await;
+        app2.workflows = Arc::new(RwLock::new(vec![workflow]));
+        app2.go_to_starting_view();
+        assert!(view_is::<WorkflowView>(&app2));
+    }
+
+    /// Test that ``post_update`` with a workflow view that has no action is a noop.
+    #[tokio::test]
+    async fn test_post_update_workflow_view_no_action_is_noop() {
+        let config = empty_config();
+        let mut app = TuiApp::new(config).await;
+        app.is_running = true;
+        let workflows = Arc::new(RwLock::new(Vec::new()));
+        app.view = Box::new(WorkflowView::new(workflows));
         app.post_update();
         assert!(app.is_running);
     }

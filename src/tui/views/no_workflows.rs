@@ -81,9 +81,11 @@ impl NoWorkflowsView {
     }
 
     pub(crate) fn run_button_action(&mut self, selected: usize) {
-        if let Some(button) = self.buttons.get(selected) {
-            self.pending_action = Some(button.action);
-        }
+        assert!(
+            selected < self.buttons.len(),
+            "selected >= self.buttons.len()"
+        );
+        self.pending_action = Some(self.buttons[selected].action);
     }
 }
 
@@ -135,6 +137,7 @@ impl View for NoWorkflowsView {
 mod tests {
     use super::*;
     use crate::tui::views::View;
+    use crossterm::event::{Event, KeyCode};
 
     fn empty_config() -> Config {
         Config::default()
@@ -190,5 +193,49 @@ mod tests {
         let config = Arc::new(RwLock::new(Config::default()));
         let view = NoWorkflowsView::new(config);
         assert!(view.as_any().is::<NoWorkflowsView>());
+    }
+
+    #[test]
+    fn test_handle_event_key_down_selects_first_button() {
+        let config = Arc::new(RwLock::new(empty_config()));
+        let mut view = NoWorkflowsView::new(config);
+        let event = Event::Key(KeyCode::Down.into());
+        let handled = view.handle_event(&event, unsafe { &mut *no_read_term() });
+        assert!(!handled);
+        assert_eq!(view.list_state.selected(), Some(0));
+    }
+
+    #[test]
+    fn test_handle_event_enter_triggers_action() {
+        let config = Arc::new(RwLock::new(empty_config()));
+        let mut view = NoWorkflowsView::new(config);
+        view.list_state.select(Some(0));
+        let event = Event::Key(KeyCode::Enter.into());
+        let handled = view.handle_event(&event, unsafe { &mut *no_read_term() });
+        assert!(!handled);
+        assert_eq!(view.get_action(), Some(ViewAction::CreateWorkflow));
+    }
+
+    #[test]
+    fn test_handle_event_mouse_ignored() {
+        let config = Arc::new(RwLock::new(empty_config()));
+        let mut view = NoWorkflowsView::new(config);
+        let event = Event::Mouse(crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        });
+        let handled = view.handle_event(&event, unsafe { &mut *no_read_term() });
+        assert!(!handled);
+    }
+
+    /// Helper to build a `&mut DefaultTerminal` that is never dereferenced.
+    fn no_read_term() -> *mut ratatui::DefaultTerminal {
+        use std::mem::MaybeUninit;
+        static SLOT: std::sync::OnceLock<MaybeUninit<ratatui::DefaultTerminal>> =
+            std::sync::OnceLock::new();
+        let slot = SLOT.get_or_init(MaybeUninit::uninit);
+        slot.as_ptr().cast_mut()
     }
 }

@@ -579,8 +579,7 @@ mod tests {
             .base_url("http://localhost:8080")
             .temperature(0.5)
             .max_completion_tokens(1024)
-            .build()
-            .unwrap();
+            .build();
         assert_eq!(llm.model, "gpt-4");
         assert_eq!(llm.api_key, "test-key");
         assert_eq!(llm.base_url, "http://localhost:8080");
@@ -642,8 +641,7 @@ mod tests {
             .model("auto")
             .api_key("")
             .base_url("http://localhost:9999")
-            .build()
-            .unwrap();
+            .build();
         let agent = Agent::new("Test task", llm.clone());
         assert_eq!(agent.task, "Test task");
         assert_eq!(agent.max_steps, 20);
@@ -657,8 +655,7 @@ mod tests {
             .model("auto")
             .api_key("")
             .base_url("http://localhost:9999")
-            .build()
-            .unwrap();
+            .build();
         let browser = Browser::new(None);
         let agent = Agent::new_with_browser("Browser test", llm, browser);
         assert_eq!(agent.task, "Browser test");
@@ -671,8 +668,7 @@ mod tests {
             .model("auto")
             .api_key("")
             .base_url("http://localhost:9999")
-            .build()
-            .unwrap();
+            .build();
         let agent = Agent::new("Task", llm).max_steps(5);
         assert_eq!(agent.max_steps, 5);
     }
@@ -683,8 +679,7 @@ mod tests {
             .model("auto")
             .api_key("")
             .base_url("http://localhost:9999")
-            .build()
-            .unwrap();
+            .build();
         let agent = Agent::new("Task", llm).prompt_mode(PromptMode::Flash);
         assert_eq!(agent.system_prompt.mode, PromptMode::Flash);
     }
@@ -695,8 +690,7 @@ mod tests {
             .model("auto")
             .api_key("")
             .base_url("http://localhost:9999")
-            .build()
-            .unwrap();
+            .build();
         let custom_prompt = SystemPrompt::builder().mode(PromptMode::NoThinking).build();
         let agent = Agent::new("Task", llm).system_prompt(custom_prompt);
         assert_eq!(agent.system_prompt.mode, PromptMode::NoThinking);
@@ -708,8 +702,7 @@ mod tests {
             .model("auto")
             .api_key("")
             .base_url("http://localhost:9999")
-            .build()
-            .unwrap();
+            .build();
         let agent = Agent::new("Task", llm);
         assert!(agent.history.is_empty());
         assert_eq!(agent.history.len(), 0);
@@ -849,8 +842,7 @@ mod tests {
             .model("auto")
             .api_key("")
             .base_url("http://localhost:9999")
-            .build()
-            .unwrap();
+            .build();
         let mut agent = Agent::new("Test task", llm);
 
         // Build some history manually
@@ -888,8 +880,7 @@ mod tests {
             .model("auto")
             .api_key("")
             .base_url("http://localhost:9999")
-            .build()
-            .unwrap();
+            .build();
         let agent = Agent::new("Task", llm);
         let vars = agent.detect_variables();
         assert!(vars.is_empty());
@@ -901,8 +892,7 @@ mod tests {
             .model("auto")
             .api_key("")
             .base_url("http://localhost:9999")
-            .build()
-            .unwrap();
+            .build();
 
         // Test builder pattern chaining
         let agent = Agent::new("Complex task", llm)

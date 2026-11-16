@@ -163,3 +163,122 @@ fn render_valid_workflow(workflow: &super::ValidWorkflowState, area: Rect, buf: 
         offset_x += required_width;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::KeyCode;
+
+    /// Build a valid selection using an already-constructed `ValidWorkflowState`.
+    fn valid_selection() -> super::super::WorkflowSelection {
+        super::super::WorkflowSelection {
+            index: 0,
+            workflow_file: None,
+            state: super::super::WorkflowSelectionState::Valid(super::super::ValidWorkflowState {
+                name_field: super::super::super::super::common::widgets::TextField::new(
+                    "Name".to_string(),
+                    "My Workflow".to_string(),
+                ),
+                description_field: None,
+            }),
+        }
+    }
+
+    /// Build an error selection that disables Edit and Execution buttons.
+    fn error_selection() -> super::super::WorkflowSelection {
+        super::super::WorkflowSelection {
+            index: 0,
+            workflow_file: None,
+            state: super::super::WorkflowSelectionState::Error("file is bad".to_string()),
+        }
+    }
+
+    #[test]
+    fn test_workflow_preview_new_has_four_buttons() {
+        let preview = WorkflowPreview::new();
+        // The internal button array has length 4 — we verify via rendering.
+        let selection = valid_selection();
+        let area = Rect::new(0, 0, 80, 5);
+        let mut buf = Buffer::empty(area);
+        preview.render(&selection, area, &mut buf);
+        // If rendering didn't panic with the assertion, the counts match.
+    }
+
+    #[test]
+    fn test_open_file_always_enabled() {
+        let preview = WorkflowPreview::new();
+        let selection = error_selection();
+        let action = preview.get_button_action(0, &selection);
+        assert_eq!(action, Some(WorkflowAction::OpenFile));
+    }
+
+    #[test]
+    fn test_delete_always_enabled() {
+        let preview = WorkflowPreview::new();
+        let selection = error_selection();
+        let action = preview.get_button_action(2, &selection);
+        assert_eq!(action, Some(WorkflowAction::Delete));
+    }
+
+    #[test]
+    fn test_edit_disabled_when_invalid() {
+        let preview = WorkflowPreview::new();
+        let selection = error_selection();
+        let action = preview.get_button_action(1, &selection);
+        assert!(action.is_none());
+    }
+
+    #[test]
+    fn test_edit_enabled_when_valid() {
+        let preview = WorkflowPreview::new();
+        let selection = valid_selection();
+        let action = preview.get_button_action(1, &selection);
+        assert_eq!(action, Some(WorkflowAction::Edit));
+    }
+
+    #[test]
+    fn test_execution_disabled_when_invalid() {
+        let preview = WorkflowPreview::new();
+        let selection = error_selection();
+        let action = preview.get_button_action(3, &selection);
+        assert!(action.is_none());
+    }
+
+    #[test]
+    fn test_execution_enabled_when_valid() {
+        let preview = WorkflowPreview::new();
+        let selection = valid_selection();
+        let action = preview.get_button_action(3, &selection);
+        assert_eq!(action, Some(WorkflowAction::Execution));
+    }
+
+    #[test]
+    fn test_handle_navigation_enter_selects_action() {
+        let mut preview = WorkflowPreview::new();
+        let selection = valid_selection();
+        // ListState defaults to `None`; select index 0 so Enter resolves to OpenFile.
+        preview.list_state.select(Some(0));
+        let event = Event::Key(KeyCode::Enter.into());
+        let action = unsafe { preview.handle_event(&event, &mut *no_read_term(), &selection) };
+        assert_eq!(action, Some(WorkflowAction::OpenFile));
+    }
+
+    #[test]
+    fn test_render_with_error_selection_no_panic() {
+        let preview = WorkflowPreview::new();
+        let selection = error_selection();
+        let area = Rect::new(0, 0, 80, 10);
+        let mut buf = Buffer::empty(area);
+        preview.render(&selection, area, &mut buf);
+    }
+
+    /// Returns a `&mut DefaultTerminal` that is never dereferenced by the
+    /// views we exercise (they ignore the `_terminal` parameter).
+    fn no_read_term() -> *mut ratatui::DefaultTerminal {
+        use std::mem::MaybeUninit;
+        static SLOT: std::sync::OnceLock<MaybeUninit<ratatui::DefaultTerminal>> =
+            std::sync::OnceLock::new();
+        let slot = SLOT.get_or_init(MaybeUninit::uninit);
+        slot.as_ptr().cast_mut()
+    }
+}

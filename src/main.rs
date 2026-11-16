@@ -192,3 +192,70 @@ async fn run_tui(cli: &cli::Cli) -> Result<()> {
 //
 //     Ok(())
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cli::Cli;
+    use cli::Commands::Run;
+
+    #[test]
+    fn test_run_workflow_requires_config_path() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(async {
+            let cli = Cli {
+                config_path: None,
+                command: Some(Run {
+                    workflow: "test-workflow".to_string(),
+                }),
+            };
+            run_workflow("test-workflow", &cli).await
+        });
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "Config path is required");
+    }
+
+    #[test]
+    fn test_run_workflow_with_valid_config_returns_ok() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("config.json");
+        std::fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&Config::default()).unwrap(),
+        )
+        .unwrap();
+
+        let result = rt.block_on(async {
+            let cli = Cli {
+                config_path: Some(config_path),
+                command: Some(Run {
+                    workflow: "my-workflow".to_string(),
+                }),
+            };
+            run_workflow("my-workflow", &cli).await
+        });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_cli_matches_workflow_command() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("config.json");
+        std::fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&Config::default()).unwrap(),
+        )
+        .unwrap();
+
+        let cli = Cli {
+            config_path: Some(config_path.clone()),
+            command: Some(Run {
+                workflow: "test-wf".to_string(),
+            }),
+        };
+        let result = rt.block_on(run_cli(&cli));
+        assert!(result.is_ok());
+    }
+}
