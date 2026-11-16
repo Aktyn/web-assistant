@@ -1,7 +1,8 @@
+use anyhow::{Context, Result};
 use documented::DocumentedFields;
 use serde::{Deserialize, Serialize};
 use std::io::{Write as _, stdout};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
@@ -93,22 +94,25 @@ pub(crate) static DEFAULT_CONFIG_FILE: &str = r"./config.json";
 
 /// Create a default config file at the given path. If no path is provided, the default config file
 /// will be created in the current working directory as config.json.
-pub(crate) async fn create_default_config(path: Option<PathBuf>) {
-    let config_path = path.unwrap_or(DEFAULT_CONFIG_FILE.into());
+pub(crate) async fn create_default_config(path: Option<&Path>) -> Result<&Path> {
+    let config_path = path.unwrap_or(DEFAULT_CONFIG_FILE.as_ref());
     log::info!("Initializing default config from {}", config_path.display());
 
-    assert!(
-        !config_path.exists(),
-        "\"{}\" file already exists. Delete it or choose a different output path.",
-        config_path.display()
-    );
+    if config_path.exists() {
+        anyhow::bail!(
+            "\"{}\" file already exists. Delete it or choose a different output path.",
+            config_path.display()
+        );
+    }
 
     let default_config = Config::default();
     let json =
         serde_json::to_vec_pretty(&default_config).expect("Failed to serialize default config");
     tokio::fs::write(&config_path, &json)
         .await
-        .expect("Failed to create config file");
+        .context("Failed to create config file")?;
+
+    Ok(config_path)
 }
 
 #[cfg(test)]

@@ -5,12 +5,16 @@ mod config;
 pub mod llm;
 mod tui;
 mod utils;
-pub mod workflow;
+mod workflow;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use documented::DocumentedFields;
-use std::io::{Write, stdout};
+use std::{
+    io::{Write, stdout},
+    path::PathBuf,
+};
 
+use cli::Commands::{ExplainConfig, InitConfig, Run};
 use config::Config;
 
 #[tokio::main]
@@ -18,6 +22,7 @@ async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
 
     let cli = cli::get_cli();
+    run_cli(&cli).await
 
     // let config = browser::BrowserConfig {
     //     headless: false,
@@ -38,59 +43,71 @@ async fn main() -> Result<()> {
     // if let Some(name) = cli.name.as_deref() {
     //     println!("Value for name: {name}");
     // }
+}
 
+async fn run_cli(cli: &cli::Cli) -> Result<()> {
     match &cli.command {
-        Some(cli::Commands::Run { workflow }) => {
-            log::info!("Running workflow: {workflow}");
-            //TODO: Implement inline workflow execution
-
-            // let config_path = config_path.expect("Config path is required");
-            // let config = Config::new(config_path).await;
-            // workflows::load_from_file(cli...)
-        }
-
-        Some(cli::Commands::InitConfig { output_path }) => {
-            stdout().write_all(b"Initializing config...\n").ok();
-
-            config::create_default_config(output_path.clone()).await;
-
-            stdout()
-                .write_all(
-                    format!(r"The default config was successfully saved to {output_path:?}")
-                        .as_bytes(),
-                )
-                .ok();
-        }
-
-        Some(cli::Commands::ExplainConfig {}) => {
-            tui::inline::print_struct(&tui::inline::StructDocs {
-                description: "Config must be a json file with the following fields:",
-                field_names: Config::FIELD_NAMES,
-                field_docs: Config::FIELD_DOCS,
-            });
-
-            stdout().write_all(b"\n\n").ok();
-
-            tui::inline::print_struct(&tui::inline::StructDocs {
-                description: "HexColorsConfig object. All fields are optional.",
-                field_names: tui::common::HexColorsConfig::FIELD_NAMES,
-                field_docs: tui::common::HexColorsConfig::FIELD_DOCS,
-            });
-        }
-
-        None => {
-            //NOTE: TUI logger is being initialized here to catch early core logs
-            tui_logger::init_logger(tui_logger::LevelFilter::Trace).unwrap();
-            tui_logger::set_default_level(tui_logger::LevelFilter::Trace);
-
-            let config_path = cli.config_path.expect("Config path is required");
-            let config = config::load_config(&config_path).await;
-
-            return tui::render_tui(config).await;
-        }
+        Some(Run { workflow }) => run_workflow(workflow, cli).await,
+        Some(InitConfig { output_path }) => init_config(output_path.as_ref()).await,
+        Some(ExplainConfig {}) => explain_config(),
+        None => run_tui(cli).await,
     }
+}
+
+async fn run_workflow(workflow_path_or_name: &str, cli: &cli::Cli) -> Result<()> {
+    dbg!(workflow_path_or_name);
+
+    let config_path = cli
+        .config_path
+        .as_ref()
+        .context("Config path is required")?;
+    let config = config::load_config(config_path).await;
+    dbg!(&config);
+    //TODO: Implement inline workflow execution
+    // let workflow = workflow::load_from_file(workflow).await;
 
     Ok(())
+}
+
+async fn init_config(output_path: Option<&PathBuf>) -> Result<()> {
+    stdout().write_all(b"Initializing config...\n").ok();
+
+    let config_path = config::create_default_config(output_path.map(PathBuf::as_path)).await?;
+
+    let absolute_path = config_path.canonicalize().unwrap_or(PathBuf::from(""));
+    tui::inline::print_success(&format!(
+        r"The default config was successfully saved to: {}",
+        absolute_path.display()
+    ))
+}
+
+fn explain_config() -> Result<()> {
+    tui::inline::print_struct(&tui::inline::StructDocs {
+        description: "Config must be a json file with the following fields:",
+        field_names: Config::FIELD_NAMES,
+        field_docs: Config::FIELD_DOCS,
+    })?;
+
+    stdout().write_all(b"\n\n").ok();
+
+    tui::inline::print_struct(&tui::inline::StructDocs {
+        description: "HexColorsConfig object. All fields are optional.",
+        field_names: tui::common::HexColorsConfig::FIELD_NAMES,
+        field_docs: tui::common::HexColorsConfig::FIELD_DOCS,
+    })
+}
+
+async fn run_tui(cli: &cli::Cli) -> Result<()> {
+    //NOTE: TUI logger is being initialized here to catch early core logs
+    tui_logger::init_logger(tui_logger::LevelFilter::Trace)?;
+    tui_logger::set_default_level(tui_logger::LevelFilter::Trace);
+
+    if let Some(config_path) = &cli.config_path {
+        let config = config::load_config(config_path).await;
+        tui::render_tui(config).await
+    } else {
+        anyhow::bail!("Config path is required")
+    }
 }
 
 // An example left for future reference

@@ -1,8 +1,9 @@
+mod workflow_loader;
+
 use serde::Deserialize;
 use std::path::PathBuf;
-use tokio::fs::DirEntry;
 
-use crate::utils;
+pub use workflow_loader::load_from_directory;
 
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct WorkflowData {
@@ -24,8 +25,8 @@ pub(crate) struct Workflow {
 }
 
 impl Workflow {
-    pub(crate) fn new(json: WorkflowDataJson) -> Self {
-        match serde_json::from_str(json.content.as_str()) {
+    pub(crate) fn new(json: workflow_loader::WorkflowDataJson) -> Self {
+        match serde_json::from_str(&json.content) {
             Ok(data) => Workflow {
                 state: WorkflowState::Data(data),
                 file_path: Some(json.path),
@@ -46,50 +47,6 @@ impl Workflow {
             file_path: None,
         }
     }
-}
-
-pub(crate) struct WorkflowDataJson {
-    path: PathBuf,
-    content: String,
-}
-
-impl WorkflowDataJson {
-    pub(crate) async fn new(entry: &DirEntry) -> Option<Self> {
-        if entry.path().extension().and_then(|ext| ext.to_str()) == Some("json") {
-            let content = tokio::fs::read_to_string(entry.path()).await.ok()?;
-            Some(Self {
-                path: entry.path(),
-                content,
-            })
-        } else {
-            None
-        }
-    }
-
-    /// Test-only constructor that builds a `WorkflowDataJson` from raw content
-    /// without touching the filesystem. Available only in test builds.
-    #[cfg(test)]
-    pub(crate) fn from_raw(path: PathBuf, content: String) -> Self {
-        Self { path, content }
-    }
-}
-
-pub(crate) async fn load_from_directory(workflows_directory: &PathBuf) -> Vec<Workflow> {
-    assert!(
-        !workflows_directory.exists() || workflows_directory.is_dir(),
-        "Workflows path already exists but is not a directory: \"{}\"",
-        workflows_directory.display()
-    );
-
-    let json_files = utils::read_json_files(workflows_directory).await;
-    let mut workflows = Vec::with_capacity(json_files.len());
-    for entry in &json_files {
-        if let Some(json) = WorkflowDataJson::new(entry).await {
-            workflows.push(Workflow::new(json));
-        }
-    }
-
-    workflows
 }
 
 #[cfg(test)]

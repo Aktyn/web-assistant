@@ -41,6 +41,7 @@ pub(crate) struct HexColorsConfig {
     accent: Option<HexString>,
     disabled: Option<HexString>,
     error_foreground: Option<HexString>,
+    success_foreground: Option<HexString>,
 }
 
 #[derive(Debug)]
@@ -52,6 +53,7 @@ pub struct TuiPalette {
     pub accent: Color,
     pub disabled: Color,
     pub error_foreground: Color,
+    pub success_foreground: Color,
 
     pub background_style: Style,
     pub separator_style: Style,
@@ -80,6 +82,8 @@ impl TuiPalette {
             disabled: parse_hex_string(config.disabled.as_ref()).unwrap_or(defaults.disabled),
             error_foreground: parse_hex_string(config.error_foreground.as_ref())
                 .unwrap_or(defaults.error_foreground),
+            success_foreground: parse_hex_string(config.success_foreground.as_ref())
+                .unwrap_or(defaults.success_foreground),
 
             background_style: Style::new().bg(background),
             separator_style: Style::new().fg(border).bg(background),
@@ -102,7 +106,8 @@ impl Default for TuiPalette {
             muted_foreground: Color::Rgb(120, 144, 156), // Blue gray 400
             accent: Color::Rgb(77, 182, 172),            // Teal 300
             disabled: Color::Rgb(158, 158, 158),         // Grey 500
-            error_foreground: Color::Rgb(229, 115, 115),
+            error_foreground: Color::Rgb(229, 115, 115), // Red 300
+            success_foreground: Color::Rgb(129, 199, 132), // Green 300
 
             background_style: Style::new().bg(BACKGROUND),
             separator_style: Style::new().fg(BORDER).bg(BACKGROUND),
