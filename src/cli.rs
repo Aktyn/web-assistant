@@ -19,7 +19,7 @@ pub(crate) enum Commands {
     /// Runs a workflow
     Run {
         /// Workflow name or path to workflow file
-        #[arg(short, long, name = "name or file")]
+        #[arg(short, long, required = true, value_name = "name or file")]
         workflow: String,
     },
 

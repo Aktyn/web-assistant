@@ -1,9 +1,13 @@
+use std::io;
+
+use anyhow::Context;
 use ratatui::{
     TerminalOptions, Viewport,
+    backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout, Margin},
     style::Stylize as _,
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Borders},
+    widgets::{Block, BorderType, Borders, Paragraph, Wrap},
 };
 
 use super::common::palette;
@@ -15,11 +19,10 @@ pub(crate) struct StructDocs {
 }
 
 /// Pretty prints given struct documentation utilizing inline ratatui viewport
-pub(crate) fn print_struct(docs: &StructDocs) {
-    assert!(
-        docs.field_names.len() == docs.field_docs.len(),
-        "Field names and docs must have the same length"
-    );
+pub(crate) fn print_struct(docs: &StructDocs) -> anyhow::Result<()> {
+    if docs.field_names.len() != docs.field_docs.len() {
+        anyhow::bail!("Field names and docs must have the same length");
+    }
 
     let total_docs_lines: usize = docs.field_docs.iter().map(|doc| doc.lines().count()).sum();
 
@@ -77,5 +80,33 @@ pub(crate) fn print_struct(docs: &StructDocs) {
                 frame.render_widget(docs, doc_area);
             }
         })
-        .expect("Failed to draw description");
+        .context("Failed to draw struct documentation")?;
+
+    Ok(())
+}
+
+pub(crate) fn print_success(message: &str) -> anyhow::Result<()> {
+    let backend = CrosstermBackend::new(io::stdout());
+    let size = backend.size()?;
+    let terminal_width = size.width;
+
+    let paragraph = Paragraph::new(message)
+        .style(palette().success_foreground)
+        .bold()
+        .wrap(Wrap { trim: true });
+    let line_count = paragraph.line_count(terminal_width);
+
+    let mut terminal = ratatui::init_with_options(TerminalOptions {
+        viewport: Viewport::Inline(u16::try_from(line_count).unwrap_or(1)),
+    });
+    terminal.clear().ok();
+
+    terminal
+        .draw(|frame| {
+            let area = frame.area();
+            frame.render_widget(paragraph, area);
+        })
+        .context("Failed to draw success message")?;
+
+    Ok(())
 }
