@@ -185,7 +185,9 @@ mod tests {
     async fn test_init_default_config_creates_file() {
         let tmp = tempfile::tempdir().unwrap();
         let output_path = tmp.path().join("config.json");
-        create_default_config(Some(output_path.clone())).await;
+        create_default_config(Some(output_path.as_path()))
+            .await
+            .expect("config creation should succeed");
 
         assert!(output_path.exists());
         assert!(output_path.is_file());
@@ -196,18 +198,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_init_default_config_with_existing_file_panics() {
+    async fn test_init_default_config_with_existing_file_errors() {
         let tmp = tempfile::tempdir().unwrap();
         let output_path = tmp.path().join("existing.json");
         std::fs::write(&output_path, "{}").unwrap();
 
-        let result = std::panic::catch_unwind(|| {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async { create_default_config(Some(output_path.clone())).await });
-        });
+        let result = create_default_config(Some(output_path.as_path())).await;
         assert!(
             result.is_err(),
-            "Expected panic when output file already exists"
+            "Expected error when output file already exists"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("already exists"),
+            "Error should mention the file already exists: {err}"
         );
     }
 
@@ -215,22 +219,14 @@ mod tests {
     async fn test_init_default_config_serializes_pretty_json() {
         let tmp = tempfile::tempdir().unwrap();
         let output_path = tmp.path().join("pretty.json");
-        create_default_config(Some(output_path.clone())).await;
+        create_default_config(Some(output_path.as_path()))
+            .await
+            .expect("config creation should succeed");
 
         let content = tokio::fs::read_to_string(&output_path).await.unwrap();
         // Pretty-printed JSON contains newlines and indentation.
         assert!(content.contains('\n'));
         assert!(content.contains("workflowsDirectory"));
-    }
-
-    #[test]
-    fn test_config_struct_clone() {
-        let config = Config {
-            workflowsDirectory: PathBuf::from("/some/path"),
-            tuiColors: None,
-        };
-        let cloned = config.clone();
-        assert_eq!(cloned.workflowsDirectory, config.workflowsDirectory);
     }
 
     #[test]

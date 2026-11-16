@@ -5,6 +5,9 @@ use std::path::PathBuf;
 
 pub use workflow_loader::load_from_directory;
 
+#[cfg(test)]
+pub use workflow_loader::WorkflowDataJson;
+
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct WorkflowData {
     pub name: String,

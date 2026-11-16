@@ -184,6 +184,7 @@ mod tests {
             accent: None,
             disabled: None,
             error_foreground: None,
+            success_foreground: None,
         };
         let palette = TuiPalette::from_config(&config);
         assert_eq!(palette.background, Color::Rgb(26, 43, 60));
@@ -199,6 +200,7 @@ mod tests {
             accent: None,
             disabled: None,
             error_foreground: None,
+            success_foreground: None,
         };
         let palette = TuiPalette::from_config(&config);
         assert_eq!(palette.background, TuiPalette::default().background);
@@ -215,6 +217,7 @@ mod tests {
             accent: None,
             disabled: None,
             error_foreground: None,
+            success_foreground: None,
         };
         let palette = TuiPalette::from_config(&config);
         assert_eq!(palette.background, Color::Rgb(255, 255, 255));

@@ -280,4 +280,22 @@ mod tests {
         assert_eq!(truncate_text(text, 100, None), text);
         assert_eq!(truncate_text_left(text, 100, None), text);
     }
+
+    #[tokio::test]
+    async fn test_read_json_files_nonexistent_directory_returns_empty() {
+        let nonexistent = PathBuf::from("/tmp/does_not_exist_xyz_12345");
+        let result = read_json_files(&nonexistent).await;
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_open_file_with_nonexistent_path_fails() {
+        let result = open_file(Path::new("/tmp/does_not_exist_for_testing_xyz"));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("failed to get absolute path")
+                || err.to_string().contains("No such file")
+        );
+    }
 }
