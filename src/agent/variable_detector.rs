@@ -1,5 +1,13 @@
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
+
+static EMAIL_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[\w\.-]+@[\w\.-]+\.\w+$").expect("valid email regex"));
+static PHONE_CHARS_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[\d\s\-\(\)\+]+$").expect("valid phone regex"));
+static DATE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2}$").expect("valid date regex"));
 
 use super::views::{Action, AgentHistoryList, DetectedVariable, InteractedElementMetadata};
 
@@ -205,23 +213,18 @@ pub fn detect_from_attributes(
 }
 
 pub fn detect_from_value_pattern(value: &str) -> Option<(String, Option<String>)> {
-    if value.contains('@') && value.contains('.') {
-        let email_regex = Regex::new(r"^[\w\.-]+@[\w\.-]+\.\w+$").unwrap();
-        if email_regex.is_match(value) {
-            return Some(("email".into(), Some("email".into())));
-        }
+    if value.contains('@') && value.contains('.') && EMAIL_REGEX.is_match(value) {
+        return Some(("email".into(), Some("email".into())));
     }
 
-    let phone_chars_regex = Regex::new(r"^[\d\s\-\(\)\+]+$").unwrap();
-    if phone_chars_regex.is_match(value) {
+    if PHONE_CHARS_REGEX.is_match(value) {
         let digits_only: String = value.chars().filter(char::is_ascii_digit).collect();
         if digits_only.len() >= 10 {
             return Some(("phone".into(), Some("phone".into())));
         }
     }
 
-    let date_regex = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
-    if date_regex.is_match(value) {
+    if DATE_REGEX.is_match(value) {
         return Some(("date".into(), Some("date".into())));
     }
 

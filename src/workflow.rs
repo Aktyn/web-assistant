@@ -3,25 +3,27 @@ mod workflow_loader;
 use serde::Deserialize;
 use std::path::PathBuf;
 
+#[cfg(test)]
+pub(crate) use workflow_loader::WorkflowDataJson;
 pub use workflow_loader::load_from_directory;
 
 #[derive(Debug, Deserialize, Clone)]
-pub(crate) struct WorkflowData {
+pub struct WorkflowData {
     pub name: String,
     pub description: Option<String>,
 }
 
 #[derive(Debug)]
-pub(crate) enum WorkflowState {
+pub enum WorkflowState {
     Data(WorkflowData),
     Error(serde_json::Error),
 }
 
 #[derive(Debug)]
-pub(crate) struct Workflow {
-    pub(crate) state: WorkflowState,
+pub struct Workflow {
+    pub state: WorkflowState,
     /// No file path indicates draft workflow
-    pub(crate) file_path: Option<PathBuf>,
+    pub file_path: Option<PathBuf>,
 }
 
 impl Workflow {
@@ -38,7 +40,8 @@ impl Workflow {
         }
     }
 
-    pub(crate) fn new_draft() -> Self {
+    #[must_use]
+    pub fn new_draft() -> Self {
         Workflow {
             state: WorkflowState::Data(WorkflowData {
                 name: "Draft workflow".to_string(),

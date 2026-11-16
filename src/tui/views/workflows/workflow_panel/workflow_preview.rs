@@ -20,6 +20,12 @@ pub(crate) struct WorkflowPreview {
     buttons: [ThisButtonData; 4],
 }
 
+impl Default for WorkflowPreview {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorkflowPreview {
     pub fn new() -> Self {
         Self {
@@ -41,12 +47,6 @@ impl WorkflowPreview {
     ) {
         let button_areas: [Rect; 4] = area.layout(&Layout::horizontal([Ratio(1, 4); 4]));
 
-        assert!(
-            button_areas.len() == self.buttons.len(),
-            "button_areas.len() != self.buttons.len()"
-        );
-
-        // WorkflowSelectionState::Error(error) => {
         let is_invalid = matches!(selection.state, super::WorkflowSelectionState::Error(_));
 
         self.buttons
@@ -69,33 +69,18 @@ impl WorkflowPreview {
         selected: usize,
         selection: &super::WorkflowSelection,
     ) -> Option<WorkflowAction> {
-        assert!(
-            selected < self.buttons.len(),
-            "selected >= self.buttons.len()"
-        );
-
-        let button_data = &self.buttons[selected];
-
+        let button_data = self.buttons.get(selected)?;
         let is_invalid = matches!(selection.state, super::WorkflowSelectionState::Error(_));
 
-        match button_data.action {
-            WorkflowAction::OpenFile => Some(WorkflowAction::OpenFile),
-            WorkflowAction::Delete => Some(super::WorkflowAction::Delete),
-            WorkflowAction::Edit => {
-                if is_invalid {
-                    None
-                } else {
-                    Some(WorkflowAction::Edit)
-                }
-            }
-            WorkflowAction::Execution => {
-                if is_invalid {
-                    None
-                } else {
-                    Some(WorkflowAction::Execution)
-                }
-            }
-            _ => None,
+        if is_invalid
+            && matches!(
+                button_data.action,
+                WorkflowAction::Edit | WorkflowAction::Execution
+            )
+        {
+            None
+        } else {
+            Some(button_data.action)
         }
     }
 }

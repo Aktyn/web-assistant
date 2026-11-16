@@ -1,38 +1,19 @@
 macro_rules! workflows_count {
     ($workflows_arc:expr) => {
-        $workflows_arc
-            .read()
-            .map(|workflows| workflows.len())
-            .unwrap_or(0)
+        $crate::tui::common::utils::workflows_count(&$workflows_arc)
     };
 }
 pub(crate) use workflows_count;
 
 macro_rules! move_selection {
     ($self:expr, Previous) => {
-        macros::move_selection!($self, Previous, 0)
+        $crate::tui::common::utils::move_selection_previous(&mut $self)
     };
-    ($self:expr, Previous, $max:expr) => {{
-        let selected = match $self.selected() {
-            Some(current) => current.saturating_sub(1),
-            None => 0,
-        };
-        $self.select(Some(selected));
-        selected
-    }};
-    ($self:expr, Next, $max:expr) => {{
-        let selected = match $self.selected() {
-            Some(current) => {
-                if current < $max {
-                    current + 1
-                } else {
-                    current
-                }
-            }
-            None => 0,
-        };
-        $self.select(Some(selected));
-        selected
-    }};
+    ($self:expr, Previous, $max:expr) => {
+        $crate::tui::common::utils::move_selection_previous(&mut $self)
+    };
+    ($self:expr, Next, $max:expr) => {
+        $crate::tui::common::utils::move_selection_next(&mut $self, $max)
+    };
 }
 pub(crate) use move_selection;

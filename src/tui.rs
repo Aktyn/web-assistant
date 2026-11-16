@@ -215,9 +215,7 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::workflow::{Workflow, WorkflowDataJson};
-    use crossterm::event::{Event, KeyCode};
     use std::path::PathBuf;
-    use views::View;
 
     fn empty_config() -> Config {
         Config::default()

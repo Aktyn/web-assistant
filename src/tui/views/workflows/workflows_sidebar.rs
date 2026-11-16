@@ -50,7 +50,6 @@ impl panel::Panel for WorkflowsSidebar {
             .workflows
             .read()
             .map(|workflows| {
-                log::info!("Workflows: {:?}", workflows.len());
                 workflows
                     .iter()
                     .map(|w| match &w.state {
@@ -67,6 +66,8 @@ impl panel::Panel for WorkflowsSidebar {
                                 .file_path
                                 .as_ref()
                                 .expect("Workflow that failed to load must have a file path");
+                            let file_name_str =
+                                file_path.file_name().and_then(OsStr::to_str).unwrap_or("");
                             let text = vec![
                                 utils::truncate_text(
                                     "Invalid workflow file found",
@@ -75,13 +76,7 @@ impl panel::Panel for WorkflowsSidebar {
                                 )
                                 .into(),
                                 utils::truncate_text(
-                                    &format!(
-                                        "{}",
-                                        file_path
-                                            .file_name()
-                                            .unwrap_or(OsStr::new(&file_path))
-                                            .display()
-                                    ),
+                                    file_name_str,
                                     WorkflowsSidebar::WIDTH as usize,
                                     None,
                                 )
@@ -132,14 +127,6 @@ impl panel::Panel for WorkflowsSidebar {
             }
         }
         false
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
     }
 }
 
@@ -199,9 +186,8 @@ mod tests {
         let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(1));
         let key_event = Event::Key(KeyCode::Up.into());
-        sidebar
-            .handle_event(&key_event, unsafe { &mut *no_read_term() })
-            .unwrap();
+        let handled = sidebar.handle_event(&key_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
         assert_eq!(sidebar.workflows_list_state.selected(), Some(0));
     }
 
@@ -211,9 +197,8 @@ mod tests {
         let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Down.into());
-        sidebar
-            .handle_event(&key_event, unsafe { &mut *no_read_term() })
-            .unwrap();
+        let handled = sidebar.handle_event(&key_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
         assert_eq!(sidebar.workflows_list_state.selected(), None);
     }
 
@@ -223,9 +208,8 @@ mod tests {
         let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Char('j').into());
-        sidebar
-            .handle_event(&key_event, unsafe { &mut *no_read_term() })
-            .unwrap();
+        let handled = sidebar.handle_event(&key_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
         assert_eq!(sidebar.workflows_list_state.selected(), None);
     }
 
@@ -235,9 +219,8 @@ mod tests {
         let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Char('k').into());
-        sidebar
-            .handle_event(&key_event, unsafe { &mut *no_read_term() })
-            .unwrap();
+        let handled = sidebar.handle_event(&key_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
         assert_eq!(sidebar.workflows_list_state.selected(), Some(0));
     }
 
@@ -252,6 +235,6 @@ mod tests {
             modifiers: crossterm::event::KeyModifiers::NONE,
         });
         let result = sidebar.handle_event(&mouse_event, unsafe { &mut *no_read_term() });
-        assert!(result.is_ok());
+        assert!(!result);
     }
 }

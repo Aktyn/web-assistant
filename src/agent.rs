@@ -312,7 +312,7 @@ impl Agent {
 
 pub fn parse_agent_output(raw_text: &str) -> Result<AgentOutput> {
     let clean_json = extract_json_str(raw_text);
-    let val: serde_json::Value = serde_json::from_str(&clean_json)
+    let val: serde_json::Value = serde_json::from_str(clean_json)
         .with_context(|| format!("Failed to parse JSON from:\n{clean_json}"))?;
 
     let thought = val
@@ -364,28 +364,28 @@ pub fn parse_agent_output(raw_text: &str) -> Result<AgentOutput> {
     })
 }
 
-fn extract_json_str(raw: &str) -> String {
+fn extract_json_str(raw: &str) -> &str {
     let trimmed = raw.trim();
 
     if let Some(start_idx) = trimmed.find("```json") {
         let after_start = &trimmed[start_idx + 7..];
         if let Some(end_idx) = after_start.find("```") {
-            return after_start[..end_idx].trim().to_string();
+            return after_start[..end_idx].trim();
         }
     } else if let Some(start_idx) = trimmed.find("```") {
         let after_start = &trimmed[start_idx + 3..];
         if let Some(end_idx) = after_start.find("```") {
-            return after_start[..end_idx].trim().to_string();
+            return after_start[..end_idx].trim();
         }
     }
 
     if let (Some(first_brace), Some(last_brace)) = (trimmed.find('{'), trimmed.rfind('}'))
         && first_brace < last_brace
     {
-        return trimmed[first_brace..=last_brace].to_string();
+        return &trimmed[first_brace..=last_brace];
     }
 
-    trimmed.to_string()
+    trimmed
 }
 
 #[cfg(test)]

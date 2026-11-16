@@ -1,47 +1,33 @@
-use documented::DocumentedFields;
 use ratatui::style::Color;
 use ratatui::style::Style;
-use serde::Deserialize;
-use serde::Serialize;
 use std::sync::OnceLock;
 
-type HexString = String;
+pub(crate) use crate::config::HexColorsConfig;
 
-fn parse_hex_string(hex_string: Option<&HexString>) -> Option<Color> {
-    if let Some(hex_value) = hex_string {
-        let hex = hex_value.strip_prefix("#").unwrap();
-        let r: u8;
-        let g: u8;
-        let b: u8;
-        if hex.len() == 3 {
-            r = u8::from_str_radix(&hex[0..1].repeat(2), 16).unwrap();
-            g = u8::from_str_radix(&hex[1..2].repeat(2), 16).unwrap();
-            b = u8::from_str_radix(&hex[2..3].repeat(2), 16).unwrap();
-        } else if hex.len() == 6 {
-            r = u8::from_str_radix(&hex[0..2], 16).unwrap();
-            g = u8::from_str_radix(&hex[2..4], 16).unwrap();
-            b = u8::from_str_radix(&hex[4..6], 16).unwrap();
-        } else {
-            panic!("Invalid hex string: {hex_value}");
+fn parse_hex_color(hex_string: &str) -> Option<Color> {
+    let hex = hex_string.strip_prefix('#').unwrap_or(hex_string);
+    match hex.len() {
+        3 => {
+            let r = u8::from_str_radix(&hex[0..1].repeat(2), 16).ok()?;
+            let g = u8::from_str_radix(&hex[1..2].repeat(2), 16).ok()?;
+            let b = u8::from_str_radix(&hex[2..3].repeat(2), 16).ok()?;
+            Some(Color::Rgb(r, g, b))
         }
-
-        Some(Color::Rgb(r, g, b))
-    } else {
-        None
+        6 => {
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+            Some(Color::Rgb(r, g, b))
+        }
+        _ => {
+            log::warn!("Invalid hex color string: \"{hex_string}\"");
+            None
+        }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields)]
-#[documented_fields(default = "Hex color string")]
-pub(crate) struct HexColorsConfig {
-    background: Option<HexString>,
-    foreground: Option<HexString>,
-    border: Option<HexString>,
-    muted_foreground: Option<HexString>,
-    accent: Option<HexString>,
-    disabled: Option<HexString>,
-    error_foreground: Option<HexString>,
-    success_foreground: Option<HexString>,
+fn parse_hex_string(hex_string: Option<&String>) -> Option<Color> {
+    hex_string.and_then(|s| parse_hex_color(s))
 }
 
 #[derive(Debug)]
@@ -178,11 +164,7 @@ mod tests {
     fn test_from_config_overrides_background() {
         let config = HexColorsConfig {
             background: Some("#1a2b3c".to_string()),
-            foreground: None,
-            border: None,
-            muted_foreground: None,
-            accent: None,
-            error_foreground: None,
+            ..Default::default()
         };
         let palette = TuiPalette::from_config(&config);
         assert_eq!(palette.background, Color::Rgb(26, 43, 60));
@@ -190,14 +172,7 @@ mod tests {
 
     #[test]
     fn test_from_config_keeps_defaults_for_unset_fields() {
-        let config = HexColorsConfig {
-            background: None,
-            foreground: None,
-            border: None,
-            muted_foreground: None,
-            accent: None,
-            error_foreground: None,
-        };
+        let config = HexColorsConfig::default();
         let palette = TuiPalette::from_config(&config);
         assert_eq!(palette.background, TuiPalette::default().background);
         assert_eq!(palette.foreground, TuiPalette::default().foreground);
@@ -207,11 +182,7 @@ mod tests {
     fn test_from_config_parses_short_hex() {
         let config = HexColorsConfig {
             background: Some("#fff".to_string()),
-            foreground: None,
-            border: None,
-            muted_foreground: None,
-            accent: None,
-            error_foreground: None,
+            ..Default::default()
         };
         let palette = TuiPalette::from_config(&config);
         assert_eq!(palette.background, Color::Rgb(255, 255, 255));

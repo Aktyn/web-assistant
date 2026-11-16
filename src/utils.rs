@@ -1,8 +1,5 @@
 use anyhow::{Result, anyhow};
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 use tokio::fs::DirEntry;
 
 //TODO: organize these utils into text utils and file utils
@@ -24,11 +21,12 @@ fn truncate(text: &str, limit: usize, suffix: Option<&str>, from_left: bool) -> 
     }
 
     let suffix_ = suffix.unwrap_or("...");
-    // If the suffix itself is longer than the limit, just return the suffix.
-    if suffix_.len() >= limit {
+    let suffix_char_count = suffix_.chars().count();
+    // If the suffix itself is longer than or equal to the limit, just return the suffix.
+    if suffix_char_count >= limit {
         return suffix_.to_string();
     }
-    let keep = limit - suffix_.len();
+    let keep = limit - suffix_char_count;
     if from_left {
         format!(
             "{}{}",
@@ -41,7 +39,7 @@ fn truncate(text: &str, limit: usize, suffix: Option<&str>, from_left: bool) -> 
 }
 
 /// Returns list of JSON files found in the given directory
-pub async fn read_json_files(directory_path: &PathBuf) -> Vec<DirEntry> {
+pub async fn read_json_files(directory_path: &Path) -> Vec<DirEntry> {
     if !directory_path.exists() {
         return vec![];
     }
@@ -77,7 +75,16 @@ async fn filter_entry_by_extension(entry: &DirEntry, extension: &str) -> bool {
         Err(_) => return false,
     };
 
-    is_file && entry.path().extension() == Some(OsStr::new(extension))
+    is_file && entry.path().extension().and_then(|ext| ext.to_str()) == Some(extension)
+}
+
+/// Returns the user's home directory across Linux, macOS, and Windows.
+#[must_use]
+pub fn home_dir() -> Option<PathBuf> {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok()
+        .map(PathBuf::from)
 }
 
 /// Runs system command that opens given file in its default application
@@ -88,18 +95,23 @@ pub fn open_file(path: &Path) -> Result<std::process::Child> {
         .canonicalize()
         .map_err(|e| anyhow!("failed to get absolute path of \"{}\": {e}", path.display()))?;
 
-    let cmd = || {
-        if cfg!(target_os = "windows") {
-            "start"
-        } else if cfg!(target_os = "linux") {
-            "xdg-open"
-        } else {
+    let mut command = if cfg!(target_os = "windows") {
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args(["/C", "start", ""]);
+        cmd.arg(&absolute_path);
+        cmd
+    } else {
+        let program = if cfg!(target_os = "macos") {
             "open"
-        }
+        } else {
+            "xdg-open"
+        };
+        let mut cmd = std::process::Command::new(program);
+        cmd.arg(&absolute_path);
+        cmd
     };
 
-    std::process::Command::new(cmd())
-        .arg(&absolute_path)
+    command
         .stdout(std::process::Stdio::null())
         .spawn()
         .map_err(|e| anyhow!("failed to open \"{}\": {e}", absolute_path.display()))

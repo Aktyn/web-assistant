@@ -21,8 +21,8 @@ enum WorkflowsPanelType {
 
 pub(crate) struct WorkflowView {
     workflows: Arc<RwLock<Vec<Workflow>>>,
-    panel: Box<dyn panel::Panel>,
-    sidebar: Box<dyn panel::Panel>,
+    pub(super) panel: WorkflowPanel,
+    pub(super) sidebar: WorkflowsSidebar,
     show_sidebar: bool,
     focused_panel: WorkflowsPanelType,
 }
@@ -34,8 +34,8 @@ impl WorkflowView {
 
         Self {
             workflows,
-            sidebar: Box::new(WorkflowsSidebar::new(workflows_sidebar_arc)),
-            panel: Box::new(WorkflowPanel::new(workflows_panel_arc)),
+            sidebar: WorkflowsSidebar::new(workflows_sidebar_arc),
+            panel: WorkflowPanel::new(workflows_panel_arc),
             show_sidebar: true,
             focused_panel: WorkflowsPanelType::Sidebar,
         }
@@ -56,13 +56,6 @@ impl WorkflowView {
         self.move_to_next_panel();
     }
 
-    fn get_focused_panel(&mut self) -> &mut dyn panel::Panel {
-        match self.focused_panel {
-            WorkflowsPanelType::Sidebar => self.sidebar.as_mut(),
-            WorkflowsPanelType::Panel => self.panel.as_mut(),
-        }
-    }
-
     pub(crate) fn create_workflow(&mut self) {
         {
             let Ok(mut workflows_write_guard) = self.workflows.write() else {
@@ -71,20 +64,14 @@ impl WorkflowView {
             workflows_write_guard.insert(0, Workflow::new_draft());
         }
 
-        if let Some(sidebar) = self.sidebar.as_any_mut().downcast_mut::<WorkflowsSidebar>()
-            && let Some(panel) = self.panel.as_any_mut().downcast_mut::<WorkflowPanel>()
-        {
-            sidebar.workflows_list_state.select_first();
-            panel.open_workflow(0);
-            self.focused_panel = WorkflowsPanelType::Panel;
-        }
+        self.sidebar.workflows_list_state.select_first();
+        self.panel.open_workflow(0);
+        self.focused_panel = WorkflowsPanelType::Panel;
     }
 
     fn focus_sidebar(&mut self) {
         self.focused_panel = WorkflowsPanelType::Sidebar;
-        if let Some(panel) = self.panel.as_any_mut().downcast_mut::<WorkflowPanel>()
-            && let WorkflowPanelMode::Preview(preview) = &mut panel.mode
-        {
+        if let WorkflowPanelMode::Preview(preview) = &mut self.panel.mode {
             preview.list_state.select(None);
         }
     }
@@ -92,11 +79,8 @@ impl WorkflowView {
 
 impl View for WorkflowView {
     fn draw(&mut self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
-        if let Some(panel) = self.panel.as_any_mut().downcast_mut::<WorkflowPanel>()
-            && let Some(sidebar) = self.sidebar.as_any().downcast_ref::<WorkflowsSidebar>()
-        {
-            panel.update(sidebar.workflows_list_state.selected());
-        }
+        self.panel
+            .update(self.sidebar.workflows_list_state.selected());
 
         if self.show_sidebar {
             let [sidebar_area, separator_area, panel_area] = area.layout(&Layout::horizontal([
@@ -105,7 +89,8 @@ impl View for WorkflowView {
                 Fill(1),
             ]));
 
-            self.sidebar.draw(
+            panel::Panel::draw(
+                &mut self.sidebar,
                 sidebar_area,
                 buf,
                 self.focused_panel == WorkflowsPanelType::Sidebar,
@@ -113,14 +98,19 @@ impl View for WorkflowView {
 
             widgets::Separator::new(widgets::Separator::VERTICAL).render(separator_area, buf);
 
-            self.panel.draw(
+            panel::Panel::draw(
+                &mut self.panel,
                 panel_area,
                 buf,
                 self.focused_panel == WorkflowsPanelType::Panel,
             );
         } else {
-            self.panel
-                .draw(area, buf, self.focused_panel == WorkflowsPanelType::Panel);
+            panel::Panel::draw(
+                &mut self.panel,
+                area,
+                buf,
+                self.focused_panel == WorkflowsPanelType::Panel,
+            );
         }
     }
 
@@ -129,12 +119,17 @@ impl View for WorkflowView {
         event: &crossterm::event::Event,
         terminal: &mut ratatui::DefaultTerminal,
     ) -> bool {
-        let prevent_propagation = self.get_focused_panel().handle_event(event, terminal);
+        let prevent_propagation = match self.focused_panel {
+            WorkflowsPanelType::Sidebar => {
+                panel::Panel::handle_event(&mut self.sidebar, event, terminal)
+            }
+            WorkflowsPanelType::Panel => {
+                panel::Panel::handle_event(&mut self.panel, event, terminal)
+            }
+        };
 
-        if let Some(sidebar) = self.sidebar.as_any_mut().downcast_mut::<WorkflowsSidebar>()
-            && sidebar.create_workflow_button_pressed
-        {
-            sidebar.create_workflow_button_pressed = false;
+        if self.sidebar.create_workflow_button_pressed {
+            self.sidebar.create_workflow_button_pressed = false;
             self.create_workflow();
             return true;
         }
@@ -164,9 +159,7 @@ impl View for WorkflowView {
                     if (self.focused_panel == WorkflowsPanelType::Sidebar) =>
                 {
                     self.focused_panel = WorkflowsPanelType::Panel;
-                    if let Some(panel) = self.panel.as_any_mut().downcast_mut::<WorkflowPanel>()
-                        && let WorkflowPanelMode::Preview(preview) = &mut panel.mode
-                    {
+                    if let WorkflowPanelMode::Preview(preview) = &mut self.panel.mode {
                         preview.list_state.select(Some(0));
                     }
                     return true;
@@ -341,12 +334,7 @@ mod tests {
         // With no workflows, the list selection is `Some(0)` by default, which
         // is *not* the create button. Select `None` to land on the create
         // button while the sidebar is still focused.
-        view.sidebar
-            .as_any_mut()
-            .downcast_mut::<WorkflowsSidebar>()
-            .unwrap()
-            .workflows_list_state
-            .select(None);
+        view.sidebar.workflows_list_state.select(None);
 
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
@@ -360,8 +348,7 @@ mod tests {
         // Pressing Enter on the create button must create the draft inline —
         // `handle_event` is the only call, mirroring the real event loop.
         let enter = Event::Key(KeyCode::Enter.into());
-        view.handle_event(&enter, unsafe { &mut *no_read_term() })
-            .unwrap();
+        view.handle_event(&enter, unsafe { &mut *no_read_term() });
 
         let mut buf2 = Buffer::empty(area);
         view.draw(area, &mut buf2);
@@ -384,8 +371,7 @@ mod tests {
         let mut view = WorkflowView::new(workflows);
         assert_eq!(view.focused_panel, WorkflowsPanelType::Sidebar);
         let enter = Event::Key(KeyCode::Enter.into());
-        view.handle_event(&enter, unsafe { &mut *no_read_term() })
-            .unwrap();
+        view.handle_event(&enter, unsafe { &mut *no_read_term() });
         assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);
     }
 }

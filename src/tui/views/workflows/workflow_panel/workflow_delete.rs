@@ -4,6 +4,7 @@ use ratatui::widgets::Widget as _;
 use super::super::widgets::ErrorAlert;
 use super::WorkflowPanelModeView;
 
+#[derive(Default)]
 pub(crate) struct WorkflowDelete {
     //
 }

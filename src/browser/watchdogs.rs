@@ -38,7 +38,7 @@ impl BrowserWatchdogs {
     #[must_use]
     pub fn new(client: CdpClient, download_dir: Option<PathBuf>) -> Self {
         let dl_dir = download_dir.unwrap_or_else(|| {
-            dirs_home().map_or_else(
+            crate::utils::home_dir().map_or_else(
                 || PathBuf::from("downloads"),
                 |h| h.join(".config/web-assistant/downloads"),
             )
@@ -104,10 +104,6 @@ impl BrowserWatchdogs {
 
         Ok(false)
     }
-}
-
-fn dirs_home() -> Option<PathBuf> {
-    std::env::var("HOME").ok().map(PathBuf::from)
 }
 
 #[cfg(test)]
