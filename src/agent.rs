@@ -654,7 +654,7 @@ mod tests {
             .api_key("")
             .base_url("http://localhost:9999")
             .build();
-        let browser = Browser::new(None);
+        let browser = Browser::new(&crate::config::BrowserConfig::default());
         let agent = Agent::new_with_browser("Browser test", llm, browser);
         assert_eq!(agent.task, "Browser test");
         assert_eq!(agent.max_steps, 20);

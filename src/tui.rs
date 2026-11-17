@@ -220,7 +220,7 @@ fn smart_event_poll(terminal: &mut DefaultTerminal) -> Result<bool> {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::workflow::{Workflow, WorkflowDataJson};
+    use crate::workflow::Workflow;
     use std::path::PathBuf;
 
     fn empty_config() -> Config {
@@ -306,7 +306,7 @@ mod tests {
         let config = empty_config();
         let mut app = TuiApp::new(config).await;
         // Inject a workflow into the app's workflows list.
-        let json = WorkflowDataJson::from_raw(
+        let json = crate::workflow::JsonFile::from_raw(
             PathBuf::from("/tmp/test-workflow.json"),
             r#"{"name":"Test Workflow"}"#.to_string(),
         );
@@ -353,14 +353,15 @@ mod tests {
     async fn test_tui_app_new_loads_empty_workflows() {
         let tmp = tempfile::tempdir().unwrap();
         let config = Config {
-            workflowsDirectory: tmp.path().to_path_buf(),
-            tuiColors: None,
+            workflows_directory: tmp.path().to_path_buf(),
+            tui_colors: None,
+            browser: crate::config::BrowserConfig::default(),
         };
         let app = TuiApp::new(config).await;
         // Should not panic during construction.
         assert!(!app.is_running);
         // Starting view should be NoWorkflowsView since no workflows were found.
-        let json = WorkflowDataJson::from_raw(
+        let json = crate::workflow::JsonFile::from_raw(
             PathBuf::from("/tmp/workflow.json"),
             r#"{"name":"W"}"#.to_string(),
         );

@@ -240,14 +240,14 @@ mod tests {
         let content = tokio::fs::read_to_string(&output_path).await.unwrap();
         // Pretty-printed JSON contains newlines and indentation.
         assert!(content.contains('\n'));
-        assert!(content.contains("workflows_directory"));
+        assert!(content.contains("workflowsDirectory"));
     }
 
     #[test]
     fn test_config_debug_display() {
         let config = Config::default();
         let debug_str = format!("{config:?}");
-        assert!(debug_str.contains("workflowsDirectory"));
+        assert!(debug_str.contains("workflows_directory"));
     }
 
     #[test]

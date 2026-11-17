@@ -28,7 +28,7 @@ impl JsonFile {
         Err(anyhow!("Wrong file extension: \"{}\"", path.display()))
     }
 
-    /// Test-only constructor that builds a `WorkflowDataJson` from raw content
+    /// Test-only constructor that builds a `JsonFile` from raw content
     /// without touching the filesystem. Available only in test builds.
     #[cfg(test)]
     pub(crate) fn from_raw(path: PathBuf, content: String) -> Self {
@@ -79,18 +79,18 @@ mod tests {
         let workflow_path = tmp.path().join("test.json");
         tokio::fs::write(
             &workflow_path,
-            r#"{"name": "Test Workflow", "description": "A test"}"#,
+            r#"{"name": "Test Workflow", "description": "A test", "steps":[]}"#,
         )
         .await
         .unwrap();
-        let workflows = load_from_directory(tmp.path()).await;
+        let workflows = load_from_directory(tmp.path()).await.unwrap();
         assert_eq!(workflows.len(), 1);
         match &workflows[0].state {
             WorkflowState::Valid(data) => {
                 assert_eq!(data.name, "Test Workflow");
                 assert_eq!(data.description.as_deref(), Some("A test"));
             }
-            WorkflowState::Error(_) => panic!("Expected Data variant"),
+            WorkflowState::Error(_) => panic!("Expected Valid variant"),
         }
     }
 
@@ -103,7 +103,7 @@ mod tests {
         tokio::fs::write(tmp.path().join("config.yaml"), "key: value")
             .await
             .unwrap();
-        let workflows = load_from_directory(tmp.path()).await;
+        let workflows = load_from_directory(tmp.path()).await.unwrap();
         assert!(workflows.is_empty());
     }
 
@@ -113,26 +113,26 @@ mod tests {
         tokio::fs::write(tmp.path().join("bad.json"), "{invalid json!!!")
             .await
             .unwrap();
-        let workflows = load_from_directory(tmp.path()).await;
+        let workflows = load_from_directory(tmp.path()).await.unwrap();
         assert_eq!(workflows.len(), 1);
         match &workflows[0].state {
             WorkflowState::Error(_) => {} // expected
-            _ => panic!("Expected Error variant"),
+            WorkflowState::Valid(_) => panic!("Expected Error variant"),
         }
     }
 
     #[tokio::test]
     async fn test_load_from_directory_nonexistent_returns_empty() {
         let nonexistent = PathBuf::from("/tmp/nonexistent_dir_for_tests_xyz");
-        let workflows = load_from_directory(&nonexistent).await;
-        assert!(workflows.is_empty());
+        let result = load_from_directory(&nonexistent).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_load_from_directory_path_is_file_not_dir() {
         let tmp = tempfile::NamedTempFile::new().unwrap();
-        let workflows = load_from_directory(tmp.path()).await;
-        assert!(workflows.is_empty());
+        let result = load_from_directory(tmp.path()).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]
@@ -140,18 +140,21 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let subdir = tmp.path().join("subdir");
         tokio::fs::create_dir(&subdir).await.unwrap();
-        tokio::fs::write(subdir.join("nested.json"), r#"{"name": "Nested"}"#)
-            .await
-            .unwrap();
+        tokio::fs::write(
+            subdir.join("nested.json"),
+            r#"{"name": "Nested","steps":[]}"#,
+        )
+        .await
+        .unwrap();
         // Only top-level files should be loaded, not nested ones.
-        tokio::fs::write(tmp.path().join("top.json"), r#"{"name": "Top"}"#)
+        tokio::fs::write(tmp.path().join("top.json"), r#"{"name": "Top","steps":[]}"#)
             .await
             .unwrap();
-        let workflows = load_from_directory(tmp.path()).await;
+        let workflows = load_from_directory(tmp.path()).await.unwrap();
         assert_eq!(workflows.len(), 1);
         match &workflows[0].state {
             WorkflowState::Valid(data) => assert_eq!(data.name, "Top"),
-            _ => panic!("Expected Data variant"),
+            WorkflowState::Error(_) => panic!("Expected Valid variant"),
         }
     }
 
@@ -163,5 +166,67 @@ mod tests {
         );
         assert_eq!(json.path, PathBuf::from("/tmp/raw-test.json"));
         assert_eq!(json.content, "{\"name\": \"Raw\"}");
+    }
+
+    #[tokio::test]
+    async fn test_load_from_file_with_valid_workflow() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("workflow.json");
+        tokio::fs::write(
+            &path,
+            r#"{"name":"FromFile","description":"desc","steps":[]}"#,
+        )
+        .await
+        .unwrap();
+        let workflow = load_from_file(&path).await.unwrap();
+        assert!(workflow.file_path.is_some());
+        match &workflow.state {
+            WorkflowState::Valid(data) => {
+                assert_eq!(data.name, "FromFile");
+                assert_eq!(data.description.as_deref(), Some("desc"));
+            }
+            WorkflowState::Error(_) => panic!("Expected Valid variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_load_from_file_with_invalid_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("bad.json");
+        tokio::fs::write(&path, "{invalid json!!!").await.unwrap();
+        let result = load_from_file(&path).await;
+        assert!(result.is_ok());
+        let workflow = result.unwrap();
+        assert!(matches!(workflow.state, WorkflowState::Error(_)));
+    }
+
+    #[tokio::test]
+    async fn test_load_from_file_with_nonexistent_path() {
+        let nonexistent = PathBuf::from("/tmp/does_not_exist_for_loader_xyz.json");
+        let result = load_from_file(&nonexistent).await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("File does not exist")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_load_from_file_with_wrong_extension() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("workflow.txt");
+        tokio::fs::write(&path, r#"{"name":"WrongExt"}"#)
+            .await
+            .unwrap();
+        let result = load_from_file(&path).await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Wrong file extension")
+        );
     }
 }

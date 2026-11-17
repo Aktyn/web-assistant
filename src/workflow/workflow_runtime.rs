@@ -43,3 +43,55 @@ async fn run_steps(steps: &Vec<step::WorkflowStep>, browser: &mut Browser) -> Re
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::workflow::{Workflow, WorkflowState};
+
+    fn default_config() -> Config {
+        Config::default()
+    }
+
+    /// Build a workflow whose state is Error (invalid JSON).
+    fn workflow_with_error_state() -> Workflow {
+        Workflow::new(crate::workflow::JsonFile::from_raw(
+            std::path::PathBuf::from("/tmp/invalid-for-run-test.json"),
+            "{invalid json".to_string(),
+        ))
+    }
+
+    #[tokio::test]
+    async fn test_run_draft_workflow_bails() {
+        let mut draft = Workflow::new_draft();
+        let result = draft.run(&default_config()).await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Cannot run a draft workflow")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_run_invalid_state_bails() {
+        let mut workflow = workflow_with_error_state();
+        assert!(matches!(workflow.state, WorkflowState::Error(_)));
+        let result = workflow.run(&default_config()).await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Workflow is not valid")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_run_steps_empty_returns_ok() {
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
+        let result = run_steps(&Vec::new(), &mut browser).await;
+        assert!(result.is_ok());
+    }
+}

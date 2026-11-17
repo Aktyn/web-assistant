@@ -922,7 +922,7 @@ mod tests {
 
         let file_url = format!("file://{}", html_path.display());
 
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
 
         // Navigate to the test page
@@ -1021,7 +1021,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         .unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1190,7 +1190,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, html_content).unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1235,7 +1235,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, html_content).unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1272,7 +1272,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, "<html><body></body></html>").unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1326,7 +1326,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
     fn test_quad_viewport_intersection() {
         // Test case: quad fully inside viewport
         let quads: Vec<Vec<f64>> = vec![vec![0.0, 0.0, 100.0, 0.0, 100.0, 100.0, 0.0, 100.0]];
-        let browser = Browser::new(None);
+        let browser = Browser::new(&crate::config::BrowserConfig::default());
         let _ = browser;
         let result = find_largest_visible_quad(&quads, 800.0, 600.0);
         assert!(result.is_some());
@@ -1424,7 +1424,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, html_content).unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1498,7 +1498,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         .unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1665,13 +1665,13 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
 
     #[tokio::test]
     async fn test_user_data_dir_none_before_start() {
-        let browser = Browser::new(None);
+        let browser = Browser::new(&crate::config::BrowserConfig::default());
         assert!(browser.user_data_dir().is_none());
     }
 
     #[tokio::test]
     async fn test_watchdogs_none_before_start() {
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         assert!(browser.watchdogs().is_none());
         assert!(browser.watchdogs_mut().is_none());
     }
@@ -1704,7 +1704,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
 
     #[tokio::test]
     async fn test_wait_succeeds() {
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         let result = browser.wait(0).await;
         assert!(result.is_ok());
     }
@@ -1728,7 +1728,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         .unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1764,7 +1764,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         .unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1777,7 +1777,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
     #[tokio::test]
     #[ignore = "Requires Chrome/Chromium"]
     async fn test_live_browser_user_data_dir() {
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         assert!(browser.user_data_dir().is_some());
         browser.close().await.unwrap();
@@ -1791,7 +1791,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, "<html><body>Test</body></html>").unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
         browser.close().await.unwrap();

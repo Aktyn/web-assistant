@@ -307,7 +307,7 @@ fn render_no_selection_info(area: Rect, buf: &mut Buffer) {
 mod tests {
     use super::*;
     use crate::tui::common::panel::Panel;
-    use crate::workflow::{Workflow, WorkflowDataJson};
+    use crate::workflow::{JsonFile, Workflow};
     use crossterm::event::KeyCode;
     use std::path::PathBuf;
 
@@ -380,9 +380,9 @@ mod tests {
     }
 
     fn workflows_with_one(name: &str) -> Arc<RwLock<Vec<Workflow>>> {
-        let json = WorkflowDataJson::from_raw(
+        let json = JsonFile::from_raw(
             PathBuf::from("/tmp/workflow.json"),
-            format!(r#"{{"name":"{name}"}}"#),
+            format!(r#"{{"name":"{name}","steps":[]}}"#),
         );
         let workflow = Workflow::new(json);
         Arc::new(RwLock::new(vec![workflow]))
@@ -390,8 +390,10 @@ mod tests {
 
     fn workflows_with_two() -> Arc<RwLock<Vec<Workflow>>> {
         let mk = |name: &str, path: &str| {
-            let json =
-                WorkflowDataJson::from_raw(PathBuf::from(path), format!(r#"{{"name":"{name}"}}"#));
+            let json = JsonFile::from_raw(
+                PathBuf::from(path),
+                format!(r#"{{"name":"{name}","steps":[]}}"#),
+            );
             Workflow::new(json)
         };
         Arc::new(RwLock::new(vec![
@@ -401,8 +403,7 @@ mod tests {
     }
 
     fn workflows_with_invalid() -> Arc<RwLock<Vec<Workflow>>> {
-        let json =
-            WorkflowDataJson::from_raw(PathBuf::from("/tmp/bad.json"), "{invalid json".to_string());
+        let json = JsonFile::from_raw(PathBuf::from("/tmp/bad.json"), "{invalid json".to_string());
         let workflow = Workflow::new(json);
         Arc::new(RwLock::new(vec![workflow]))
     }
@@ -592,7 +593,7 @@ mod tests {
         let json_content = r#"{"name":"ToDelete"}"#;
         std::fs::write(&wf_path, json_content).unwrap();
 
-        let json = WorkflowDataJson::from_raw(wf_path.clone(), json_content.to_string());
+        let json = JsonFile::from_raw(wf_path.clone(), json_content.to_string());
         let workflow = Workflow::new(json);
         let workflows = Arc::new(RwLock::new(vec![workflow]));
         let mut panel = WorkflowPanel::new(workflows.clone());
@@ -612,7 +613,7 @@ mod tests {
 
     #[test]
     fn test_workflow_panel_confirm_delete_invalidates_nonexistent_file() {
-        let json = WorkflowDataJson::from_raw(
+        let json = JsonFile::from_raw(
             PathBuf::from("/tmp/nonexistent_workflow_xyz.json"),
             r#"{"name":"Ghost"}"#.to_string(),
         );

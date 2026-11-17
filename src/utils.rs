@@ -293,7 +293,7 @@ mod tests {
     async fn test_read_json_files_nonexistent_directory_returns_empty() {
         let nonexistent = PathBuf::from("/tmp/does_not_exist_xyz_12345");
         let result = read_json_files(&nonexistent).await;
-        assert!(result.is_empty());
+        assert!(result.is_err());
     }
 
     #[test]
