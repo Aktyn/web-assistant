@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn test_button_height_constant() {
-        assert_eq!(Button::<>::HEIGHT, 3);
+        assert_eq!(Button::HEIGHT, 3);
     }
 
     #[test]
