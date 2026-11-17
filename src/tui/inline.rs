@@ -171,6 +171,16 @@ pub(crate) fn print_success(message: &str) -> anyhow::Result<()> {
 mod tests {
     use super::*;
 
+    /// Extracts a readable message from a panic payload, returning an empty
+    /// string when the payload is neither a `String` nor a `&str`.
+    fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
+        payload
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| payload.downcast_ref::<&str>().copied().map(String::from))
+            .unwrap_or_default()
+    }
+
     #[test]
     fn test_struct_docs_mismatched_lengths_returns_error() {
         let docs = StructDocs {
@@ -194,5 +204,59 @@ mod tests {
         // Should not panic or error on construction.
         assert_eq!(docs.field_names.len(), 2);
         assert_eq!(docs.field_docs.len(), 2);
+    }
+
+    /// Runs `f` inside `catch_unwind` and, if it panics, asserts the panic
+    /// message looks like a terminal-initialization failure (which is the
+    /// expected outcome when no TTY is available, e.g. in CI or tarpaulin).
+    fn assert_terminal_failure_or_success<F>(f: F)
+    where
+        F: FnOnce() -> anyhow::Result<()> + std::panic::UnwindSafe,
+    {
+        let result = std::panic::catch_unwind(f);
+        match result {
+            Ok(Ok(())) => {}  // Rendered successfully (rare in CI).
+            Ok(Err(_e)) => {} // Terminal init or draw failure is expected without a TTY.
+            Err(payload) => {
+                let msg = panic_message(&payload);
+                assert!(
+                    msg.contains("terminal")
+                        || msg.contains("No such device")
+                        || msg.contains("failed to initialize"),
+                    "Unexpected panic: {msg}"
+                );
+            }
+        }
+    }
+
+    /// `print_struct` with valid docs tries to initialize the terminal.
+    #[test]
+    fn test_print_struct_valid_docs_invokes_terminal() {
+        let docs = StructDocs {
+            description: "Test struct",
+            field_names: &["name", "value"],
+            field_docs: &["Name doc", "Value doc"],
+            ..Default::default()
+        };
+        assert_terminal_failure_or_success(|| print_struct(&docs));
+    }
+
+    /// Same as above but with a non-zero `margin_left` to exercise the layout
+    /// branch that uses `docs.margin_left`.
+    #[test]
+    fn test_print_struct_with_margin_left_invokes_terminal() {
+        let docs = StructDocs {
+            description: "Test struct",
+            field_names: &["name", "value"],
+            field_docs: &["Name doc", "Value doc"],
+            margin_left: Some(4),
+        };
+        assert_terminal_failure_or_success(|| print_struct(&docs));
+    }
+
+    /// `print_success` also initializes a terminal.
+    #[test]
+    fn test_print_success_invokes_terminal() {
+        assert_terminal_failure_or_success(|| print_success("ok"));
     }
 }

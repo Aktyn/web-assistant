@@ -20,46 +20,76 @@ mod tests {
 
     #[test]
     fn test_navigate_step_serde_roundtrip() {
-        let step = NavigateStep {
+        let step = page_action::NavigateAction {
             url: "https://example.com".to_string(),
         };
         let json = serde_json::to_string(&step).unwrap();
-        let parsed: NavigateStep = serde_json::from_str(&json).unwrap();
+        let parsed: page_action::NavigateAction = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.url, step.url);
     }
 
     #[test]
     fn test_workflow_step_navigate_deserialization() {
-        let json = r#"{"type":"navigate","url":"https://example.com"}"#;
-        let step: WorkflowStep = serde_json::from_str(json).unwrap();
-        match step.step_type {
-            WorkflowStepType::Navigate(navigate) => assert_eq!(navigate.url, "https://example.com"),
+        let json = r#"{"type":"page-action","pageIndex":0,"action":{"type":"navigate","url":"https://example.com"}}"#;
+        let step: WorkflowStepType = serde_json::from_str(json).unwrap();
+        match step {
+            WorkflowStepType::PageAction(page_action_step) => {
+                assert_eq!(page_action_step.page_index, 0);
+                assert!(matches!(page_action_step.action, PageAction::Navigate(_)));
+            }
+            WorkflowStepType::Agent(_) => panic!("Expected PageAction variant"),
         }
     }
 
     #[test]
     fn test_workflow_step_unknown_type_fails() {
         let json = r#"{"type":"unknown","url":"https://example.com"}"#;
-        let result: Result<WorkflowStep, _> = serde_json::from_str(json);
+        let result: Result<WorkflowStepType, _> = serde_json::from_str(json);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_workflow_step_missing_type_fails() {
         let json = r#"{"url":"https://example.com"}"#;
-        let result: Result<WorkflowStep, _> = serde_json::from_str(json);
+        let result: Result<WorkflowStepType, _> = serde_json::from_str(json);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_step_type_serde_roundtrip() {
-        let step = WorkflowStep {
-            step_type: WorkflowStepType::Navigate(NavigateStep {
+        let step = WorkflowStepType::PageAction(page_action::PageActionStep {
+            page_index: 0,
+            action: PageAction::Navigate(page_action::NavigateAction {
                 url: "https://example.com".to_string(),
             }),
-        };
+        });
         let json = serde_json::to_string(&step).unwrap();
-        let parsed: WorkflowStep = serde_json::from_str(&json).unwrap();
-        assert!(matches!(parsed.step_type, WorkflowStepType::Navigate(_)));
+        let parsed: WorkflowStepType = serde_json::from_str(&json).unwrap();
+        assert!(matches!(parsed, WorkflowStepType::PageAction(_)));
+    }
+
+    #[test]
+    fn test_workflow_step_agent_deserialization() {
+        let json = r#"{"type":"agent","task":"do something","maxSteps":8}"#;
+        let step: WorkflowStepType = serde_json::from_str(json).unwrap();
+        match step {
+            WorkflowStepType::Agent(agent_step) => {
+                assert_eq!(agent_step.task, "do something");
+                assert_eq!(agent_step.max_steps, 8);
+            }
+            WorkflowStepType::PageAction(_) => panic!("Expected Agent variant"),
+        }
+    }
+
+    #[test]
+    fn test_agent_step_default_max_steps() {
+        let json = r#"{"type":"agent","task":"do something"}"#;
+        let step: WorkflowStepType = serde_json::from_str(json).unwrap();
+        match step {
+            WorkflowStepType::Agent(agent_step) => {
+                assert_eq!(agent_step.max_steps, 64);
+            }
+            WorkflowStepType::PageAction(_) => panic!("Expected Agent variant"),
+        }
     }
 }
