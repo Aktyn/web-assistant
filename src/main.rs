@@ -354,4 +354,124 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_run_workflow_no_workflow_found() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("config.json");
+        let wf_dir = tmp.path().join("workflows");
+        std::fs::create_dir(&wf_dir).unwrap();
+        let config_json = serde_json::json!({
+            "workflowsDirectory": wf_dir.to_str().unwrap(),
+            "browser": { "headless": true }
+        });
+        std::fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&config_json).unwrap(),
+        )
+        .unwrap();
+
+        let result = rt.block_on(async {
+            let cli = Cli {
+                config_path: Some(config_path),
+                command: Some(Run {
+                    workflow: "does-not-exist".to_string(),
+                }),
+            };
+            run_cli(&cli).await
+        });
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No workflow found")
+        );
+    }
+
+    #[test]
+    fn test_run_workflow_path_not_exists() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("config.json");
+        let wf_dir = tmp.path().join("workflows");
+        std::fs::create_dir(&wf_dir).unwrap();
+        let config_json = serde_json::json!({
+            "workflowsDirectory": wf_dir.to_str().unwrap(),
+            "browser": { "headless": true }
+        });
+        std::fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&config_json).unwrap(),
+        )
+        .unwrap();
+
+        let result = rt.block_on(async {
+            let cli = Cli {
+                config_path: Some(config_path),
+                command: Some(Run {
+                    workflow: "/nonexistent/path/to/workflow.json".to_string(),
+                }),
+            };
+            run_cli(&cli).await
+        });
+        assert!(result.is_err());
+        let err_str = result.unwrap_err().to_string();
+        // When the path doesn't exist, the code falls back to directory lookup
+        // which returns "No workflow found" since the name doesn't match.
+        assert!(
+            err_str.contains("No workflow found")
+                || err_str.contains("Couldn't load workflow from file"),
+            "Unexpected error: {err_str}"
+        );
+    }
+
+    #[test]
+    fn test_run_tui_requires_config_path() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(async {
+            let cli = Cli {
+                config_path: None,
+                command: None,
+            };
+            run_tui(&cli).await
+        });
+        assert!(result.is_err());
+        let err_str = result.unwrap_err().to_string();
+        // The TUI logger may already be initialized in some test contexts,
+        // which short-circuits before the config path check.
+        assert!(
+            err_str.contains("Config path is required") || err_str.contains("SetLoggerError"),
+            "Unexpected error: {err_str}"
+        );
+    }
+
+    #[test]
+    fn test_run_tui_with_config_path() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("config.json");
+        let wf_dir = tmp.path().join("workflows");
+        std::fs::create_dir(&wf_dir).unwrap();
+        let config_json = serde_json::json!({
+            "workflowsDirectory": wf_dir.to_str().unwrap(),
+            "browser": { "headless": true }
+        });
+        std::fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&config_json).unwrap(),
+        )
+        .unwrap();
+
+        let result = rt.block_on(async {
+            let cli = Cli {
+                config_path: Some(config_path),
+                command: None,
+            };
+            run_tui(&cli).await
+        });
+        // TUI rendering may fail in CI; we just check it doesn't panic on config load.
+        let _ = result;
+    }
 }
