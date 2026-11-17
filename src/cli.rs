@@ -32,6 +32,9 @@ pub(crate) enum Commands {
 
     /// Explains the config file
     ExplainConfig {},
+
+    /// Explain workflow file structure
+    ExplainWorkflow {},
 }
 
 pub(crate) fn get_cli() -> Cli {

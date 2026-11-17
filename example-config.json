@@ -1,0 +1,11 @@
+{
+  "TODO": "Use all possible values to achieve complete example",
+
+  "workflowsDirectory": "./workflows",
+  "tuiColors": {
+    "background": "#0f141a"
+  },
+  "browser": {
+    "headless": false
+  }
+}

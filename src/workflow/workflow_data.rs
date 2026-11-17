@@ -1,13 +1,22 @@
-pub(super) mod step;
+pub(crate) mod step;
 
-use serde::Deserialize;
+use documented::{Documented, DocumentedFields};
+use serde::{Deserialize, Serialize};
 
-/// Describes valid workflow data structure
-#[derive(Debug, Deserialize, Clone)]
+/// Workflow must be a json file with the following fields:
+#[derive(Debug, Default, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct WorkflowData {
+    /// Name of the workflow
     pub name: String,
+    /// Description of the workflow
     pub description: Option<String>,
-    pub steps: Vec<step::WorkflowStep>,
+    /// List of steps to be performed
+    /// Each step is an object that contains "type" property (enum)
+    /// See specific fields for each type:
+    /// "page-action" --> `PageActionStep`
+    /// "agent" --> `AgentStep`
+    pub steps: Vec<step::WorkflowStepType>,
 }
 
 #[cfg(test)]

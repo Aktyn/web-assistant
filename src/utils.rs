@@ -1,5 +1,8 @@
 use anyhow::{Result, anyhow, bail};
-use std::path::{Path, PathBuf};
+use std::{
+    io::{Write, stdout},
+    path::{Path, PathBuf},
+};
 use tokio::fs::DirEntry;
 
 //TODO: organize these utils into text utils and file utils
@@ -111,6 +114,10 @@ pub fn open_file(path: &Path) -> Result<std::process::Child> {
         .stdout(std::process::Stdio::null())
         .spawn()
         .map_err(|e| anyhow!("failed to open \"{}\": {e}", absolute_path.display()))
+}
+
+pub fn print_lines(count: u16) {
+    stdout().write_all(&b"\n".repeat(count.into())).ok();
 }
 
 #[cfg(test)]

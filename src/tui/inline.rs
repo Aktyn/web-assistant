@@ -12,10 +12,12 @@ use ratatui::{
 
 use super::common::palette;
 
+#[derive(Default)]
 pub(crate) struct StructDocs {
     pub description: &'static str,
     pub field_names: &'static [&'static str],
     pub field_docs: &'static [&'static str],
+    pub margin_left: Option<u16>,
 }
 
 /// Pretty prints given struct documentation utilizing inline ratatui viewport
@@ -25,6 +27,16 @@ pub(crate) fn print_struct(docs: &StructDocs) -> anyhow::Result<()> {
     }
 
     let total_docs_lines: usize = docs.field_docs.iter().map(|doc| doc.lines().count()).sum();
+    let max_line_length = docs
+        .field_names
+        .iter()
+        .zip(docs.field_docs)
+        .map(|(name, doc)| {
+            let max_doc_line_length = doc.lines().map(str::len).max().unwrap_or_default();
+            max_doc_line_length.saturating_add(name.len())
+        })
+        .max()
+        .unwrap_or_default();
 
     let mut terminal = ratatui::init_with_options(TerminalOptions {
         viewport: Viewport::Inline(u16::try_from(total_docs_lines + 2).unwrap_or(u16::MAX)),
@@ -33,14 +45,22 @@ pub(crate) fn print_struct(docs: &StructDocs) -> anyhow::Result<()> {
 
     terminal
         .draw(|frame| {
-            let area = frame.area();
+            let frame_area = frame.area();
+            let [_, area, _] = frame_area.layout(&Layout::horizontal([
+                Constraint::Length(docs.margin_left.unwrap_or(0)),
+                Constraint::Length(
+                    u16::try_from(max_line_length.saturating_add(2 + 4))
+                        .unwrap_or(frame_area.width),
+                ),
+                Constraint::Fill(1),
+            ]));
 
             let block = Block::bordered()
                 .fg(palette().muted_foreground)
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
                 .title(format!(" {} ", docs.description));
-            frame.render_widget(block, frame.area());
+            frame.render_widget(block, area);
 
             let content_area = area.inner(Margin::from(1));
 

@@ -2,7 +2,7 @@ mod browser_config;
 mod colors_config;
 
 use anyhow::{Context, Result};
-use documented::DocumentedFields;
+use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
 use std::io::{Write as _, stdout};
 use std::path::{Path, PathBuf};
@@ -14,9 +14,9 @@ use std::time::Duration;
 pub(crate) use browser_config::*;
 pub(crate) use colors_config::*;
 
-#[allow(non_snake_case)]
-#[derive(Debug, Serialize, Deserialize, DocumentedFields)]
-#[documented_fields(default = "Field not documented")]
+/// Config must be a json file
+#[derive(Debug, Serialize, Deserialize, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct Config {
     /// Path to directory containing workflow files.
     /// Can be omitted during inline run if workflow is provided as file path
@@ -27,11 +27,11 @@ pub struct Config {
     )]
     pub workflows_directory: PathBuf,
     /// Optional map of hex colors to use when rendering TUI.
-    /// See *`HexColorsConfig`* for list of color names.
+    /// See `HexColorsConfig` for list of color names.
     #[serde(alias = "tuiColors", rename = "tuiColors")]
     pub tui_colors: Option<HexColorsConfig>,
 
-    /// See *`BrowserConfig`* for more information.
+    /// See `BrowserConfig` for more information.
     #[serde(default = "BrowserConfig::default")]
     pub browser: BrowserConfig,
 }
@@ -95,7 +95,7 @@ pub async fn load_config(config_path: &Path) -> Config {
 }
 
 fn run_loading_animation(done: &Arc<AtomicBool>) {
-    let label = "Loading";
+    let label = "Loading config";
     let spinner = ['—', '\\', '|', '/'];
     let mut step = 0usize;
 

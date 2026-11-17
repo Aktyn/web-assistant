@@ -1,21 +1,30 @@
-use documented::DocumentedFields;
+use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
 
 pub type HexString = String;
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone, DocumentedFields)]
-#[documented_fields(default = "Hex color string")]
+/// `HexColorsConfig`. All fields are optional hex color values.
+#[derive(Debug, Default, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct HexColorsConfig {
+    /// Overall terminal background
     pub background: Option<HexString>,
+    /// Main text
     pub foreground: Option<HexString>,
+    /// Borders and separators
     pub border: Option<HexString>,
+    /// Secondary text
     #[serde(alias = "mutedForeground", rename = "mutedForeground")]
     pub muted_foreground: Option<HexString>,
+    /// Used to accent main action elements like buttons, links, etc
     pub accent: Option<HexString>,
+    /// Disabled widgets and text
     pub disabled: Option<HexString>,
     #[serde(alias = "errorForeground", rename = "errorForeground")]
+    /// Error messages
     pub error_foreground: Option<HexString>,
     #[serde(alias = "successForeground", rename = "successForeground")]
+    /// Success messages
     pub success_foreground: Option<HexString>,
 }
 

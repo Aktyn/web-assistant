@@ -1,0 +1,45 @@
+{
+  "name": "Example browser instructions",
+  "description": "Example description",
+  "dataSources": [
+    {
+      "name": "credentials",
+      "path": "./data/credentials.csv",
+      "columns": [
+        {
+          "name": "username",
+          "type": "text"
+        },
+        {
+          "name": "password",
+          "type": "text"
+        },
+        {
+          "name": "time",
+          "type": "now"
+        }
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "type": "page-action",
+      "pageIndex": 0,
+      "action": {
+        "type": "navigate",
+        "url": "http://example.com"
+      }
+    },
+    {
+      "type": "agent",
+      "task": "Find the latest version of the Rust programming language and print it as a result.",
+      "promptMode": "standard",
+      "maxSteps": 64,
+      "historyOutput": "./rust-version.json",
+      "judge": {
+        "onCaptcha": "TODO",
+        "onImpossibleTask": "TODO"
+      }
+    }
+  ]
+}

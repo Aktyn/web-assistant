@@ -9,14 +9,17 @@ mod utils;
 mod workflow;
 
 use anyhow::{Context, Result};
-use documented::DocumentedFields;
+use documented::{Documented, DocumentedFields};
 use std::{
     io::{Write, stdout},
     path::PathBuf,
 };
 
-use cli::Commands::{ExplainConfig, InitConfig, Run};
+use cli::Commands::{ExplainConfig, ExplainWorkflow, InitConfig, Run};
 use config::Config;
+
+use crate::tui::common::init_palette;
+use workflow::workflow_data::step as workflow_step;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -31,12 +34,13 @@ async fn run_cli(cli: &cli::Cli) -> Result<()> {
         Some(Run { workflow }) => run_workflow(workflow, cli).await,
         Some(InitConfig { output_path }) => init_config(output_path.as_ref()).await,
         Some(ExplainConfig {}) => explain_config(),
+        Some(ExplainWorkflow {}) => explain_workflow(),
         None => run_tui(cli).await,
     }
 }
 
 async fn run_workflow(workflow_path_or_name: &str, cli: &cli::Cli) -> Result<()> {
-    let _ = env_logger::try_init();
+    env_logger::try_init().ok();
 
     log::info!("Running workflow: {workflow_path_or_name}");
 
@@ -45,6 +49,10 @@ async fn run_workflow(workflow_path_or_name: &str, cli: &cli::Cli) -> Result<()>
         .as_ref()
         .context("Config path is required")?;
     let config = config::load_config(config_path).await;
+
+    if let Some(colors) = &config.tui_colors {
+        init_palette(colors);
+    }
 
     let possible_path = PathBuf::from(workflow_path_or_name);
     let mut workflow = if possible_path.exists() && possible_path.is_file() {
@@ -88,25 +96,63 @@ async fn init_config(output_path: Option<&PathBuf>) -> Result<()> {
 
 fn explain_config() -> Result<()> {
     tui::inline::print_struct(&tui::inline::StructDocs {
-        description: "Config must be a json file with the following fields:",
+        description: Config::DOCS,
         field_names: Config::FIELD_NAMES,
         field_docs: Config::FIELD_DOCS,
+        ..Default::default()
     })?;
 
-    stdout().write_all(b"\n\n").ok();
+    utils::print_lines(1);
 
     tui::inline::print_struct(&tui::inline::StructDocs {
-        description: "HexColorsConfig. All fields are optional.",
+        description: config::HexColorsConfig::DOCS,
         field_names: config::HexColorsConfig::FIELD_NAMES,
         field_docs: config::HexColorsConfig::FIELD_DOCS,
+        margin_left: Some(2),
     })?;
 
-    stdout().write_all(b"\n\n").ok();
+    utils::print_lines(1);
 
     tui::inline::print_struct(&tui::inline::StructDocs {
-        description: "BrowserConfig. Used when starting the browser",
+        description: config::BrowserConfig::DOCS,
         field_names: config::BrowserConfig::FIELD_NAMES,
         field_docs: config::BrowserConfig::FIELD_DOCS,
+        margin_left: Some(2),
+    })?;
+
+    Ok(())
+}
+
+fn explain_workflow() -> Result<()> {
+    //TODO: move descriptions to doc comments
+    tui::inline::print_struct(&tui::inline::StructDocs {
+        description: workflow::WorkflowData::DOCS,
+        field_names: workflow::WorkflowData::FIELD_NAMES,
+        field_docs: workflow::WorkflowData::FIELD_DOCS,
+        ..Default::default()
+    })?;
+
+    utils::print_lines(1);
+
+    tui::inline::print_struct(&tui::inline::StructDocs {
+        description: workflow_step::PageActionStep::DOCS,
+        field_names: workflow_step::PageActionStep::FIELD_NAMES,
+        field_docs: workflow_step::PageActionStep::FIELD_DOCS,
+        margin_left: Some(2),
+    })?;
+    utils::print_lines(1);
+    tui::inline::print_struct(&tui::inline::StructDocs {
+        description: workflow_step::page_action::NavigateAction::DOCS,
+        field_names: workflow_step::page_action::NavigateAction::FIELD_NAMES,
+        field_docs: workflow_step::page_action::NavigateAction::FIELD_DOCS,
+        margin_left: Some(4),
+    })?;
+    utils::print_lines(1);
+    tui::inline::print_struct(&tui::inline::StructDocs {
+        description: workflow_step::AgentStep::DOCS,
+        field_names: workflow_step::AgentStep::FIELD_NAMES,
+        field_docs: workflow_step::AgentStep::FIELD_DOCS,
+        margin_left: Some(2),
     })?;
 
     Ok(())

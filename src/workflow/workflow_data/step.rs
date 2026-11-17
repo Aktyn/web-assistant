@@ -1,20 +1,17 @@
+mod agent;
+pub(crate) mod page_action;
+
 use serde::{Deserialize, Serialize};
+
+pub(crate) use agent::AgentStep;
+pub(crate) use page_action::{PageAction, PageActionStep};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(tag = "type", rename_all = "lowercase")]
-pub enum StepType {
-    Navigate(NavigateStep),
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct WorkflowStep {
-    #[serde(flatten)]
-    pub step_type: StepType,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct NavigateStep {
-    pub url: String,
+pub enum WorkflowStepType {
+    #[serde(alias = "page-action", rename = "page-action")]
+    PageAction(page_action::PageActionStep),
+    Agent(agent::AgentStep),
 }
 
 #[cfg(test)]
@@ -36,7 +33,7 @@ mod tests {
         let json = r#"{"type":"navigate","url":"https://example.com"}"#;
         let step: WorkflowStep = serde_json::from_str(json).unwrap();
         match step.step_type {
-            StepType::Navigate(navigate) => assert_eq!(navigate.url, "https://example.com"),
+            WorkflowStepType::Navigate(navigate) => assert_eq!(navigate.url, "https://example.com"),
         }
     }
 
@@ -57,12 +54,12 @@ mod tests {
     #[test]
     fn test_step_type_serde_roundtrip() {
         let step = WorkflowStep {
-            step_type: StepType::Navigate(NavigateStep {
+            step_type: WorkflowStepType::Navigate(NavigateStep {
                 url: "https://example.com".to_string(),
             }),
         };
         let json = serde_json::to_string(&step).unwrap();
         let parsed: WorkflowStep = serde_json::from_str(&json).unwrap();
-        assert!(matches!(parsed.step_type, StepType::Navigate(_)));
+        assert!(matches!(parsed.step_type, WorkflowStepType::Navigate(_)));
     }
 }

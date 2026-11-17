@@ -91,6 +91,8 @@ impl NoWorkflowsView {
 
 impl View for NoWorkflowsView {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
+        buf.set_style(area, palette().style);
+
         let workflows_directory = self
             .config
             .read()
