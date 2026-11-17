@@ -313,4 +313,18 @@ mod tests {
                 || err.to_string().contains("No such file")
         );
     }
+
+    /// `print_lines` writes `\r\n` repeated `count` times to stdout. It must
+    /// not panic for any value including zero.
+    #[test]
+    fn test_print_lines_zero_is_noop() {
+        // Should not panic and produce no output.
+        print_lines(0);
+    }
+
+    #[test]
+    fn test_print_lines_writes_newlines() {
+        // Exercise the function and ensure it does not panic.
+        print_lines(5);
+    }
 }

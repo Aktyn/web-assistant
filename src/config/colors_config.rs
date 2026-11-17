@@ -86,9 +86,9 @@ mod tests {
     fn test_hex_colors_config_field_names_and_docs() {
         let names = HexColorsConfig::FIELD_NAMES;
         assert!(names.contains(&"background"));
-        assert!(names.contains(&"muted_foreground"));
-        assert!(names.contains(&"error_foreground"));
-        assert!(names.contains(&"success_foreground"));
+        assert!(names.contains(&"mutedForeground"));
+        assert!(names.contains(&"errorForeground"));
+        assert!(names.contains(&"successForeground"));
         assert_ne!(HexColorsConfig::FIELD_DOCS.len(), 0);
     }
 

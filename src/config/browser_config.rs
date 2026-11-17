@@ -93,10 +93,10 @@ mod tests {
     fn test_browser_config_field_names_and_docs() {
         let names = BrowserConfig::FIELD_NAMES;
         assert!(names.contains(&"headless"));
-        assert!(names.contains(&"executable_path"));
-        assert!(names.contains(&"user_data_dir"));
-        assert!(names.contains(&"downloads_dir"));
-        assert!(names.contains(&"cdp_url"));
+        assert!(names.contains(&"executablePath"));
+        assert!(names.contains(&"userDataDir"));
+        assert!(names.contains(&"downloadsDir"));
+        assert!(names.contains(&"cdpUrl"));
         assert_ne!(BrowserConfig::FIELD_DOCS.len(), 0);
     }
 

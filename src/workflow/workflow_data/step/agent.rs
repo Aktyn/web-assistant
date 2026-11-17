@@ -29,3 +29,52 @@ pub struct AgentStep {
 fn default_max_steps() -> u16 {
     64
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_agent_step_defaults_max_steps() {
+        let json = r#"{"task":"do something"}"#;
+        let step: AgentStep = serde_json::from_str(json).unwrap();
+        assert_eq!(step.task, "do something");
+        assert_eq!(step.max_steps, 64);
+        assert!(step.history_output.is_none());
+    }
+
+    #[test]
+    fn test_agent_step_explicit_max_steps_and_history_output() {
+        let json = r#"{"task":"go","maxSteps":16,"historyOutput":"./out.json"}"#;
+        let step: AgentStep = serde_json::from_str(json).unwrap();
+        assert_eq!(step.task, "go");
+        assert_eq!(step.max_steps, 16);
+        assert_eq!(step.history_output, Some(PathBuf::from("./out.json")));
+    }
+
+    #[test]
+    fn test_agent_step_serializes_with_camel_case() {
+        let step = AgentStep {
+            task: "task".to_string(),
+            max_steps: 8,
+            history_output: Some(PathBuf::from("./h.json")),
+        };
+        let json = serde_json::to_value(&step).unwrap();
+        assert_eq!(json["task"], "task");
+        assert_eq!(json["maxSteps"], 8);
+        assert_eq!(json["historyOutput"], "./h.json");
+    }
+
+    #[test]
+    fn test_agent_step_clone_and_debug() {
+        let step = AgentStep {
+            task: "clone me".to_string(),
+            max_steps: 32,
+            history_output: None,
+        };
+        let cloned = step.clone();
+        assert_eq!(cloned.task, step.task);
+        assert_eq!(cloned.max_steps, step.max_steps);
+        assert!(format!("{step:?}").contains("AgentStep"));
+    }
+}

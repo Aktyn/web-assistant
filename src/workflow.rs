@@ -5,6 +5,8 @@ mod workflow_runtime;
 use std::path::PathBuf;
 
 pub(crate) use workflow_data::WorkflowData;
+#[cfg(test)]
+pub(crate) use workflow_loader::JsonFile;
 pub use workflow_loader::{load_from_directory, load_from_file};
 
 #[derive(Debug)]

@@ -76,7 +76,7 @@ fn run_agent_step(step: &step::AgentStep, _browser: &mut Browser) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::workflow::{Workflow, WorkflowState};
+    use crate::workflow::{JsonFile, Workflow, WorkflowState};
 
     fn default_config() -> Config {
         Config::default()
@@ -84,7 +84,7 @@ mod tests {
 
     /// Build a workflow whose state is Error (invalid JSON).
     fn workflow_with_error_state() -> Workflow {
-        Workflow::new(crate::workflow::JsonFile::from_raw(
+        Workflow::new(JsonFile::from_raw(
             std::path::PathBuf::from("/tmp/invalid-for-run-test.json"),
             "{invalid json".to_string(),
         ))
@@ -141,11 +141,12 @@ mod tests {
         );
         let mut browser = Browser::new_with_client(mock.client);
 
-        let steps = vec![step::WorkflowStep {
-            step_type: step::StepType::Navigate(step::NavigateStep {
+        let steps = vec![step::WorkflowStepType::PageAction(step::PageActionStep {
+            page_index: 0,
+            action: step::PageAction::Navigate(step::page_action::NavigateAction {
                 url: "https://example.com".to_string(),
             }),
-        }];
+        })];
         let result = run_steps(&steps, &mut browser).await;
         assert!(result.is_ok());
     }

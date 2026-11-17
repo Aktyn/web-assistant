@@ -37,12 +37,15 @@ mod tests {
         let json = r#"{
             "name":"Full",
             "description":"desc",
-            "steps":[{"type":"navigate","url":"https://example.com"}]
+            "steps":[
+                {"type":"page-action","pageIndex":0,"action":{"type":"navigate","url":"https://example.com"}},
+                {"type":"agent","task":"do something"}
+            ]
         }"#;
         let data: WorkflowData = serde_json::from_str(json).unwrap();
         assert_eq!(data.name, "Full");
         assert_eq!(data.description.as_deref(), Some("desc"));
-        assert_eq!(data.steps.len(), 1);
+        assert_eq!(data.steps.len(), 2);
     }
 
     #[test]
