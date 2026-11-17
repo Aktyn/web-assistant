@@ -259,7 +259,18 @@ mod tests {
             };
             run_workflow("my-workflow", &cli).await
         });
-        assert!(result.is_ok());
+        // The workflow lookup and config loading should succeed; the only
+        // acceptable failure is the browser not being available in the CI
+        // environment (no Chrome/Chromium installed).
+        if let Err(err) = &result {
+            let err_str = err.to_string();
+            assert!(
+                err_str.contains("Chrome")
+                    || err_str.contains("chromium")
+                    || err_str.contains("DevTools"),
+                "Expected only a browser-launch failure, got: {err_str}"
+            );
+        }
     }
 
     #[test]
