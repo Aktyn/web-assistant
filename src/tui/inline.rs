@@ -12,6 +12,36 @@ use ratatui::{
 
 use super::common::palette;
 
+/// Convenience macro that builds a [`StructDocs`] from a documented type's
+/// `DOCS`, `FIELD_NAMES`, and `FIELD_DOCS` associated constants and passes it
+/// to [`print_struct`].
+///
+/// # Examples
+///
+/// ```ignore
+/// print_struct_docs!(Config);
+/// print_struct_docs!(config::HexColorsConfig, 2);
+/// ```
+macro_rules! print_struct_docs {
+    ($struct_type:ty) => {
+        $crate::tui::inline::print_struct(&$crate::tui::inline::StructDocs {
+            description: <$struct_type>::DOCS,
+            field_names: <$struct_type>::FIELD_NAMES,
+            field_docs: <$struct_type>::FIELD_DOCS,
+            ..Default::default()
+        })
+    };
+    ($struct_type:ty, $margin_left:expr) => {
+        $crate::tui::inline::print_struct(&$crate::tui::inline::StructDocs {
+            description: <$struct_type>::DOCS,
+            field_names: <$struct_type>::FIELD_NAMES,
+            field_docs: <$struct_type>::FIELD_DOCS,
+            margin_left: Some($margin_left),
+        })
+    };
+}
+pub(crate) use print_struct_docs;
+
 #[derive(Default)]
 pub(crate) struct StructDocs {
     pub description: &'static str,
@@ -102,6 +132,9 @@ pub(crate) fn print_struct(docs: &StructDocs) -> anyhow::Result<()> {
         })
         .context("Failed to draw struct documentation")?;
 
+    let cursor_y = terminal.get_cursor_position()?.y;
+    terminal.set_cursor_position((0, cursor_y))?;
+
     Ok(())
 }
 
@@ -128,6 +161,9 @@ pub(crate) fn print_success(message: &str) -> anyhow::Result<()> {
         })
         .context("Failed to draw success message")?;
 
+    let cursor_y = terminal.get_cursor_position()?.y;
+    terminal.set_cursor_position((0, cursor_y))?;
+
     Ok(())
 }
 
@@ -141,6 +177,7 @@ mod tests {
             description: "Test",
             field_names: &["field1"],
             field_docs: &["doc1", "doc2"],
+            ..Default::default()
         };
         let result = print_struct(&docs);
         assert!(result.is_err());
@@ -152,6 +189,7 @@ mod tests {
             description: "Test struct",
             field_names: &["name", "value"],
             field_docs: &["Name doc", "Value doc"],
+            ..Default::default()
         };
         // Should not panic or error on construction.
         assert_eq!(docs.field_names.len(), 2);

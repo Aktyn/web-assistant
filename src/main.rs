@@ -18,7 +18,7 @@ use std::{
 use cli::Commands::{ExplainConfig, ExplainWorkflow, InitConfig, Run};
 use config::Config;
 
-use crate::tui::common::init_palette;
+use crate::{tui::common::init_palette, workflow::WorkflowData};
 use workflow::workflow_data::step as workflow_step;
 
 #[tokio::main]
@@ -34,7 +34,9 @@ async fn run_cli(cli: &cli::Cli) -> Result<()> {
         Some(Run { workflow }) => run_workflow(workflow, cli).await,
         Some(InitConfig { output_path }) => init_config(output_path.as_ref()).await,
         Some(ExplainConfig {}) => explain_config(),
-        Some(ExplainWorkflow {}) => explain_workflow(),
+        Some(ExplainWorkflow { include_example }) => {
+            explain_workflow(include_example.unwrap_or(false))
+        }
         None => run_tui(cli).await,
     }
 }
@@ -95,65 +97,59 @@ async fn init_config(output_path: Option<&PathBuf>) -> Result<()> {
 }
 
 fn explain_config() -> Result<()> {
-    tui::inline::print_struct(&tui::inline::StructDocs {
-        description: Config::DOCS,
-        field_names: Config::FIELD_NAMES,
-        field_docs: Config::FIELD_DOCS,
-        ..Default::default()
-    })?;
-
+    tui::inline::print_struct_docs!(Config)?;
     utils::print_lines(1);
-
-    tui::inline::print_struct(&tui::inline::StructDocs {
-        description: config::HexColorsConfig::DOCS,
-        field_names: config::HexColorsConfig::FIELD_NAMES,
-        field_docs: config::HexColorsConfig::FIELD_DOCS,
-        margin_left: Some(2),
-    })?;
-
+    tui::inline::print_struct_docs!(config::HexColorsConfig, 2)?;
     utils::print_lines(1);
-
-    tui::inline::print_struct(&tui::inline::StructDocs {
-        description: config::BrowserConfig::DOCS,
-        field_names: config::BrowserConfig::FIELD_NAMES,
-        field_docs: config::BrowserConfig::FIELD_DOCS,
-        margin_left: Some(2),
-    })?;
+    tui::inline::print_struct_docs!(config::BrowserConfig, 2)?;
 
     Ok(())
 }
 
-fn explain_workflow() -> Result<()> {
-    //TODO: move descriptions to doc comments
-    tui::inline::print_struct(&tui::inline::StructDocs {
-        description: workflow::WorkflowData::DOCS,
-        field_names: workflow::WorkflowData::FIELD_NAMES,
-        field_docs: workflow::WorkflowData::FIELD_DOCS,
-        ..Default::default()
-    })?;
+fn explain_workflow(include_example: bool) -> Result<()> {
+    tui::inline::print_struct_docs!(workflow::WorkflowData)?;
 
     utils::print_lines(1);
 
-    tui::inline::print_struct(&tui::inline::StructDocs {
-        description: workflow_step::PageActionStep::DOCS,
-        field_names: workflow_step::PageActionStep::FIELD_NAMES,
-        field_docs: workflow_step::PageActionStep::FIELD_DOCS,
-        margin_left: Some(2),
-    })?;
+    tui::inline::print_struct_docs!(workflow_step::PageActionStep, 2)?;
     utils::print_lines(1);
-    tui::inline::print_struct(&tui::inline::StructDocs {
-        description: workflow_step::page_action::NavigateAction::DOCS,
-        field_names: workflow_step::page_action::NavigateAction::FIELD_NAMES,
-        field_docs: workflow_step::page_action::NavigateAction::FIELD_DOCS,
-        margin_left: Some(4),
-    })?;
+    tui::inline::print_struct_docs!(workflow_step::page_action::NavigateAction, 4)?;
     utils::print_lines(1);
-    tui::inline::print_struct(&tui::inline::StructDocs {
-        description: workflow_step::AgentStep::DOCS,
-        field_names: workflow_step::AgentStep::FIELD_NAMES,
-        field_docs: workflow_step::AgentStep::FIELD_DOCS,
-        margin_left: Some(2),
-    })?;
+    tui::inline::print_struct_docs!(workflow_step::AgentStep, 2)?;
+
+    if include_example {
+        utils::print_lines(2);
+
+        let example: WorkflowData = workflow::WorkflowData {
+            name: String::from("Example"),
+            description: Some(String::from("Example workflow description")),
+            steps: vec![
+                workflow_step::WorkflowStepType::PageAction(workflow_step::PageActionStep {
+                    page_index: 0,
+                    action: workflow_step::PageAction::Navigate(
+                        workflow_step::page_action::NavigateAction {
+                            url: String::from("https://github.com/Aktyn/web-assistant"),
+                        },
+                    ),
+                }),
+                workflow_step::WorkflowStepType::Agent(workflow_step::AgentStep {
+                    task: String::from(
+                        "Star this repository and print total number of stars the repository has.",
+                    ),
+                    max_steps: 16,
+                    history_output: Some(PathBuf::from("./repo-stars-agent-run.json")),
+                }),
+            ],
+        };
+        let json = serde_json::to_string_pretty(&example)?.replace('\n', "\r\n");
+        let output = format!("Example workflow json:\r\n{json}");
+        stdout().write_all(output.as_bytes()).ok();
+    } else {
+        utils::print_lines(1);
+        stdout()
+            .write_all(b"\nUse --include-example argument to print an example workflow file\n")
+            .ok();
+    }
 
     Ok(())
 }

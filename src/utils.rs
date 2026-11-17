@@ -117,7 +117,7 @@ pub fn open_file(path: &Path) -> Result<std::process::Child> {
 }
 
 pub fn print_lines(count: u16) {
-    stdout().write_all(&b"\n".repeat(count.into())).ok();
+    stdout().write_all(&b"\r\n".repeat(count.into())).ok();
 }
 
 #[cfg(test)]

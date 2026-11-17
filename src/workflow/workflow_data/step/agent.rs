@@ -8,16 +8,16 @@ use serde::{Deserialize, Serialize};
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct AgentStep {
     /// Prompt sent to the agent
-    task: String,
+    pub task: String,
 
     /// Maximum number of steps the agent is allowed to take
     /// Default is 64
     #[serde(default = "default_max_steps", alias = "maxSteps", rename = "maxSteps")]
-    max_steps: u16,
+    pub max_steps: u16,
 
     /// Path to where the steps agent decided to run will be saved
     #[serde(alias = "historyOutput", rename = "historyOutput")]
-    history_output: Option<PathBuf>,
+    pub history_output: Option<PathBuf>,
     //TODO:
     // promptMode: "standard",
     // "judge": {
