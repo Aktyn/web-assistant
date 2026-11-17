@@ -145,6 +145,7 @@ pub const EXTRACT_DOM_JS: &str = r#"
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_element_rect_center() {
@@ -244,5 +245,37 @@ mod tests {
         assert_ne!(EXTRACT_DOM_JS, "");
         assert!(EXTRACT_DOM_JS.contains("getBoundingClientRect"));
         assert!(EXTRACT_DOM_JS.contains("interactiveSelectors"));
+    }
+
+    #[test]
+    fn test_enhanced_element_structure() {
+        let elem = EnhancedElement {
+            index: 5,
+            tag: "a".into(),
+            text: "Link".into(),
+            attributes: HashMap::from([("href".into(), "https://example.com".into())]),
+            x: 100.0,
+            y: 200.0,
+        };
+        assert_eq!(elem.index, 5);
+        assert_eq!(elem.tag, "a");
+        assert_eq!(
+            elem.attributes.get("href"),
+            Some(&"https://example.com".to_string())
+        );
+    }
+
+    #[test]
+    fn test_browser_state_clone() {
+        let state = BrowserState {
+            url: "https://example.com".into(),
+            title: "Example".into(),
+            elements: vec![],
+            text: "Content".into(),
+        };
+        let cloned = state.clone();
+        assert_eq!(state.url, cloned.url);
+        assert_eq!(state.title, cloned.title);
+        assert_eq!(state.text, cloned.text);
     }
 }

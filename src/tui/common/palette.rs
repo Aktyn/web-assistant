@@ -250,4 +250,84 @@ mod tests {
         let palette = TuiPalette::from_config(&config);
         assert_eq!(palette.background, Color::Rgb(170, 187, 204));
     }
+
+    #[test]
+    fn test_init_and_get_palette() {
+        // init() sets the global palette; if it was already set by another test,
+        // this will panic. We test that get() returns a valid palette.
+        let palette = get();
+        // Verify the returned palette has sensible defaults
+        assert_eq!(palette.foreground, Color::Rgb(236, 239, 241));
+        assert_eq!(palette.accent, Color::Rgb(77, 182, 172));
+    }
+
+    #[test]
+    fn test_parse_hex_color_returns_none_for_invalid() {
+        assert!(parse_hex_color("invalid").is_none());
+        assert!(parse_hex_color("#zzzzzz").is_none());
+        assert!(parse_hex_color("#12345").is_none());
+    }
+
+    #[test]
+    fn test_parse_hex_color_returns_some_for_valid() {
+        assert!(parse_hex_color("#ffffff").is_some());
+        assert!(parse_hex_color("#abc").is_some());
+        assert!(parse_hex_color("ffffff").is_some());
+    }
+
+    #[test]
+    fn test_parse_hex_string_none_returns_none() {
+        assert!(parse_hex_string(None).is_none());
+    }
+
+    #[test]
+    fn test_parse_hex_string_some_returns_color() {
+        let opt: Option<String> = Some("#000000".to_string());
+        let color = parse_hex_string(opt.as_ref());
+        assert_eq!(color, Some(Color::Rgb(0, 0, 0)));
+    }
+
+    #[test]
+    fn test_tui_palette_default_values() {
+        let palette = TuiPalette::default();
+        assert_eq!(palette.background, Color::Reset);
+        assert_eq!(palette.muted_foreground, Color::Rgb(120, 144, 156));
+        assert_eq!(palette.disabled, Color::Rgb(158, 158, 158));
+        assert_eq!(palette.success_foreground, Color::Rgb(129, 199, 132));
+    }
+
+    #[test]
+    fn test_from_config_all_fields_set() {
+        let config = HexColorsConfig {
+            background: Some("#000000".to_string()),
+            foreground: Some("#ffffff".to_string()),
+            border: Some("#ff0000".to_string()),
+            muted_foreground: Some("#00ff00".to_string()),
+            accent: Some("#0000ff".to_string()),
+            disabled: Some("#aaaaaa".to_string()),
+            error_foreground: Some("#bb0000".to_string()),
+            success_foreground: Some("#00bb00".to_string()),
+        };
+        let palette = TuiPalette::from_config(&config);
+        assert_eq!(palette.background, Color::Rgb(0, 0, 0));
+        assert_eq!(palette.foreground, Color::Rgb(255, 255, 255));
+        assert_eq!(palette.border, Color::Rgb(255, 0, 0));
+        assert_eq!(palette.muted_foreground, Color::Rgb(0, 255, 0));
+        assert_eq!(palette.accent, Color::Rgb(0, 0, 255));
+        assert_eq!(palette.disabled, Color::Rgb(170, 170, 170));
+        assert_eq!(palette.error_foreground, Color::Rgb(187, 0, 0));
+        assert_eq!(palette.success_foreground, Color::Rgb(0, 187, 0));
+    }
+
+    #[test]
+    fn test_from_config_only_foreground_set() {
+        let config = HexColorsConfig {
+            foreground: Some("#112233".to_string()),
+            ..Default::default()
+        };
+        let palette = TuiPalette::from_config(&config);
+        assert_eq!(palette.foreground, Color::Rgb(17, 34, 51));
+        // Other fields should keep defaults
+        assert_eq!(palette.background, TuiPalette::default().background);
+    }
 }

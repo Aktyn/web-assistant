@@ -94,4 +94,30 @@ mod tests {
         let result = run_steps(&Vec::new(), &mut browser).await;
         assert!(result.is_ok());
     }
+
+    #[tokio::test]
+    async fn test_run_steps_with_navigate_uses_browser() {
+        use crate::browser::cdp::MockCdp;
+
+        let state_json = serde_json::json!({
+            "url": "https://example.com",
+            "title": "Example",
+            "elements": [],
+            "text": ""
+        });
+        let mock = MockCdp::new();
+        mock.set(
+            "Runtime.evaluate",
+            serde_json::json!({"result": {"value": state_json}}),
+        );
+        let mut browser = Browser::new_with_client(mock.client);
+
+        let steps = vec![step::WorkflowStep {
+            step_type: step::StepType::Navigate(step::NavigateStep {
+                url: "https://example.com".to_string(),
+            }),
+        }];
+        let result = run_steps(&steps, &mut browser).await;
+        assert!(result.is_ok());
+    }
 }

@@ -89,4 +89,42 @@ mod tests {
         let cli = Cli::try_parse_from(["test"]).unwrap();
         assert!(cli.command.is_none());
     }
+
+    #[test]
+    fn test_cli_run_command() {
+        let cli = Cli::try_parse_from(["test", "run", "--workflow", "my-workflow"]).unwrap();
+        match cli.command {
+            Some(Commands::Run { workflow }) => assert_eq!(workflow, "my-workflow"),
+            _ => panic!("Expected Run command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_run_command_short() {
+        let cli = Cli::try_parse_from(["test", "run", "-w", "short-wf"]).unwrap();
+        match cli.command {
+            Some(Commands::Run { workflow }) => assert_eq!(workflow, "short-wf"),
+            _ => panic!("Expected Run command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_explain_config_command() {
+        let cli = Cli::try_parse_from(["test", "explain-config"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::ExplainConfig {})));
+    }
+
+    #[test]
+    fn test_cli_init_config_default_path() {
+        let cli = Cli::try_parse_from(["test", "init-config"]).unwrap();
+        match cli.command {
+            Some(Commands::InitConfig { output_path }) => {
+                assert_eq!(
+                    output_path.as_deref(),
+                    Some(PathBuf::from(config::DEFAULT_CONFIG_FILE).as_path())
+                );
+            }
+            _ => panic!("Expected InitConfig command"),
+        }
+    }
 }
