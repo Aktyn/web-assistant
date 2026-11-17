@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use std::path::{Path, PathBuf};
 use tokio::fs::DirEntry;
 
@@ -39,18 +39,14 @@ fn truncate(text: &str, limit: usize, suffix: Option<&str>, from_left: bool) -> 
 }
 
 /// Returns list of JSON files found in the given directory
-pub async fn read_json_files(directory_path: &Path) -> Vec<DirEntry> {
+/// # Errors
+/// This function will return an error if the directory does not exist or is not a directory.
+pub async fn read_json_files(directory_path: &Path) -> Result<Vec<DirEntry>> {
     if !directory_path.exists() {
-        return vec![];
+        bail!("directory does not exist: {}", directory_path.display());
     }
 
-    let mut dir = match tokio::fs::read_dir(directory_path).await {
-        Ok(dir) => dir,
-        Err(e) => {
-            log::error!("error reading workflows directory: {e}");
-            return vec![];
-        }
-    };
+    let mut dir = tokio::fs::read_dir(directory_path).await?;
 
     let mut entries = Vec::new();
     loop {
@@ -66,7 +62,7 @@ pub async fn read_json_files(directory_path: &Path) -> Vec<DirEntry> {
             }
         }
     }
-    entries
+    Ok(entries)
 }
 
 async fn filter_entry_by_extension(entry: &DirEntry, extension: &str) -> bool {
@@ -297,7 +293,7 @@ mod tests {
     async fn test_read_json_files_nonexistent_directory_returns_empty() {
         let nonexistent = PathBuf::from("/tmp/does_not_exist_xyz_12345");
         let result = read_json_files(&nonexistent).await;
-        assert!(result.is_empty());
+        assert!(result.is_err());
     }
 
     #[test]

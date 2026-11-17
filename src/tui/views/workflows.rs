@@ -188,7 +188,7 @@ impl View for WorkflowView {
 mod tests {
     use super::*;
     use crate::tui::views::View;
-    use crate::workflow::{Workflow, WorkflowDataJson};
+    use crate::workflow::{JsonFile, Workflow};
     use crossterm::event::{Event, KeyCode};
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
@@ -200,9 +200,9 @@ mod tests {
     }
 
     fn make_workflow(name: &str) -> Workflow {
-        let json = WorkflowDataJson::from_raw(
+        let json = JsonFile::from_raw(
             PathBuf::from("/tmp/test.json"),
-            format!(r#"{{"name":"{name}"}}"#),
+            format!(r#"{{"name":"{name}","steps":[]}}"#),
         );
         Workflow::new(json)
     }

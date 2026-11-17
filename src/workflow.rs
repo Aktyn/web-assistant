@@ -1,21 +1,17 @@
+mod workflow_data;
 mod workflow_loader;
+mod workflow_runtime;
 
-use serde::Deserialize;
 use std::path::PathBuf;
 
+pub(crate) use workflow_data::WorkflowData;
 #[cfg(test)]
-pub(crate) use workflow_loader::WorkflowDataJson;
-pub use workflow_loader::load_from_directory;
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct WorkflowData {
-    pub name: String,
-    pub description: Option<String>,
-}
+pub(crate) use workflow_loader::JsonFile;
+pub use workflow_loader::{load_from_directory, load_from_file};
 
 #[derive(Debug)]
 pub enum WorkflowState {
-    Data(WorkflowData),
+    Valid(WorkflowData),
     Error(serde_json::Error),
 }
 
@@ -27,10 +23,11 @@ pub struct Workflow {
 }
 
 impl Workflow {
-    pub(crate) fn new(json: workflow_loader::WorkflowDataJson) -> Self {
+    #[must_use]
+    pub(crate) fn new(json: workflow_loader::JsonFile) -> Self {
         match serde_json::from_str(&json.content) {
             Ok(data) => Workflow {
-                state: WorkflowState::Data(data),
+                state: WorkflowState::Valid(data),
                 file_path: Some(json.path),
             },
             Err(e) => Workflow {
@@ -43,12 +40,17 @@ impl Workflow {
     #[must_use]
     pub fn new_draft() -> Self {
         Workflow {
-            state: WorkflowState::Data(WorkflowData {
+            state: WorkflowState::Valid(WorkflowData {
                 name: "Draft workflow".to_string(),
                 description: None,
+                steps: vec![],
             }),
             file_path: None,
         }
+    }
+
+    fn is_draft(&self) -> bool {
+        self.file_path.is_none()
     }
 }
 
@@ -58,73 +60,67 @@ mod tests {
     use super::*;
     #[tokio::test]
     async fn test_workflow_data_json_valid_file() {
-        let json_content = "{\"name\": \"Test Workflow\"}";
+        let json_content = "{\"name\": \"Test Workflow\", \"steps\":[]}";
         let tmp = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(tmp.path(), json_content).unwrap();
         let path = tmp.path().to_path_buf();
-        let json = WorkflowDataJson {
-            path: path.clone(),
-            content: json_content.to_string(),
-        };
+        let json = JsonFile::from_raw(path.clone(), json_content.to_string());
         let workflow = Workflow::new(json);
         match &workflow.state {
-            WorkflowState::Data(data) => {
+            WorkflowState::Valid(data) => {
                 assert_eq!(data.name, "Test Workflow");
             }
-            WorkflowState::Error(_) => panic!("Expected Data variant"),
+            WorkflowState::Error(_) => panic!("Expected Valid variant"),
         }
         assert_eq!(workflow.file_path, Some(path));
     }
 
     #[tokio::test]
     async fn test_workflow_data_json_invalid_json() {
-        let json = WorkflowDataJson {
-            path: PathBuf::from("/fake/path.json"),
-            content: "{invalid json".to_string(),
-        };
+        let json = JsonFile::from_raw(
+            PathBuf::from("/fake/path.json"),
+            "{invalid json".to_string(),
+        );
         let workflow = Workflow::new(json);
         match &workflow.state {
             WorkflowState::Error(_) => {} // expected
-            WorkflowState::Data(_) => panic!("Expected Error variant"),
+            WorkflowState::Valid(_) => panic!("Expected Error variant"),
         }
     }
 
     #[tokio::test]
     async fn test_workflow_data_json_missing_name_field() {
-        let json = WorkflowDataJson {
-            path: PathBuf::from("/fake/path2.json"),
-            content: r#"{"other": "value"}"#.to_string(),
-        };
+        let json = JsonFile::from_raw(
+            PathBuf::from("/fake/path2.json"),
+            r#"{"other": "value"}"#.to_string(),
+        );
         let workflow = Workflow::new(json);
         match &workflow.state {
             WorkflowState::Error(_) => {} // missing required `name` field → deserialize error
-            WorkflowState::Data(_) => panic!("Expected Error variant"),
+            WorkflowState::Valid(_) => panic!("Expected Error variant"),
         }
     }
 
     #[tokio::test]
     async fn test_workflow_data_json_empty_object() {
-        let json = WorkflowDataJson {
-            path: PathBuf::from("/fake/path3.json"),
-            content: "{}".to_string(),
-        };
+        let json = JsonFile::from_raw(PathBuf::from("/fake/path3.json"), "{}".to_string());
         let workflow = Workflow::new(json);
         match &workflow.state {
             WorkflowState::Error(_) => {}
-            WorkflowState::Data(_) => panic!("Expected Error variant"),
+            WorkflowState::Valid(_) => panic!("Expected Error variant"),
         }
     }
 
     #[tokio::test]
     async fn test_workflow_data_json_null_name() {
-        let json = WorkflowDataJson {
-            path: PathBuf::from("/fake/path4.json"),
-            content: r#"{"name": null}"#.to_string(),
-        };
+        let json = JsonFile::from_raw(
+            PathBuf::from("/fake/path4.json"),
+            r#"{"name": null}"#.to_string(),
+        );
         let workflow = Workflow::new(json);
         match &workflow.state {
             WorkflowState::Error(_) => {}
-            WorkflowState::Data(_) => panic!("Expected Error variant"),
+            WorkflowState::Valid(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -133,21 +129,23 @@ mod tests {
         let data = WorkflowData {
             name: "My Workflow".to_string(),
             description: Some("description".to_string()),
+            steps: vec![],
         };
-        let state = WorkflowState::Data(data);
+        let state = WorkflowState::Valid(data);
         let debug_str = format!("{state:?}");
         assert!(debug_str.contains("My Workflow"));
     }
 
     #[test]
     fn test_workflow_state_variant_match() {
-        let state = WorkflowState::Data(WorkflowData {
+        let state = WorkflowState::Valid(WorkflowData {
             name: "ok".to_string(),
             description: None,
+            steps: vec![],
         });
         match state {
-            WorkflowState::Data(d) => assert_eq!(d.name, "ok"),
-            WorkflowState::Error(_) => panic!("Expected Data"),
+            WorkflowState::Valid(d) => assert_eq!(d.name, "ok"),
+            WorkflowState::Error(_) => panic!("Expected Valid variant"),
         }
     }
 
@@ -156,6 +154,7 @@ mod tests {
         let data = WorkflowData {
             name: "clone-test".to_string(),
             description: Some("test description".to_string()),
+            steps: vec![],
         };
         let cloned = data.clone();
         assert_eq!(data.name, cloned.name);
@@ -166,20 +165,17 @@ mod tests {
         let draft = Workflow::new_draft();
         assert!(draft.file_path.is_none());
         match &draft.state {
-            WorkflowState::Data(d) => {
+            WorkflowState::Valid(d) => {
                 assert_eq!(d.name, "Draft workflow");
                 assert!(d.description.is_none());
             }
-            WorkflowState::Error(_) => panic!("Expected Data variant"),
+            WorkflowState::Error(_) => panic!("Expected Valid variant"),
         }
     }
 
     #[test]
     fn test_workflow_state_error_contains_message() {
-        let json = WorkflowDataJson {
-            path: PathBuf::from("/tmp/bad.json"),
-            content: "{invalid".to_string(),
-        };
+        let json = JsonFile::from_raw(PathBuf::from("/tmp/bad.json"), "{invalid".to_string());
         let wf = Workflow::new(json);
         match &wf.state {
             WorkflowState::Error(e) => {
@@ -188,15 +184,16 @@ mod tests {
                 let err_str = e.to_string();
                 assert!(!err_str.is_empty(), "error message should not be empty");
             }
-            WorkflowState::Data(_) => panic!("Expected Error variant"),
+            WorkflowState::Valid(_) => panic!("Expected Error variant"),
         }
     }
 
     #[test]
     fn test_workflow_state_debug_display() {
-        let state = WorkflowState::Data(WorkflowData {
+        let state = WorkflowState::Valid(WorkflowData {
             name: "Test".to_string(),
             description: None,
+            steps: vec![],
         });
         let s = format!("{state:?}");
         assert!(s.contains("Test"));
@@ -205,32 +202,35 @@ mod tests {
     #[tokio::test]
     async fn test_load_from_directory_empty_returns_empty() {
         let tmp = tempfile::tempdir().unwrap();
-        let workflows = load_from_directory(&tmp.path().to_path_buf()).await;
+        let workflows = load_from_directory(tmp.path()).await.unwrap();
         assert!(workflows.is_empty());
     }
 
     #[tokio::test]
     async fn test_load_from_directory_nonexistent_returns_empty() {
         let nonexistent = PathBuf::from("/tmp/does_not_exist_xyz_12345");
-        let workflows = load_from_directory(&nonexistent).await;
-        assert!(workflows.is_empty());
+        let result = load_from_directory(&nonexistent).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_load_from_directory_with_valid_file() {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("test.json");
-        tokio::fs::write(&path, r#"{"name":"MyWorkflow","description":"desc"}"#)
-            .await
-            .unwrap();
-        let workflows = load_from_directory(&tmp.path().to_path_buf()).await;
+        tokio::fs::write(
+            &path,
+            r#"{"name":"MyWorkflow","description":"desc","steps":[]}"#,
+        )
+        .await
+        .unwrap();
+        let workflows = load_from_directory(tmp.path()).await.unwrap();
         assert_eq!(workflows.len(), 1);
         match &workflows[0].state {
-            WorkflowState::Data(d) => {
+            WorkflowState::Valid(d) => {
                 assert_eq!(d.name, "MyWorkflow");
                 assert_eq!(d.description.as_deref(), Some("desc"));
             }
-            WorkflowState::Error(_) => panic!("Expected Data variant"),
+            WorkflowState::Error(_) => panic!("Expected Valid variant"),
         }
     }
 
@@ -241,13 +241,13 @@ mod tests {
         tokio::fs::write(tmp.path().join("readme.txt"), "hello")
             .await
             .unwrap();
-        let workflows = load_from_directory(&tmp.path().to_path_buf()).await;
+        let workflows = load_from_directory(tmp.path()).await.unwrap();
         assert!(workflows.is_empty());
     }
 
     #[test]
     fn test_workflow_data_deserialization_missing_description_defaults_to_none() {
-        let json_str = r#"{"name":"NoDesc"}"#;
+        let json_str = r#"{"name":"NoDesc","steps":[]}"#;
         let data: WorkflowData = serde_json::from_str(json_str).unwrap();
         assert_eq!(data.name, "NoDesc");
         assert!(data.description.is_none());
@@ -255,7 +255,7 @@ mod tests {
 
     #[test]
     fn test_workflow_data_deserialization_full() {
-        let json_str = r#"{"name":"Full","description":"A full workflow"}"#;
+        let json_str = r#"{"name":"Full","description":"A full workflow","steps":[]}"#;
         let data: WorkflowData = serde_json::from_str(json_str).unwrap();
         assert_eq!(data.name, "Full");
         assert_eq!(data.description.as_deref(), Some("A full workflow"));
@@ -268,5 +268,55 @@ mod tests {
             let _json: WorkflowData = serde_json::from_str("not json at all").unwrap();
         });
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_workflow_is_draft_for_new_workflow() {
+        let workflow = Workflow::new_draft();
+        assert!(workflow.is_draft());
+    }
+
+    #[test]
+    fn test_workflow_is_not_draft_for_loaded_workflow() {
+        let json = JsonFile::from_raw(
+            PathBuf::from("/tmp/loaded.json"),
+            r#"{"name":"Loaded","steps":[]}"#.to_string(),
+        );
+        let workflow = Workflow::new(json);
+        assert!(!workflow.is_draft());
+    }
+
+    #[tokio::test]
+    async fn test_load_from_file_valid_workflow() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("workflow.json");
+        tokio::fs::write(
+            &path,
+            r#"{"name":"FromFile","description":"desc","steps":[]}"#,
+        )
+        .await
+        .unwrap();
+        let workflow = load_from_file(&path).await.unwrap();
+        assert!(workflow.file_path.is_some());
+        match &workflow.state {
+            WorkflowState::Valid(data) => {
+                assert_eq!(data.name, "FromFile");
+                assert_eq!(data.description.as_deref(), Some("desc"));
+            }
+            WorkflowState::Error(_) => panic!("Expected Valid variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_load_from_file_nonexistent_path() {
+        let nonexistent = PathBuf::from("/tmp/does_not_exist_for_workflow_xyz.json");
+        let result = load_from_file(&nonexistent).await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("File does not exist")
+        );
     }
 }

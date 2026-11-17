@@ -29,6 +29,7 @@ pub(crate) enum Commands {
         #[arg(short, long, default_value = config::DEFAULT_CONFIG_FILE, value_hint=FilePath)]
         output_path: Option<PathBuf>,
     },
+
     /// Explains the config file
     ExplainConfig {},
 }

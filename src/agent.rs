@@ -1,5 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
-
 pub mod judge;
 pub mod prompts;
 mod variable_detector;
@@ -34,7 +32,7 @@ impl Agent {
         Self {
             task: task.into(),
             llm,
-            browser: Browser::new(None),
+            browser: Browser::default(),
             system_prompt: SystemPrompt::default(),
             max_steps: 20,
             history: AgentHistoryList::new(),
@@ -656,7 +654,7 @@ mod tests {
             .api_key("")
             .base_url("http://localhost:9999")
             .build();
-        let browser = Browser::new(None);
+        let browser = Browser::new(&crate::config::BrowserConfig::default());
         let agent = Agent::new_with_browser("Browser test", llm, browser);
         assert_eq!(agent.task, "Browser test");
         assert_eq!(agent.max_steps, 20);

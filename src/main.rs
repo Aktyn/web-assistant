@@ -24,26 +24,6 @@ async fn main() -> Result<()> {
 
     let cli = cli::get_cli();
     run_cli(&cli).await
-
-    // let config = browser::BrowserConfig {
-    //     headless: false,
-    //     ..Default::default()
-    // };
-    // let mut browser = browser::Browser::new(Some(config));
-    // match browser.start().await {
-    //     Ok(_) => println!("Browser started successfully"),
-    //     Err(e) => return Err(anyhow::anyhow!("Browser failed to start: \"{e}\"")),
-    // };
-    //
-    // match browser.navigate("https://example.com").await {
-    //     Ok(_) => println!("Navigation successful"),
-    //     Err(e) => println!("Navigation failed: {e}"),
-    // };
-    //
-    // You can check the value provided by positional arguments, or option arguments
-    // if let Some(name) = cli.name.as_deref() {
-    //     println!("Value for name: {name}");
-    // }
 }
 
 async fn run_cli(cli: &cli::Cli) -> Result<()> {
@@ -56,6 +36,8 @@ async fn run_cli(cli: &cli::Cli) -> Result<()> {
 }
 
 async fn run_workflow(workflow_path_or_name: &str, cli: &cli::Cli) -> Result<()> {
+    let _ = env_logger::try_init();
+
     log::info!("Running workflow: {workflow_path_or_name}");
 
     let config_path = cli
@@ -63,9 +45,29 @@ async fn run_workflow(workflow_path_or_name: &str, cli: &cli::Cli) -> Result<()>
         .as_ref()
         .context("Config path is required")?;
     let config = config::load_config(config_path).await;
-    log::info!("Loaded config: {config:?}");
-    // TODO: Implement inline workflow execution
-    // let workflow = workflow::load_from_file(workflow).await;
+
+    let possible_path = PathBuf::from(workflow_path_or_name);
+    let mut workflow = if possible_path.exists() && possible_path.is_file() {
+        workflow::load_from_file(&possible_path)
+            .await
+            .context("Couldn't load workflow from file")?
+    } else {
+        // Load all workflows from config.workflowsDirectory and find the one with matching name
+        let directory_workflows =
+            workflow::load_from_directory(&config.workflows_directory).await?;
+        let matching_workflow = directory_workflows.into_iter().find(|workflow| {
+            matches!(
+                &workflow.state,
+                workflow::WorkflowState::Valid(data) if data.name.eq_ignore_ascii_case(workflow_path_or_name)
+            )
+        });
+
+        matching_workflow.context(format!(
+            "No workflow found matching name \"{workflow_path_or_name}\""
+        ))?
+    };
+
+    workflow.run(&config).await?;
 
     Ok(())
 }
@@ -94,10 +96,20 @@ fn explain_config() -> Result<()> {
     stdout().write_all(b"\n\n").ok();
 
     tui::inline::print_struct(&tui::inline::StructDocs {
-        description: "HexColorsConfig object. All fields are optional.",
+        description: "HexColorsConfig. All fields are optional.",
         field_names: config::HexColorsConfig::FIELD_NAMES,
         field_docs: config::HexColorsConfig::FIELD_DOCS,
-    })
+    })?;
+
+    stdout().write_all(b"\n\n").ok();
+
+    tui::inline::print_struct(&tui::inline::StructDocs {
+        description: "BrowserConfig. Used when starting the browser",
+        field_names: config::BrowserConfig::FIELD_NAMES,
+        field_docs: config::BrowserConfig::FIELD_DOCS,
+    })?;
+
+    Ok(())
 }
 
 async fn run_tui(cli: &cli::Cli) -> Result<()> {
@@ -220,9 +232,21 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let config_path = tmp.path().join("config.json");
+        // Create a workflow file in the temp directory.
+        let wf_dir = tmp.path().join("workflows");
+        std::fs::create_dir(&wf_dir).unwrap();
+        std::fs::write(
+            wf_dir.join("my-workflow.json"),
+            r#"{"name":"my-workflow","steps":[]}"#,
+        )
+        .unwrap();
+        let config_json = serde_json::json!({
+            "workflowsDirectory": wf_dir.to_str().unwrap(),
+            "browser": { "headless": true }
+        });
         std::fs::write(
             &config_path,
-            serde_json::to_string_pretty(&Config::default()).unwrap(),
+            serde_json::to_string_pretty(&config_json).unwrap(),
         )
         .unwrap();
 
@@ -243,9 +267,21 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let config_path = tmp.path().join("config.json");
+        // Create a workflow file in the temp directory.
+        let wf_dir = tmp.path().join("workflows");
+        std::fs::create_dir(&wf_dir).unwrap();
+        std::fs::write(
+            wf_dir.join("test-wf.json"),
+            r#"{"name":"test-wf","steps":[]}"#,
+        )
+        .unwrap();
+        let config_json = serde_json::json!({
+            "workflowsDirectory": wf_dir.to_str().unwrap(),
+            "browser": { "headless": true }
+        });
         std::fs::write(
             &config_path,
-            serde_json::to_string_pretty(&Config::default()).unwrap(),
+            serde_json::to_string_pretty(&config_json).unwrap(),
         )
         .unwrap();
 
@@ -256,6 +292,13 @@ mod tests {
             }),
         };
         let result = rt.block_on(run_cli(&cli));
-        assert!(result.is_ok());
+        // The workflow lookup should succeed; browser.start() may fail in CI env.
+        if let Err(err) = &result {
+            let err_str = err.to_string();
+            assert!(
+                !err_str.contains("No workflow found"),
+                "Expected workflow lookup to succeed, got: {err_str}"
+            );
+        }
     }
 }

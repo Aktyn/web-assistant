@@ -1,5 +1,4 @@
-#![allow(clippy::missing_errors_doc)]
-
+//TODO: remove pub from mod declarations
 pub mod cdp;
 mod dom;
 pub mod watchdogs;
@@ -7,20 +6,13 @@ pub mod watchdogs;
 use anyhow::{Context, Result, anyhow};
 use cdp::{BrowserProcess, CdpClient};
 use dom::{BrowserState, ElementRect, EnhancedElement};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, warn};
 use watchdogs::BrowserWatchdogs;
 
-#[derive(Debug, Clone, Default)]
-pub struct BrowserConfig {
-    pub headless: bool,
-    pub executable_path: Option<PathBuf>,
-    pub user_data_dir: Option<PathBuf>,
-    pub downloads_dir: Option<PathBuf>,
-    pub cdp_url: Option<String>,
-}
+use crate::config::BrowserConfig;
 
 pub struct Browser {
     pub config: BrowserConfig,
@@ -32,19 +24,14 @@ pub struct Browser {
 
 impl Browser {
     #[must_use]
-    pub fn new(conf: Option<BrowserConfig>) -> Self {
+    pub fn new(config: &BrowserConfig) -> Self {
         Self {
-            config: conf.unwrap_or_default(),
+            config: config.clone(),
             process: None,
             client: None,
             watchdogs: None,
             cached_state: None,
         }
-    }
-
-    #[must_use]
-    pub fn builder() -> BrowserBuilder {
-        BrowserBuilder::default()
     }
 
     pub async fn start(&mut self) -> Result<()> {
@@ -696,55 +683,7 @@ fn find_largest_visible_quad(
 
 impl Default for Browser {
     fn default() -> Self {
-        Self::new(None)
-    }
-}
-
-#[derive(Default)]
-pub struct BrowserBuilder {
-    config: BrowserConfig,
-}
-
-impl BrowserBuilder {
-    #[must_use]
-    pub fn headless(mut self, headless: bool) -> Self {
-        self.config.headless = headless;
-        self
-    }
-
-    #[must_use]
-    pub fn executable_path(mut self, path: impl Into<PathBuf>) -> Self {
-        self.config.executable_path = Some(path.into());
-        self
-    }
-
-    #[must_use]
-    pub fn user_data_dir(mut self, path: impl Into<PathBuf>) -> Self {
-        self.config.user_data_dir = Some(path.into());
-        self
-    }
-
-    #[must_use]
-    pub fn downloads_dir(mut self, path: impl Into<PathBuf>) -> Self {
-        self.config.downloads_dir = Some(path.into());
-        self
-    }
-
-    #[must_use]
-    pub fn cdp_url(mut self, url: impl Into<String>) -> Self {
-        self.config.cdp_url = Some(url.into());
-        self
-    }
-
-    #[must_use]
-    pub fn build(self) -> Browser {
-        Browser {
-            config: self.config,
-            process: None,
-            client: None,
-            watchdogs: None,
-            cached_state: None,
-        }
+        Self::new(&BrowserConfig::default())
     }
 }
 
@@ -983,7 +922,7 @@ mod tests {
 
         let file_url = format!("file://{}", html_path.display());
 
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
 
         // Navigate to the test page
@@ -1082,7 +1021,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         .unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1108,14 +1047,6 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         assert_eq!(value.as_str().unwrap(), "react_text_test");
 
         browser.close().await.unwrap();
-    }
-
-    #[test]
-    fn test_builder_construction() {
-        let browser = BrowserBuilder::default().headless(true).build();
-        assert!(browser.config.headless);
-        assert!(browser.client.is_none());
-        assert!(browser.process.is_none());
     }
 
     #[test]
@@ -1259,7 +1190,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, html_content).unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1304,7 +1235,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, html_content).unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1341,7 +1272,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, "<html><body></body></html>").unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1395,7 +1326,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
     fn test_quad_viewport_intersection() {
         // Test case: quad fully inside viewport
         let quads: Vec<Vec<f64>> = vec![vec![0.0, 0.0, 100.0, 0.0, 100.0, 100.0, 0.0, 100.0]];
-        let browser = Browser::new(None);
+        let browser = Browser::new(&crate::config::BrowserConfig::default());
         let _ = browser;
         let result = find_largest_visible_quad(&quads, 800.0, 600.0);
         assert!(result.is_some());
@@ -1493,7 +1424,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, html_content).unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1567,7 +1498,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         .unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1734,13 +1665,13 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
 
     #[tokio::test]
     async fn test_user_data_dir_none_before_start() {
-        let browser = Browser::new(None);
+        let browser = Browser::new(&crate::config::BrowserConfig::default());
         assert!(browser.user_data_dir().is_none());
     }
 
     #[tokio::test]
     async fn test_watchdogs_none_before_start() {
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         assert!(browser.watchdogs().is_none());
         assert!(browser.watchdogs_mut().is_none());
     }
@@ -1773,7 +1704,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
 
     #[tokio::test]
     async fn test_wait_succeeds() {
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         let result = browser.wait(0).await;
         assert!(result.is_ok());
     }
@@ -1797,7 +1728,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         .unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1833,7 +1764,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         .unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
 
@@ -1846,7 +1777,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
     #[tokio::test]
     #[ignore = "Requires Chrome/Chromium"]
     async fn test_live_browser_user_data_dir() {
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         assert!(browser.user_data_dir().is_some());
         browser.close().await.unwrap();
@@ -1860,7 +1791,7 @@ Object.defineProperty(window.HTMLInputElement.prototype, 'value', {
         std::fs::write(&html_path, "<html><body>Test</body></html>").unwrap();
 
         let file_url = format!("file://{}", html_path.display());
-        let mut browser = Browser::new(None);
+        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
         browser.start().await.unwrap();
         browser.navigate(&file_url).await.unwrap();
         browser.close().await.unwrap();

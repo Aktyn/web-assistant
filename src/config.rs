@@ -1,3 +1,6 @@
+mod browser_config;
+mod colors_config;
+
 use anyhow::{Context, Result};
 use documented::DocumentedFields;
 use serde::{Deserialize, Serialize};
@@ -8,20 +11,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
-pub type HexString = String;
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone, DocumentedFields)]
-#[documented_fields(default = "Hex color string")]
-pub struct HexColorsConfig {
-    pub background: Option<HexString>,
-    pub foreground: Option<HexString>,
-    pub border: Option<HexString>,
-    pub muted_foreground: Option<HexString>,
-    pub accent: Option<HexString>,
-    pub disabled: Option<HexString>,
-    pub error_foreground: Option<HexString>,
-    pub success_foreground: Option<HexString>,
-}
+pub(crate) use browser_config::*;
+pub(crate) use colors_config::*;
 
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize, DocumentedFields)]
@@ -31,14 +22,18 @@ pub struct Config {
     /// Can be omitted during inline run if workflow is provided as file path
     #[serde(
         default = "get_default_workflows_directory",
-        alias = "workflows_directory",
+        alias = "workflowsDirectory",
         rename = "workflowsDirectory"
     )]
-    pub workflowsDirectory: PathBuf,
+    pub workflows_directory: PathBuf,
     /// Optional map of hex colors to use when rendering TUI.
     /// See *`HexColorsConfig`* for list of color names.
-    #[serde(alias = "tui_colors", rename = "tuiColors")]
-    pub tuiColors: Option<HexColorsConfig>,
+    #[serde(alias = "tuiColors", rename = "tuiColors")]
+    pub tui_colors: Option<HexColorsConfig>,
+
+    /// See *`BrowserConfig`* for more information.
+    #[serde(default = "BrowserConfig::default")]
+    pub browser: BrowserConfig,
 }
 
 impl Config {
@@ -74,8 +69,9 @@ fn get_default_workflows_directory() -> PathBuf {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            workflowsDirectory: get_default_workflows_directory(),
-            tuiColors: None,
+            workflows_directory: get_default_workflows_directory(),
+            tui_colors: None,
+            browser: BrowserConfig::default(),
         }
     }
 }
@@ -91,6 +87,9 @@ pub async fn load_config(config_path: &Path) -> Config {
 
     done_loading.store(true, Ordering::SeqCst);
     loading_thread_handle.join().ok();
+
+    stdout().write_all(b"\n").ok();
+    stdout().flush().ok();
 
     config
 }
@@ -147,7 +146,7 @@ mod tests {
     #[test]
     fn test_default_config_has_workflows_directory() {
         let config = Config::default();
-        assert_eq!(config.workflowsDirectory, PathBuf::from("./workflows"));
+        assert_eq!(config.workflows_directory, PathBuf::from("./workflows"));
     }
 
     #[test]
@@ -160,7 +159,7 @@ mod tests {
         // Path that does not exist → Config::new returns default config.
         let non_existent = PathBuf::from("/tmp/nonexistent-config-for-testing-12345.json");
         let config = Config::new(&non_existent).await;
-        assert_eq!(config.workflowsDirectory, PathBuf::from("./workflows"));
+        assert_eq!(config.workflows_directory, PathBuf::from("./workflows"));
     }
 
     #[tokio::test]
@@ -172,7 +171,7 @@ mod tests {
         let path = PathBuf::from(tmp.path());
         let loaded = Config::new(&path).await;
         assert_eq!(
-            loaded.workflowsDirectory,
+            loaded.workflows_directory,
             PathBuf::from("/custom/workflows")
         );
     }
@@ -216,7 +215,7 @@ mod tests {
 
         let content = tokio::fs::read_to_string(&output_path).await.unwrap();
         let parsed: Config = serde_json::from_str(&content).unwrap();
-        assert_eq!(parsed.workflowsDirectory, PathBuf::from("./workflows"));
+        assert_eq!(parsed.workflows_directory, PathBuf::from("./workflows"));
     }
 
     #[tokio::test]
@@ -248,13 +247,13 @@ mod tests {
     fn test_config_debug_display() {
         let config = Config::default();
         let debug_str = format!("{config:?}");
-        assert!(debug_str.contains("workflowsDirectory"));
+        assert!(debug_str.contains("workflows_directory"));
     }
 
     #[test]
     fn test_config_default_is_valid_path() {
         let config = Config::default();
         // Default should be a relative path
-        assert!(config.workflowsDirectory.is_relative());
+        assert!(config.workflows_directory.is_relative());
     }
 }
