@@ -17,7 +17,8 @@ impl JsonFile {
             anyhow::bail!("Given path doesn't point to a file: \"{}\"", path.display());
         }
 
-        if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+        let extension = path.extension().and_then(|ext| ext.to_str());
+        if extension == Some("json") || extension == Some("jsonc") {
             let content = tokio::fs::read_to_string(&path).await?;
             return Ok(Self {
                 path: path.to_path_buf(),

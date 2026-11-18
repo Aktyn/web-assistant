@@ -4,6 +4,7 @@ mod workflow_runtime;
 
 use std::path::PathBuf;
 
+use jsonc_parser::{ParseOptions, errors::ParseError, parse_to_serde_value};
 pub(crate) use workflow_data::WorkflowData;
 #[cfg(test)]
 pub(crate) use workflow_loader::JsonFile;
@@ -14,7 +15,7 @@ pub enum WorkflowState {
     Running(workflow_runtime::RunningWorkflow),
     Valid(WorkflowData),
     // Refers to json deserialization error
-    Error(serde_json::Error),
+    Error(ParseError),
 }
 
 // #[derive(Debug)]
@@ -27,7 +28,7 @@ pub struct Workflow {
 impl Workflow {
     #[must_use]
     pub(crate) fn new(json: workflow_loader::JsonFile) -> Self {
-        match serde_json::from_str(&json.content) {
+        match parse_to_serde_value(&json.content, &ParseOptions::default()) {
             Ok(data) => Workflow {
                 state: WorkflowState::Valid(data),
                 file_path: Some(json.path),

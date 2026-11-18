@@ -4,6 +4,7 @@ mod colors_config;
 
 use anyhow::{Context, Result};
 use documented::{Documented, DocumentedFields};
+use jsonc_parser::{ParseOptions, parse_to_serde_value};
 use serde::{Deserialize, Serialize};
 use std::io::{Write as _, stdout};
 use std::path::{Path, PathBuf};
@@ -64,7 +65,7 @@ impl Config {
             .await
             .expect("Cannot read config file");
 
-        serde_json::from_str(config_content.as_str()).unwrap()
+        parse_to_serde_value(config_content.as_str(), &ParseOptions::default()).unwrap()
     }
 }
 
@@ -116,7 +117,7 @@ fn run_loading_animation(done: &Arc<AtomicBool>) {
     }
 }
 
-pub static DEFAULT_CONFIG_FILE: &str = r"./config.json";
+pub static DEFAULT_CONFIG_FILE: &str = r"./config.jsonc";
 
 /// Create a default config file at the given path. If no path is provided, the default config file
 /// will be created in the current working directory as config.json.

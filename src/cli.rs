@@ -7,7 +7,7 @@ use crate::config;
 #[command(version, about = "If no command is provided, the TUI will be launched", long_about = None)]
 pub(crate) struct Cli {
     /// Relative or absolute path to config file
-    #[arg(short, long, value_name = "file", default_value = config::DEFAULT_CONFIG_FILE, value_hint=FilePath)]
+    #[arg(short, long, value_name = "json file", default_value = config::DEFAULT_CONFIG_FILE, value_hint=FilePath)]
     pub config_path: Option<PathBuf>,
 
     #[command(subcommand)]
@@ -19,7 +19,7 @@ pub(crate) enum Commands {
     /// Runs a workflow
     Run {
         /// Workflow name or path to workflow file
-        #[arg(short, long, required = true, value_name = "name or file")]
+        #[arg(short, long, required = true, value_name = "name or json file")]
         workflow: String,
     },
 

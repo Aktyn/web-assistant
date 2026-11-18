@@ -43,8 +43,6 @@ async fn run_workflow(workflow_path_or_name: &str, cli: &cli::Cli) -> Result<()>
     dotenvy::dotenv().ok();
     env_logger::try_init().ok();
 
-    log::info!("Running workflow: {workflow_path_or_name}");
-
     let config_path = cli
         .config_path
         .as_ref()
@@ -61,6 +59,8 @@ async fn run_workflow(workflow_path_or_name: &str, cli: &cli::Cli) -> Result<()>
             .await
             .context("Couldn't load workflow from file")?
     } else {
+        log::info!("Workflow was not provided as a file, loading from directory by matching name");
+
         // Load all workflows from config.workflowsDirectory and find the one with matching name
         let directory_workflows =
             workflow::load_from_directory(&config.workflows_directory).await?;
