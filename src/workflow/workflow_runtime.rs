@@ -1,76 +1,81 @@
-use anyhow::{Context, Result, bail};
+mod agent_runner;
+mod page_action_runner;
 
+use std::sync::Arc;
+
+use anyhow::{Result, bail};
+use tokio::sync::RwLock;
+
+use super::WorkflowState;
 use super::workflow_data::step;
 use crate::browser::Browser;
 use crate::config::Config;
 
+pub struct RunningWorkflow {
+    pub(crate) data: super::WorkflowData,
+    browser: Arc<RwLock<Browser>>,
+    config: Box<Config>,
+}
+
+impl RunningWorkflow {
+    async fn run_steps(&mut self) -> Result<()> {
+        for step in &self.data.steps {
+            match step {
+                step::WorkflowStepType::PageAction(page_action_step) => {
+                    self.run_page_action_step(page_action_step).await?;
+                }
+                step::WorkflowStepType::Agent(agent_step) => {
+                    // self.run_agent_step(agent_step).await?;
+                    self.run_agent_step(agent_step)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 impl super::Workflow {
     /// # Errors
     /// This function returns an error if the workflow fails to run.
-    pub async fn run(&mut self, config: &Config) -> Result<()> {
+    pub async fn run(&mut self, config: Box<Config>) -> Result<()> {
         if self.is_draft() {
             bail!("Cannot run a draft workflow");
         }
 
         let data = match &self.state {
-            super::WorkflowState::Valid(data) => data,
-            super::WorkflowState::Error(error) => bail!("Workflow is not valid: {error}"),
+            WorkflowState::Valid(data) => data,
+            WorkflowState::Running(_) => bail!("Workflow is already running"),
+            WorkflowState::Error(error) => bail!("Workflow is not valid: {error}"),
         };
 
         log::info!("Running workflow: \"{}\"", data.name);
 
-        let mut browser = Browser::new(&config.browser);
-        browser.start().await?;
+        let browser = Arc::new(RwLock::new(Browser::new(&config.browser)));
 
-        run_steps(&data.steps, &mut browser).await?;
+        self.state = WorkflowState::Running(RunningWorkflow {
+            data: data.clone(),
+            config,
+            browser,
+        });
+
+        if let WorkflowState::Running(running_workflow) = &mut self.state {
+            match running_workflow.run_steps().await {
+                Ok(()) => {
+                    //TODO: set state to SuccessfulRun
+                    self.state = WorkflowState::Valid(running_workflow.data.clone());
+                }
+                Err(e) => {
+                    //TODO: set state to FailedRun
+                    log::error!("Workflow failed to run: {e:?}");
+                }
+            }
+        } else {
+            bail!("Workflow failed to start");
+        }
+
         Ok(())
     }
-}
-
-async fn run_steps(steps: &Vec<step::WorkflowStepType>, browser: &mut Browser) -> Result<()> {
-    for step in steps {
-        match &step {
-            step::WorkflowStepType::PageAction(page_action_step) => {
-                run_page_action_step(page_action_step, browser).await?;
-            }
-            step::WorkflowStepType::Agent(agent_step) => {
-                run_agent_step(agent_step, browser)?;
-            }
-        }
-    }
-
-    Ok(())
-}
-
-async fn run_page_action_step(step: &step::PageActionStep, browser: &mut Browser) -> Result<()> {
-    log::info!("Running page action step: \"{step:?}\"");
-
-    //TODO: support multi-page workflows
-    // step.page_index;
-
-    match &step.action {
-        step::PageAction::Navigate(navigate_action) => {
-            log::info!("Navigating to: \"{}\"", navigate_action.url);
-
-            browser
-                .navigate(&navigate_action.url)
-                .await
-                .context("Failed to navigate to the URL")?;
-        }
-    }
-
-    Ok(())
-}
-
-fn run_agent_step(step: &step::AgentStep, _browser: &mut Browser) -> Result<()> {
-    log::info!("Running agent step: \"{step:?}\"");
-
-    //TODO: implement
-
-    if 5 > 10 {
-        bail!("5 is not greater than 10");
-    }
-    Ok(())
 }
 
 #[cfg(test)]

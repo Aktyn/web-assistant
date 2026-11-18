@@ -10,6 +10,7 @@ use ratatui::layout::{Layout, Rect, Size};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Widget};
 use ratatui::{DefaultTerminal, Frame};
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tui_logger::TuiLoggerWidget;
@@ -52,7 +53,14 @@ impl TuiApp {
         };
 
         for workflow in &workflows {
-            log::info!("Workflow: {workflow:?}");
+            log::info!(
+                "Workflow: {}",
+                workflow
+                    .file_path
+                    .as_ref()
+                    .unwrap_or(&PathBuf::from(""))
+                    .display()
+            );
         }
 
         let workflows_arc = Arc::new(RwLock::new(workflows));

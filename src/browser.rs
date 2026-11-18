@@ -15,7 +15,7 @@ use watchdogs::BrowserWatchdogs;
 use crate::config::BrowserConfig;
 
 pub struct Browser {
-    pub config: BrowserConfig,
+    config: BrowserConfig,
     process: Option<BrowserProcess>,
     client: Option<CdpClient>,
     watchdogs: Option<BrowserWatchdogs>,

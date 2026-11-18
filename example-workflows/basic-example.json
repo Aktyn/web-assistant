@@ -34,7 +34,7 @@
       "type": "agent",
       "task": "Find the latest version of the Rust programming language and print it as a result.",
       "promptMode": "standard",
-      "maxSteps": 64,
+      "maxSteps": 24,
       "historyOutput": "./rust-version.json",
       "judge": {
         "onCaptcha": "TODO",

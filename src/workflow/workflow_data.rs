@@ -9,8 +9,10 @@ use serde::{Deserialize, Serialize};
 pub struct WorkflowData {
     /// Name of the workflow
     pub name: String,
+
     /// Description of the workflow
     pub description: Option<String>,
+
     /// List of steps to be performed
     /// Each step is an object that contains "type" property (enum)
     /// See specific fields for each type:

@@ -19,7 +19,7 @@ use std::{
 use super::super::common::widgets::{Separator, TextField};
 use super::super::common::{palette, panel};
 use crate::utils;
-use crate::workflow::{Workflow, WorkflowState};
+use crate::workflow::{Workflow, WorkflowData, WorkflowState};
 use workflow_delete::WorkflowDelete;
 use workflow_preview::WorkflowPreview;
 
@@ -100,6 +100,16 @@ impl WorkflowPanel {
     pub(super) fn open_workflow(&mut self, index: usize) {
         log::info!("Opening workflow: {index:?}");
 
+        let return_valid_selection = |data: &WorkflowData| {
+            WorkflowSelectionState::Valid(ValidWorkflowState {
+                name_field: TextField::new("Name".to_string(), data.name.clone()),
+                description_field: data
+                    .description
+                    .clone()
+                    .map(|description| TextField::new("Description".to_string(), description)),
+            })
+        };
+
         match self.workflows.read() {
             Ok(unlocked_workflows) => {
                 if let Some(workflow) = unlocked_workflows.get(index) {
@@ -107,19 +117,10 @@ impl WorkflowPanel {
                         index,
                         workflow_file: workflow.file_path.clone(),
                         state: match &workflow.state {
-                            WorkflowState::Valid(data) => {
-                                WorkflowSelectionState::Valid(ValidWorkflowState {
-                                    name_field: TextField::new(
-                                        "Name".to_string(),
-                                        data.name.clone(),
-                                    ),
-                                    description_field: data.description.clone().map(
-                                        |description| {
-                                            TextField::new("Description".to_string(), description)
-                                        },
-                                    ),
-                                })
+                            WorkflowState::Running(running_data) => {
+                                return_valid_selection(&running_data.data)
                             }
+                            WorkflowState::Valid(data) => return_valid_selection(data),
                             WorkflowState::Error(error) => {
                                 let error_message = error.to_string();
                                 log::warn!("Invalid workflow: {error_message}");

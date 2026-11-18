@@ -53,6 +53,14 @@ impl panel::Panel for WorkflowsSidebar {
                 workflows
                     .iter()
                     .map(|w| match &w.state {
+                        WorkflowState::Running(running_data) => {
+                            let label = utils::truncate_text(
+                                &running_data.data.name,
+                                WorkflowsSidebar::WIDTH as usize,
+                                None,
+                            );
+                            ListItem::new(label).fg(palette().accent).bold()
+                        }
                         WorkflowState::Valid(data) => {
                             let label = utils::truncate_text(
                                 &data.name,

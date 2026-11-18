@@ -9,13 +9,15 @@ pub(crate) use workflow_data::WorkflowData;
 pub(crate) use workflow_loader::JsonFile;
 pub use workflow_loader::{load_from_directory, load_from_file};
 
-#[derive(Debug)]
+// #[derive(Debug)]
 pub enum WorkflowState {
+    Running(workflow_runtime::RunningWorkflow),
     Valid(WorkflowData),
+    // Refers to json deserialization error
     Error(serde_json::Error),
 }
 
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct Workflow {
     pub state: WorkflowState,
     /// No file path indicates draft workflow

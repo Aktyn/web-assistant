@@ -1,3 +1,4 @@
+mod agent_config;
 mod browser_config;
 mod colors_config;
 
@@ -11,6 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
+pub(crate) use agent_config::*;
 pub(crate) use browser_config::*;
 pub(crate) use colors_config::*;
 
@@ -34,6 +36,10 @@ pub struct Config {
     /// See `BrowserConfig` for more information.
     #[serde(default = "BrowserConfig::default")]
     pub browser: BrowserConfig,
+
+    /// See `AgentConfig` for more information.
+    #[serde(default = "AgentConfig::default")]
+    pub agent: AgentConfig,
 }
 
 impl Config {
@@ -71,6 +77,7 @@ impl Default for Config {
         Self {
             workflows_directory: get_default_workflows_directory(),
             tui_colors: None,
+            agent: AgentConfig::default(),
             browser: BrowserConfig::default(),
         }
     }

@@ -23,8 +23,6 @@ use workflow::workflow_data::step as workflow_step;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    dotenvy::dotenv().ok();
-
     let cli = cli::get_cli();
     run_cli(&cli).await
 }
@@ -42,6 +40,7 @@ async fn run_cli(cli: &cli::Cli) -> Result<()> {
 }
 
 async fn run_workflow(workflow_path_or_name: &str, cli: &cli::Cli) -> Result<()> {
+    dotenvy::dotenv().ok();
     env_logger::try_init().ok();
 
     log::info!("Running workflow: {workflow_path_or_name}");
@@ -77,7 +76,7 @@ async fn run_workflow(workflow_path_or_name: &str, cli: &cli::Cli) -> Result<()>
         ))?
     };
 
-    workflow.run(&config).await?;
+    workflow.run(Box::new(config)).await?;
 
     Ok(())
 }
@@ -102,6 +101,9 @@ fn explain_config() -> Result<()> {
     tui::inline::print_struct_docs!(config::HexColorsConfig, 2)?;
     utils::print_lines(1);
     tui::inline::print_struct_docs!(config::BrowserConfig, 2)?;
+    utils::print_lines(1);
+    tui::inline::print_struct_docs!(config::AgentConfig, 2)?;
+    utils::print_lines(1);
 
     Ok(())
 }
@@ -155,6 +157,8 @@ fn explain_workflow(include_example: bool) -> Result<()> {
 }
 
 async fn run_tui(cli: &cli::Cli) -> Result<()> {
+    dotenvy::dotenv().ok();
+
     // NOTE: TUI logger is initialized here to catch early core logs
     tui_logger::init_logger(tui_logger::LevelFilter::Trace)?;
     tui_logger::set_default_level(tui_logger::LevelFilter::Trace);
@@ -213,6 +217,8 @@ async fn run_tui(cli: &cli::Cli) -> Result<()> {
 //             name, var.original_value, var.format
 //         );
 //     }
+//
+//     ---------------------------------------------------------------------
 //
 //     // Can be run again:
 //     // let mut rerun_agent = Agent::new("", ChatBrowserUse::new("auto"));

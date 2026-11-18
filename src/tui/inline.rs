@@ -66,7 +66,8 @@ pub(crate) fn print_struct(docs: &StructDocs) -> anyhow::Result<()> {
             max_doc_line_length.saturating_add(name.len())
         })
         .max()
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .max(docs.description.len());
 
     let mut terminal = ratatui::init_with_options(TerminalOptions {
         viewport: Viewport::Inline(u16::try_from(total_docs_lines + 2).unwrap_or(u16::MAX)),
