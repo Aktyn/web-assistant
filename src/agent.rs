@@ -3,55 +3,40 @@ pub mod prompts;
 mod variable_detector;
 pub mod views;
 
-use crate::browser::Browser;
-use crate::llm::openai::{ChatMessage, ChatOpenAI};
+use crate::llm::ChatMessage;
+use crate::{browser::Browser, llm};
 use anyhow::{Context, Result, anyhow};
 use std::collections::HashMap;
 use std::path::Path;
+use tokio::sync::RwLockWriteGuard;
 use tracing::{debug, info, warn};
 
-pub use judge::{Judge, JudgementResult};
 pub use prompts::{PromptMode, SystemPrompt};
-pub use variable_detector::{detect_variables_in_history, substitute_variables_in_history};
-pub use views::{
-    Action, ActionResult, AgentHistory, AgentHistoryList, AgentOutput, AgentStepState,
-    DetectedVariable, InteractedElementMetadata,
+use variable_detector::substitute_variables_in_history;
+use views::{
+    Action, ActionResult, AgentHistoryItem, AgentHistoryList, AgentOutput, AgentStepState,
+    InteractedElementMetadata,
 };
 
 pub struct Agent {
     pub task: String,
-    pub llm: ChatOpenAI,
-    pub browser: Browser,
     pub system_prompt: SystemPrompt,
-    pub max_steps: usize,
-    pub history: AgentHistoryList,
+    pub max_steps: u16,
+    // pub history: AgentHistoryList,
 }
 
 impl Agent {
-    pub fn new(task: impl Into<String>, llm: ChatOpenAI) -> Self {
+    pub fn new(task: impl Into<String>) -> Self {
         Self {
             task: task.into(),
-            llm,
-            browser: Browser::default(),
             system_prompt: SystemPrompt::default(),
             max_steps: 20,
-            history: AgentHistoryList::new(),
-        }
-    }
-
-    pub fn new_with_browser(task: impl Into<String>, llm: ChatOpenAI, browser: Browser) -> Self {
-        Self {
-            task: task.into(),
-            llm,
-            browser,
-            system_prompt: SystemPrompt::default(),
-            max_steps: 20,
-            history: AgentHistoryList::new(),
+            // history: AgentHistoryList::new(),
         }
     }
 
     #[must_use]
-    pub fn max_steps(mut self, steps: usize) -> Self {
+    pub fn max_steps(mut self, steps: u16) -> Self {
         self.max_steps = steps;
         self
     }
@@ -62,26 +47,32 @@ impl Agent {
         self
     }
 
-    #[must_use]
-    pub fn system_prompt(mut self, prompt: SystemPrompt) -> Self {
-        self.system_prompt = prompt;
-        self
-    }
+    // #[must_use]
+    // pub fn system_prompt(mut self, prompt: SystemPrompt) -> Self {
+    //     self.system_prompt = prompt;
+    //     self
+    // }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn run(&mut self) -> Result<AgentHistoryList> {
+    pub async fn run<LlmType: llm::LLM>(
+        &mut self,
+        browser: &mut RwLockWriteGuard<'_, Browser>,
+        llm: &LlmType,
+    ) -> Result<AgentHistoryList> {
         info!("Starting agent task: {}", self.task);
-        self.browser.start().await?;
+        browser.start().await?;
 
         let mut step = 0;
         let mut conversation: Vec<ChatMessage> = Vec::new();
         conversation.push(ChatMessage::system(self.system_prompt.get_system_message()));
 
+        let mut history = AgentHistoryList::new();
+
         while step < self.max_steps {
             step += 1;
             info!("Agent step {}/{}", step, self.max_steps);
 
-            let browser_state = self.browser.get_state().await?;
+            let browser_state = browser.get_state().await?;
             let formatted_state = browser_state.format_for_prompt();
 
             let step_prompt = format!(
@@ -91,8 +82,7 @@ impl Agent {
 
             conversation.push(ChatMessage::user(step_prompt));
 
-            let response = self
-                .llm
+            let response = llm
                 .invoke(&conversation)
                 .await
                 .context("Failed to get completion from LLM")?;
@@ -109,7 +99,7 @@ impl Agent {
                 match action {
                     Action::Navigate { url } => {
                         info!("Navigating to: {}", url);
-                        match self.browser.navigate(url).await {
+                        match browser.navigate(url).await {
                             Ok(()) => action_results
                                 .push(ActionResult::success(format!("Navigated to {url}"))),
                             Err(e) => action_results
@@ -118,14 +108,14 @@ impl Agent {
                     }
                     Action::Click { index } => {
                         info!("Clicking element [{}]", index);
-                        if let Some(elem) = self.browser.get_element(*index) {
+                        if let Some(elem) = browser.get_element(*index) {
                             interacted_elements.push(InteractedElementMetadata {
                                 index: *index,
                                 tag: elem.tag,
                                 attributes: elem.attributes,
                             });
                         }
-                        match self.browser.click(*index).await {
+                        match browser.click(*index).await {
                             Ok(()) => action_results
                                 .push(ActionResult::success(format!("Clicked element [{index}]"))),
                             Err(e) => action_results
@@ -134,14 +124,14 @@ impl Agent {
                     }
                     Action::Input { index, text } => {
                         info!("Inputting into element [{}]: {}", index, text);
-                        if let Some(elem) = self.browser.get_element(*index) {
+                        if let Some(elem) = browser.get_element(*index) {
                             interacted_elements.push(InteractedElementMetadata {
                                 index: *index,
                                 tag: elem.tag,
                                 attributes: elem.attributes,
                             });
                         }
-                        match self.browser.input(*index, text).await {
+                        match browser.input(*index, text).await {
                             Ok(()) => action_results.push(ActionResult::success(format!(
                                 "Inputted text into element [{index}]"
                             ))),
@@ -151,7 +141,7 @@ impl Agent {
                     }
                     Action::Scroll { amount } => {
                         info!("Scrolling by {}", amount);
-                        match self.browser.scroll(*amount).await {
+                        match browser.scroll(*amount).await {
                             Ok(()) => action_results
                                 .push(ActionResult::success(format!("Scrolled by {amount}"))),
                             Err(e) => action_results
@@ -160,13 +150,13 @@ impl Agent {
                     }
                     Action::Wait { seconds } => {
                         info!("Waiting for {} seconds", seconds);
-                        let _ = self.browser.wait(u64::from(*seconds)).await;
+                        let _ = browser.wait(u64::from(*seconds)).await;
                         action_results
                             .push(ActionResult::success(format!("Waited {seconds} seconds")));
                     }
                     Action::Extract { query } => {
                         info!("Extracting query: {}", query);
-                        let text = self.browser.get_state().await?.text;
+                        let text = browser.get_state().await?.text;
                         action_results.push(ActionResult::success(format!(
                             "Extracted content for {query}: {text}"
                         )));
@@ -183,7 +173,7 @@ impl Agent {
                 }
             }
 
-            let history_item = AgentHistory {
+            history.items.push(AgentHistoryItem {
                 model_output: Some(agent_output),
                 result: action_results,
                 state: Some(AgentStepState {
@@ -195,49 +185,45 @@ impl Agent {
                         Some(interacted_elements)
                     },
                 }),
-            };
-
-            self.history.history.push(history_item);
+            });
 
             if is_done {
                 break;
             }
         }
 
-        Ok(self.history.clone())
+        Ok(history.clone())
     }
 
-    pub fn save_history(&self, file_path: impl AsRef<Path>) -> Result<()> {
-        self.history.save_to_file(file_path)
-    }
+    //TODO: adjust this implementation
+    // pub async fn judge(&self, _ground_truth: Option<&str>) -> Result<JudgementResult> {
+    //     let judge = Judge::new(self.llm.clone());
+    //     let final_res = self.history.final_result().unwrap_or_default();
+    //     judge
+    //         .judge(&self.task, &final_res, &self.history, ground_truth)
+    //         .await
+    // }
 
-    pub fn detect_variables(&self) -> HashMap<String, DetectedVariable> {
-        detect_variables_in_history(&self.history)
-    }
-
-    pub async fn judge(&self, ground_truth: Option<&str>) -> Result<JudgementResult> {
-        let judge = Judge::new(self.llm.clone());
-        let final_res = self.history.final_result().unwrap_or_default();
-        judge
-            .judge(&self.task, &final_res, &self.history, ground_truth)
-            .await
-    }
-
-    pub async fn rerun_history(&mut self, history: &AgentHistoryList) -> Result<Vec<ActionResult>> {
-        self.browser.start().await?;
+    #[allow(unused)] //TODO:
+    pub async fn rerun_history(
+        &mut self,
+        history: &AgentHistoryList,
+        browser: &mut Browser,
+    ) -> Result<Vec<ActionResult>> {
+        browser.start().await?;
         let mut results = Vec::new();
 
-        for (i, step) in history.history.iter().enumerate() {
+        for (i, step) in history.items.iter().enumerate() {
             let Some(output) = &step.model_output else {
                 continue;
             };
 
-            info!("Replaying step {}/{}", i + 1, history.history.len());
+            info!("Replaying step {}/{}", i + 1, history.items.len());
             for action in &output.action {
                 match action {
                     Action::Navigate { url } => {
                         info!("Replay: Navigating to {}", url);
-                        match self.browser.navigate(url).await {
+                        match browser.navigate(url).await {
                             Ok(()) => {
                                 results.push(ActionResult::success(format!("Navigated to {url}")));
                             }
@@ -249,7 +235,7 @@ impl Agent {
                     }
                     Action::Click { index } => {
                         info!("Replay: Clicking element [{}]", index);
-                        match self.browser.click(*index).await {
+                        match browser.click(*index).await {
                             Ok(()) => {
                                 results.push(ActionResult::success(format!("Clicked [{index}]")));
                             }
@@ -260,7 +246,7 @@ impl Agent {
                     }
                     Action::Input { index, text } => {
                         info!("Replay: Inputting [{}] -> {}", index, text);
-                        match self.browser.input(*index, text).await {
+                        match browser.input(*index, text).await {
                             Ok(()) => results.push(ActionResult::success(format!(
                                 "Inputted text into [{index}]"
                             ))),
@@ -270,15 +256,15 @@ impl Agent {
                         }
                     }
                     Action::Scroll { amount } => {
-                        let _ = self.browser.scroll(*amount).await;
+                        let _ = browser.scroll(*amount).await;
                         results.push(ActionResult::success(format!("Scrolled {amount}")));
                     }
                     Action::Wait { seconds } => {
-                        let _ = self.browser.wait(u64::from(*seconds)).await;
+                        let _ = browser.wait(u64::from(*seconds)).await;
                         results.push(ActionResult::success(format!("Waited {seconds}s")));
                     }
                     Action::Extract { query } => {
-                        let text = self.browser.get_state().await?.text;
+                        let text = browser.get_state().await?.text;
                         results.push(ActionResult::success(format!(
                             "Extracted for {query}: {text}"
                         )));
@@ -295,16 +281,18 @@ impl Agent {
         Ok(results)
     }
 
+    #[allow(unused)] //TODO:
     pub async fn load_and_rerun(
         &mut self,
         file_path: impl AsRef<Path>,
         variables: Option<HashMap<String, String>>,
+        browser: &mut Browser,
     ) -> Result<Vec<ActionResult>> {
-        let mut history = AgentHistoryList::load_from_file(file_path)?;
+        let mut history = AgentHistoryList::load_from_file(file_path).await?;
         if let Some(ref vars) = variables {
             history = substitute_variables_in_history(&history, vars);
         }
-        self.rerun_history(&history).await
+        self.rerun_history(&history, browser).await
     }
 }
 
@@ -845,7 +833,7 @@ mod tests {
 
         // Build some history manually
         agent.history = AgentHistoryList {
-            history: vec![AgentHistory {
+            items: vec![AgentHistoryItem {
                 model_output: Some(AgentOutput {
                     thought: Some("Start".into()),
                     memory: None,

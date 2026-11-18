@@ -25,8 +25,7 @@ impl RunningWorkflow {
                     self.run_page_action_step(page_action_step).await?;
                 }
                 step::WorkflowStepType::Agent(agent_step) => {
-                    // self.run_agent_step(agent_step).await?;
-                    self.run_agent_step(agent_step)?;
+                    self.run_agent_step(agent_step).await?;
                 }
             }
         }

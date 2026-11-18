@@ -1,5 +1,5 @@
 use web_assistant::agent::views::{
-    Action, ActionResult, AgentHistory, AgentHistoryList, AgentOutput, AgentStepState,
+    Action, ActionResult, AgentHistoryItem, AgentHistoryList, AgentOutput, AgentStepState,
 };
 
 #[test]
@@ -8,8 +8,8 @@ fn test_history_file_roundtrip() {
     let path = temp_file.path();
 
     let history = AgentHistoryList {
-        history: vec![
-            AgentHistory {
+        items: vec![
+            AgentHistoryItem {
                 model_output: Some(AgentOutput {
                     thought: Some("Navigating to repo".into()),
                     memory: None,
@@ -25,7 +25,7 @@ fn test_history_file_roundtrip() {
                     interacted_element: None,
                 }),
             },
-            AgentHistory {
+            AgentHistoryItem {
                 model_output: Some(AgentOutput {
                     thought: Some("Stars found".into()),
                     memory: None,

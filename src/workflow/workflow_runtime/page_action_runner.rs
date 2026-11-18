@@ -13,9 +13,9 @@ impl super::RunningWorkflow {
             step::PageAction::Navigate(navigate_action) => {
                 log::info!("Navigating to: \"{}\"", navigate_action.url);
 
-                self.browser
-                    .write()
-                    .await
+                let mut browser = self.browser.write().await;
+
+                browser
                     .navigate(&navigate_action.url)
                     .await
                     .context("Failed to navigate to the URL")?;

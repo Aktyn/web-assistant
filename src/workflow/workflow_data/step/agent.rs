@@ -1,7 +1,8 @@
-use std::path::PathBuf;
-
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+use crate::agent;
 
 /// `AgentStep`
 #[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
@@ -15,11 +16,20 @@ pub struct AgentStep {
     #[serde(default = "default_max_steps", alias = "maxSteps", rename = "maxSteps")]
     pub max_steps: u16,
 
-    /// Path to where the steps agent decided to run will be saved
+    /// Path to where the steps that agent did will be saved
+    /// Relative to workflow file
     #[serde(alias = "historyOutput", rename = "historyOutput")]
     pub history_output: Option<PathBuf>,
+
+    /// Defines which prompt will be used during agent run
+    /// Options: "standard", "no-thinking", "flash"
+    #[serde(
+        default = "agent::PromptMode::default",
+        alias = "promptMode",
+        rename = "promptMode"
+    )]
+    pub prompt_mode: agent::PromptMode,
     //TODO:
-    // promptMode: "standard",
     // "judge": {
     //   "onCaptcha": "TODO",
     //   "onImpossibleTask": "TODO"

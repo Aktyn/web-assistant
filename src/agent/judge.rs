@@ -4,8 +4,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
+use super::llm;
 use super::views::AgentHistoryList;
-use crate::llm::openai::{ChatMessage, ChatOpenAI};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct JudgementResult {
@@ -17,26 +17,27 @@ pub struct JudgementResult {
 }
 
 pub struct Judge {
-    pub llm: ChatOpenAI,
+    // pub llm: ChatOpenAI,
 }
 
-impl Judge {
-    #[must_use]
-    pub fn new(llm: ChatOpenAI) -> Self {
-        Self { llm }
-    }
+impl super::Agent {
+    // pub fn new(llm: ChatOpenAI) -> Self {
+    //     Self { llm }
+    // }
 
-    pub async fn judge(
+    #[allow(unused)] //TODO:
+    async fn judge<LlmType: llm::LLM>(
         &self,
         task: &str,
         final_result: &str,
         history: &AgentHistoryList,
         ground_truth: Option<&str>,
+        llm: &LlmType,
     ) -> Result<JudgementResult> {
         info!("Running AI trace judgement for task: {}", task);
 
         let mut step_descriptions = Vec::new();
-        for (i, item) in history.history.iter().enumerate() {
+        for (i, item) in history.items.iter().enumerate() {
             let step_num = i + 1;
             let thought = item
                 .model_output
@@ -67,8 +68,7 @@ impl Judge {
 
         let messages =
             construct_judge_messages(task, final_result, &step_descriptions, ground_truth);
-        let resp = self
-            .llm
+        let resp = llm
             .invoke(&messages)
             .await
             .context("Failed to get judgement from LLM")?;
@@ -83,7 +83,7 @@ pub fn construct_judge_messages(
     final_result: &str,
     steps: &[String],
     ground_truth: Option<&str>,
-) -> Vec<ChatMessage> {
+) -> Vec<llm::ChatMessage> {
     let ground_truth_section = if ground_truth.is_some() {
         "\n**GROUND TRUTH VALIDATION (HIGHEST PRIORITY):**\n\
             The <ground_truth> section contains verified criteria for this task.\n\
@@ -160,8 +160,8 @@ Evaluate this agent execution given the criteria and respond with the exact JSON
     );
 
     vec![
-        ChatMessage::system(system_prompt),
-        ChatMessage::user(user_prompt),
+        llm::ChatMessage::system(system_prompt),
+        llm::ChatMessage::user(user_prompt),
     ]
 }
 

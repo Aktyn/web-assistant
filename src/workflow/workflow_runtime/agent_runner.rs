@@ -1,53 +1,91 @@
-use anyhow::{Result, bail};
+use anyhow::Result;
 
 use super::step;
 use crate::agent;
 use crate::llm;
 
 impl super::RunningWorkflow {
-    pub(super) fn run_agent_step(&self, step: &step::AgentStep) -> Result<()> {
+    pub(super) async fn run_agent_step(&self, step: &step::AgentStep) -> Result<()> {
         log::info!("Running agent step: \"{step:?}\"");
 
-        // LLM inference interface
-        let llm = llm::openai::ChatOpenAI::new(&self.config.agent.model);
+        let mut browser = self.browser.write().await;
 
-        //TODO: remove
-        if 5 > 10 {
-            bail!("Lolz");
+        // LLM inference interface
+        let llm = llm::openai::ChatOpenAI::new(llm::ChatOpenAIConfig {
+            model: self.config.agent.model.clone(),
+            base_url: self.config.agent.base_url.clone(),
+            api_key: self.config.agent.api_key.clone(),
+            ..llm::ChatOpenAIConfig::default()
+        });
+        let mut agent = agent::Agent::new(&step.task)
+            .prompt_mode(step.prompt_mode)
+            .max_steps(step.max_steps);
+
+        //TODO:
+        // step.history_output
+
+        let history = agent.run(&mut browser, &llm).await?;
+        log::info!("History: {history:?}");
+
+        if let Some(ref result) = history.final_result() {
+            log::info!("\n=================== FINAL RESULT ===================");
+            log::info!("{result}");
+            log::info!("====================================================\n");
+        } else {
+            log::info!("\nNo final result returned.");
         }
 
-        //TODO: implement browser support
-        // let browser = self.browser.write().await;
-        // let _agent = agent::Agent::new_with_browser(&step.task, llm, self.browser)
-        let _agent = agent::Agent::new(&step.task, llm)
-            .prompt_mode(agent::PromptMode::Standard)
-            .max_steps(32);
+        // Save history to file
+        if let Some(output_path) = &step.history_output {
+            // let history_file = Path::new("agent_history.json");
+            // agent.save_history(history_file)?;
+            //TODO: output should be relative to workflow file
+            history.save_to_file(output_path).await?;
+            log::info!("\nHistory saved to {}", output_path.display());
 
+            // Variable detection capabilities on run history
+            // let variables = agent.detect_variables();
+            let variables = history.detect_variables();
+            log::info!("\nDetected {} variable(s) in task run:", variables.len());
+            for (name, var) in &variables {
+                log::info!(
+                    "  - {}: \"{}\" (format: {:?})",
+                    name,
+                    var.original_value,
+                    var.format
+                );
+            }
+        }
+
+        // Can be run again:
+        // let mut rerun_agent = Agent::new("", ChatBrowserUse::new("auto"));
+        // let rerun_results = rerun_agent.load_and_rerun(history_file, None).await?;
+        // println!(
+        //     "Rerun finished successfully with {} action results.",
+        //     rerun_results.len()
+        // );
+
+        // Evaluate trace using the ported Judge system
+        //     println!("Evaluating agent execution trace with AI Judge...");
+        //     let ground_truth = "The project license is MIT. The project is an open-source library for web browser automation with AI.";
+        //     let judgement = agent.judge(Some(ground_truth)).await?;
         //
-        //     let history = agent.run().await?;
-        //
-        //     if let Some(ref result) = history.final_result() {
-        //         println!("\n=================== FINAL RESULT ===================");
-        //         println!("{result}");
-        //         println!("====================================================\n");
-        //     } else {
-        //         println!("\nNo final result returned.");
+        //     println!("\n================= JUDGEMENT REPORT =================");
+        //     println!(
+        //         "Verdict:          {}",
+        //         if judgement.verdict {
+        //             "PASSED (true)"
+        //         } else {
+        //             "FAILED (false)"
+        //         }
+        //     );
+        //     println!("Impossible Task:  {}", judgement.impossible_task);
+        //     println!("Reached Captcha:  {}", judgement.reached_captcha);
+        //     if !judgement.failure_reason.is_empty() {
+        //         println!("Failure Reason:   {}", judgement.failure_reason);
         //     }
-        //
-        //     // Save history to file
-        //     let history_file = Path::new("agent_history.json");
-        //     agent.save_history(history_file)?;
-        //     println!("\nHistory saved to {}", history_file.display());
-        //
-        //     // Variable detection capabilities on run history
-        //     let variables = agent.detect_variables();
-        //     println!("\nDetected {} variable(s) in task run:", variables.len());
-        //     for (name, var) in &variables {
-        //         println!(
-        //             "  - {}: \"{}\" (format: {:?})",
-        //             name, var.original_value, var.format
-        //         );
-        //     }
+        //     println!("Judge Reasoning:  {}", judgement.reasoning);
+        //     println!("====================================================");
 
         Ok(())
     }
