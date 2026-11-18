@@ -1,9 +1,9 @@
 use std::collections::HashMap;
+use web_assistant::agent::substitute_variables_in_history;
 use web_assistant::agent::views::{
     Action, AgentHistoryItem, AgentHistoryList, AgentOutput, AgentStepState,
     InteractedElementMetadata,
 };
-use web_assistant::agent::{detect_variables_in_history, substitute_variables_in_history};
 
 #[test]
 fn test_all_input_types_detection() {
@@ -40,7 +40,7 @@ fn test_all_input_types_detection() {
             }],
         };
 
-        let vars = detect_variables_in_history(&history);
+        let vars = history.detect_variables();
         assert!(
             vars.contains_key(expected_name),
             "Expected variable {expected_name} for type {input_type}"
@@ -88,7 +88,7 @@ fn test_semantic_attributes_detection() {
             }],
         };
 
-        let vars = detect_variables_in_history(&history);
+        let vars = history.detect_variables();
         assert!(
             vars.contains_key(expected_name),
             "Expected {expected_name} for attr {id_attr}"
@@ -145,7 +145,7 @@ fn test_duplicate_variable_naming() {
         ],
     };
 
-    let vars = detect_variables_in_history(&history);
+    let vars = history.detect_variables();
     assert_eq!(vars.len(), 2);
     assert!(vars.contains_key("first_name"));
     assert!(vars.contains_key("first_name_2"));
@@ -182,7 +182,7 @@ fn test_substitute_variables_partial_and_nested() {
     subs.insert("email".into(), "newuser@domain.org".into());
 
     let modified = substitute_variables_in_history(&history, &subs);
-    let actions = &modified.history[0].model_output.as_ref().unwrap().action;
+    let actions = &modified.items[0].model_output.as_ref().unwrap().action;
 
     match &actions[0] {
         Action::Input { text, .. } => assert_eq!(text, "newuser@domain.org"),

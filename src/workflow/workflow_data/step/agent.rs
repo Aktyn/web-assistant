@@ -68,6 +68,7 @@ mod tests {
             task: "task".to_string(),
             max_steps: 8,
             history_output: Some(PathBuf::from("./h.json")),
+            prompt_mode: agent::PromptMode::Standard,
         };
         let json = serde_json::to_value(&step).unwrap();
         assert_eq!(json["task"], "task");
@@ -81,6 +82,7 @@ mod tests {
             task: "clone me".to_string(),
             max_steps: 32,
             history_output: None,
+            prompt_mode: agent::PromptMode::Standard,
         };
         let cloned = step.clone();
         assert_eq!(cloned.task, step.task);

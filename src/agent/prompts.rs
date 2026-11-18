@@ -30,15 +30,17 @@ impl Default for SystemPrompt {
 }
 
 impl SystemPrompt {
-    // #[must_use]
-    // pub fn new(mode: PromptMode) -> Self {
-    //     Self {
-    //         mode,
-    //         max_actions_per_step: 3,
-    //         override_system_message: None,
-    //         extend_system_message: None,
-    //     }
-    // }
+    #[must_use]
+    pub fn new(mode: PromptMode) -> Self {
+        let mut s = Self::default();
+        s.mode = mode;
+        s
+    }
+
+    #[must_use]
+    pub fn builder() -> SystemPromptBuilder {
+        SystemPromptBuilder::default()
+    }
 
     #[must_use]
     pub fn get_system_message(&self) -> String {
@@ -161,6 +163,58 @@ Respond ONLY with JSON:
     }
 }
 
+#[derive(Default)]
+pub struct SystemPromptBuilder {
+    mode: Option<PromptMode>,
+    max_actions_per_step: Option<usize>,
+    override_system_message: Option<String>,
+    extend_system_message: Option<String>,
+}
+
+impl SystemPromptBuilder {
+    #[must_use]
+    pub fn mode(mut self, mode: PromptMode) -> Self {
+        self.mode = Some(mode);
+        self
+    }
+
+    #[must_use]
+    pub fn max_actions_per_step(mut self, n: usize) -> Self {
+        self.max_actions_per_step = Some(n);
+        self
+    }
+
+    #[must_use]
+    pub fn override_system_message(mut self, msg: impl Into<String>) -> Self {
+        self.override_system_message = Some(msg.into());
+        self
+    }
+
+    #[must_use]
+    pub fn extend_system_message(mut self, msg: impl Into<String>) -> Self {
+        self.extend_system_message = Some(msg.into());
+        self
+    }
+
+    #[must_use]
+    pub fn build(self) -> SystemPrompt {
+        let mut prompt = SystemPrompt::default();
+        if let Some(mode) = self.mode {
+            prompt.mode = mode;
+        }
+        if let Some(n) = self.max_actions_per_step {
+            prompt.max_actions_per_step = n;
+        }
+        if let Some(msg) = self.override_system_message {
+            prompt.override_system_message = Some(msg);
+        }
+        if let Some(msg) = self.extend_system_message {
+            prompt.extend_system_message = Some(msg);
+        }
+        prompt
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,7 +228,10 @@ mod tests {
         ];
 
         for mode in modes {
-            let prompt = SystemPrompt::new(mode);
+            let prompt = SystemPrompt {
+                mode,
+                ..Default::default()
+            };
             let msg = prompt.get_system_message();
             assert!(!msg.is_empty(), "Mode {mode:?} produced empty message");
             assert!(msg.contains("JSON"), "Mode {mode:?} should mention JSON");

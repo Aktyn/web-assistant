@@ -379,7 +379,7 @@ mod tests {
             }],
         };
 
-        let vars = detect_variables_in_history(&history);
+        let vars = history.detect_variables();
         assert_eq!(vars.len(), 1);
         let email_var = vars.get("email").unwrap();
         assert_eq!(email_var.original_value, "user@example.com");
@@ -403,7 +403,7 @@ mod tests {
             }],
         };
 
-        let vars = detect_variables_in_history(&history);
+        let vars = history.detect_variables();
         assert_eq!(vars.len(), 1);
         assert!(vars.contains_key("email"));
     }

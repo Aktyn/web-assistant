@@ -10,7 +10,7 @@ pub(crate) use workflow_data::WorkflowData;
 pub(crate) use workflow_loader::JsonFile;
 pub use workflow_loader::{load_from_directory, load_from_file};
 
-// #[derive(Debug)]
+#[derive(Debug)]
 pub enum WorkflowState {
     Running(workflow_runtime::RunningWorkflow),
     Valid(WorkflowData),
@@ -19,6 +19,16 @@ pub enum WorkflowState {
 }
 
 // #[derive(Debug)]
+impl std::fmt::Debug for Workflow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Workflow {{ state: {:?}, file_path: {:?} }}",
+            self.state, self.file_path
+        )
+    }
+}
+
 pub struct Workflow {
     pub state: WorkflowState,
     /// No file path indicates draft workflow
@@ -76,6 +86,7 @@ mod tests {
                 assert_eq!(data.name, "Test Workflow");
             }
             WorkflowState::Error(_) => panic!("Expected Valid variant"),
+            WorkflowState::Running(_) => panic!("Expected Valid variant"),
         }
         assert_eq!(workflow.file_path, Some(path));
     }
@@ -90,6 +101,7 @@ mod tests {
         match &workflow.state {
             WorkflowState::Error(_) => {} // expected
             WorkflowState::Valid(_) => panic!("Expected Error variant"),
+            WorkflowState::Running(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -103,6 +115,7 @@ mod tests {
         match &workflow.state {
             WorkflowState::Error(_) => {} // missing required `name` field → deserialize error
             WorkflowState::Valid(_) => panic!("Expected Error variant"),
+            WorkflowState::Running(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -113,6 +126,7 @@ mod tests {
         match &workflow.state {
             WorkflowState::Error(_) => {}
             WorkflowState::Valid(_) => panic!("Expected Error variant"),
+            WorkflowState::Running(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -126,6 +140,7 @@ mod tests {
         match &workflow.state {
             WorkflowState::Error(_) => {}
             WorkflowState::Valid(_) => panic!("Expected Error variant"),
+            WorkflowState::Running(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -151,6 +166,7 @@ mod tests {
         match state {
             WorkflowState::Valid(d) => assert_eq!(d.name, "ok"),
             WorkflowState::Error(_) => panic!("Expected Valid variant"),
+            WorkflowState::Running(_) => panic!("Expected Valid variant"),
         }
     }
 
@@ -175,6 +191,7 @@ mod tests {
                 assert!(d.description.is_none());
             }
             WorkflowState::Error(_) => panic!("Expected Valid variant"),
+            WorkflowState::Running(_) => panic!("Expected Valid variant"),
         }
     }
 
@@ -190,6 +207,7 @@ mod tests {
                 assert!(!err_str.is_empty(), "error message should not be empty");
             }
             WorkflowState::Valid(_) => panic!("Expected Error variant"),
+            WorkflowState::Running(_) => panic!("Expected Error variant"),
         }
     }
 
@@ -236,6 +254,7 @@ mod tests {
                 assert_eq!(d.description.as_deref(), Some("desc"));
             }
             WorkflowState::Error(_) => panic!("Expected Valid variant"),
+            WorkflowState::Running(_) => panic!("Expected Valid variant"),
         }
     }
 
@@ -309,6 +328,7 @@ mod tests {
                 assert_eq!(data.description.as_deref(), Some("desc"));
             }
             WorkflowState::Error(_) => panic!("Expected Valid variant"),
+            WorkflowState::Running(_) => panic!("Expected Valid variant"),
         }
     }
 
