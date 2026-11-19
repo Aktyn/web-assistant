@@ -1,5 +1,5 @@
 pub(crate) mod common;
-pub(crate) mod inline;
+pub mod inline;
 mod views;
 
 use anyhow::{Context, Result};

@@ -1,13 +1,10 @@
-use std::io;
-
 use anyhow::Context;
 use ratatui::{
     TerminalOptions, Viewport,
-    backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout, Margin},
     style::Stylize as _,
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Borders, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders},
 };
 
 use super::common::palette;
@@ -25,17 +22,17 @@ use super::common::palette;
 macro_rules! print_struct_docs {
     ($struct_type:ty) => {
         $crate::tui::inline::print_struct(&$crate::tui::inline::StructDocs {
-            description: <$struct_type>::DOCS,
-            field_names: <$struct_type>::FIELD_NAMES,
-            field_docs: <$struct_type>::FIELD_DOCS,
+            description: <$struct_type as documented::Documented>::DOCS,
+            field_names: <$struct_type as documented::DocumentedFields>::FIELD_NAMES,
+            field_docs: <$struct_type as documented::DocumentedFields>::FIELD_DOCS,
             ..Default::default()
         })
     };
     ($struct_type:ty, $margin_left:expr) => {
         $crate::tui::inline::print_struct(&$crate::tui::inline::StructDocs {
-            description: <$struct_type>::DOCS,
-            field_names: <$struct_type>::FIELD_NAMES,
-            field_docs: <$struct_type>::FIELD_DOCS,
+            description: <$struct_type as documented::Documented>::DOCS,
+            field_names: <$struct_type as documented::DocumentedFields>::FIELD_NAMES,
+            field_docs: <$struct_type as documented::DocumentedFields>::FIELD_DOCS,
             margin_left: Some($margin_left),
         })
     };
@@ -43,7 +40,7 @@ macro_rules! print_struct_docs {
 pub(crate) use print_struct_docs;
 
 #[derive(Default)]
-pub(crate) struct StructDocs {
+pub struct StructDocs {
     pub description: &'static str,
     pub field_names: &'static [&'static str],
     pub field_docs: &'static [&'static str],
@@ -51,7 +48,7 @@ pub(crate) struct StructDocs {
 }
 
 /// Pretty prints given struct documentation utilizing inline ratatui viewport
-pub(crate) fn print_struct(docs: &StructDocs) -> anyhow::Result<()> {
+pub fn print_struct(docs: &StructDocs) -> anyhow::Result<()> {
     if docs.field_names.len() != docs.field_docs.len() {
         anyhow::bail!("Field names and docs must have the same length");
     }
@@ -132,35 +129,6 @@ pub(crate) fn print_struct(docs: &StructDocs) -> anyhow::Result<()> {
             }
         })
         .context("Failed to draw struct documentation")?;
-
-    let cursor_y = terminal.get_cursor_position()?.y;
-    terminal.set_cursor_position((0, cursor_y))?;
-
-    Ok(())
-}
-
-pub(crate) fn print_success(message: &str) -> anyhow::Result<()> {
-    let backend = CrosstermBackend::new(io::stdout());
-    let size = backend.size()?;
-    let terminal_width = size.width;
-
-    let paragraph = Paragraph::new(message)
-        .style(palette().success_foreground)
-        .bold()
-        .wrap(Wrap { trim: true });
-    let line_count = paragraph.line_count(terminal_width);
-
-    let mut terminal = ratatui::init_with_options(TerminalOptions {
-        viewport: Viewport::Inline(u16::try_from(line_count).unwrap_or(1)),
-    });
-    terminal.clear().ok();
-
-    terminal
-        .draw(|frame| {
-            let area = frame.area();
-            frame.render_widget(paragraph, area);
-        })
-        .context("Failed to draw success message")?;
 
     let cursor_y = terminal.get_cursor_position()?.y;
     terminal.set_cursor_position((0, cursor_y))?;

@@ -1,24 +1,39 @@
 mod agent_runner;
 mod page_action_runner;
 
-use std::sync::Arc;
-
 use anyhow::{Result, bail};
-use tokio::sync::RwLock;
+use scopeguard::defer;
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
 
 use super::WorkflowState;
 use super::workflow_data::step;
 use crate::browser::Browser;
+use crate::cli::CliLogger;
 use crate::config::Config;
 
 pub struct RunningWorkflow {
-    pub(crate) data: super::WorkflowData,
-    browser: Arc<RwLock<Browser>>,
+    pub(crate) data: Box<super::WorkflowData>,
     config: Box<Config>,
+    //TODO: try simplify this with just Mutex
+    browser: Arc<RwLock<Browser>>,
+    logger: Mutex<CliLogger>,
 }
 
 impl RunningWorkflow {
-    async fn run_steps(&mut self) -> Result<()> {
+    fn new(data: Box<super::WorkflowData>, config: Box<Config>) -> Self {
+        let browser = Arc::new(RwLock::new(Browser::new(&config.browser)));
+        let logger = CliLogger::default();
+
+        Self {
+            data,
+            config,
+            browser,
+            logger: Mutex::new(logger),
+        }
+    }
+
+    async fn run_steps(&self) -> Result<()> {
         for step in &self.data.steps {
             match step {
                 step::WorkflowStepType::PageAction(page_action_step) => {
@@ -48,25 +63,32 @@ impl super::Workflow {
             WorkflowState::Error(error) => bail!("Workflow is not valid: {error}"),
         };
 
-        log::info!("Running workflow: \"{}\"", data.name);
+        //TODO: use it throughout the workflow run
+        // let mut logger = CliLogger::default();
+        // logger.info(&format!("Running workflow: {}", data.name));
 
-        let browser = Arc::new(RwLock::new(Browser::new(&config.browser)));
+        defer! {
+            // logger.reset();
+            CliLogger::default().reset();
+        }
 
-        self.state = WorkflowState::Running(RunningWorkflow {
-            data: data.clone(),
-            config,
-            browser,
-        });
+        self.state = WorkflowState::Running(RunningWorkflow::new(Box::new(data.clone()), config));
 
         if let WorkflowState::Running(running_workflow) = &mut self.state {
             match running_workflow.run_steps().await {
                 Ok(()) => {
                     //TODO: set state to SuccessfulRun
-                    self.state = WorkflowState::Valid(running_workflow.data.clone());
+                    self.state = WorkflowState::Valid(*running_workflow.data.clone());
                 }
                 Err(e) => {
+                    running_workflow
+                        .logger
+                        .lock()
+                        .await
+                        .error(&format!("Workflow failed to run: {e:?}"));
                     //TODO: set state to FailedRun
-                    log::error!("Workflow failed to run: {e:?}");
+                    self.state = WorkflowState::Valid(*running_workflow.data.clone());
+                    // self.state = state_backup;
                 }
             }
         } else {
