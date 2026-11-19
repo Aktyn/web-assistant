@@ -823,4 +823,61 @@ mod tests {
         assert_eq!(agent.system_prompt.mode, PromptMode::Standard);
         assert_eq!(agent.system_prompt.max_actions_per_step, 3);
     }
+
+    #[test]
+    fn test_parse_agent_output_done_with_success_false() {
+        let raw = r#"{
+            "action": [{"done": {"text": "failed", "success": false}}]
+        }"#;
+        let output = parse_agent_output(raw).unwrap();
+        match &output.action[0] {
+            Action::Done { text, success } => {
+                assert_eq!(text, "failed");
+                assert!(!success);
+            }
+            _ => panic!("Expected Done"),
+        }
+    }
+
+    #[test]
+    fn test_extract_json_str_with_only_backticks_no_content() {
+        let raw = "```\n```";
+        let result = extract_json_str(raw);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_extract_json_str_first_brace_before_last_returns_inner() {
+        let raw = "{a} middle {b}";
+        let result = extract_json_str(raw);
+        // Should find first '{' at 0 and last '}' at end → whole string
+        assert!(result.contains("{a}"));
+        assert!(result.contains("{b}"));
+    }
+
+    #[test]
+    fn test_extract_json_str_nested_braces() {
+        let raw = "prefix { outer { inner } middle } suffix";
+        let result = extract_json_str(raw);
+        assert!(result.contains("outer"));
+        assert!(result.contains("inner"));
+    }
+
+    #[test]
+    fn test_extract_json_str_malformed_json_still_finds_braces() {
+        let raw = "bad {key: value} stuff";
+        let result = extract_json_str(raw);
+        assert!(result.contains("key"));
+        assert!(result.contains("value"));
+    }
+
+    #[test]
+    fn test_agent_builder_chained_fluent() {
+        let agent = Agent::new("Final task")
+            .max_steps(42)
+            .prompt_mode(PromptMode::NoThinking);
+        assert_eq!(agent.task, "Final task");
+        assert_eq!(agent.max_steps, 42);
+        assert_eq!(agent.system_prompt.mode, PromptMode::NoThinking);
+    }
 }
