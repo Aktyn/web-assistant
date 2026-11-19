@@ -53,23 +53,39 @@ impl panel::Panel for WorkflowsSidebar {
                 workflows
                     .iter()
                     .map(|w| match &w.state {
-                        WorkflowState::Running(running_data) => {
+                        WorkflowState::Running(running_workflow) => {
                             let label = utils::truncate_text(
-                                &running_data.data.name,
-                                WorkflowsSidebar::WIDTH as usize,
+                                &running_workflow.data.name,
+                                WorkflowsSidebar::WIDTH.into(),
                                 None,
                             );
                             ListItem::new(label).fg(palette().accent).bold()
                         }
+                        WorkflowState::SuccessfulRun(succesfull_workflow) => {
+                            let label = utils::truncate_text(
+                                &succesfull_workflow.data.name,
+                                WorkflowsSidebar::WIDTH.into(),
+                                None,
+                            );
+                            ListItem::new(label).fg(palette().success_foreground).bold()
+                        }
+                        WorkflowState::FailedRun(failed_workflow) => {
+                            let label = utils::truncate_text(
+                                &failed_workflow.data.name,
+                                WorkflowsSidebar::WIDTH.into(),
+                                None,
+                            );
+                            ListItem::new(label).fg(palette().error_foreground).bold()
+                        }
                         WorkflowState::Valid(data) => {
                             let label = utils::truncate_text(
                                 &data.name,
-                                WorkflowsSidebar::WIDTH as usize,
+                                WorkflowsSidebar::WIDTH.into(),
                                 None,
                             );
                             ListItem::new(label).bold()
                         }
-                        WorkflowState::Error(_) => {
+                        WorkflowState::Invalid(_) => {
                             let file_path = w
                                 .file_path
                                 .as_ref()
@@ -79,13 +95,13 @@ impl panel::Panel for WorkflowsSidebar {
                             let text = vec![
                                 utils::truncate_text(
                                     "Invalid workflow file found",
-                                    WorkflowsSidebar::WIDTH as usize,
+                                    WorkflowsSidebar::WIDTH.into(),
                                     None,
                                 )
                                 .into(),
                                 utils::truncate_text(
                                     file_name_str,
-                                    WorkflowsSidebar::WIDTH as usize,
+                                    WorkflowsSidebar::WIDTH.into(),
                                     None,
                                 )
                                 .into(),

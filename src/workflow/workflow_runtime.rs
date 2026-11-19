@@ -1,20 +1,25 @@
 mod agent_runner;
 mod page_action_runner;
 
-use std::sync::Arc;
-
 use anyhow::{Result, bail};
-use tokio::sync::RwLock;
+use scopeguard::defer;
+use std::mem;
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
 
 use super::WorkflowState;
 use super::workflow_data::step;
 use crate::browser::Browser;
+use crate::cli::CliLogger;
 use crate::config::Config;
+use crate::workflow::WorkflowData;
 
 pub struct RunningWorkflow {
-    pub(crate) data: super::WorkflowData,
-    browser: Arc<RwLock<Browser>>,
+    pub data: super::WorkflowData,
     config: Box<Config>,
+    //TODO: try simplify this with just Mutex
+    browser: Arc<RwLock<Browser>>,
+    logger: Mutex<CliLogger>,
 }
 
 impl std::fmt::Debug for RunningWorkflow {
@@ -26,7 +31,19 @@ impl std::fmt::Debug for RunningWorkflow {
 }
 
 impl RunningWorkflow {
-    async fn run_steps(&mut self) -> Result<()> {
+    fn new(data: super::WorkflowData, config: Box<Config>) -> Self {
+        let browser = Arc::new(RwLock::new(Browser::new(&config.browser)));
+        let logger = CliLogger::default();
+
+        Self {
+            data,
+            config,
+            browser,
+            logger: Mutex::new(logger),
+        }
+    }
+
+    pub(crate) async fn run_steps(&self) -> Result<()> {
         for step in &self.data.steps {
             match step {
                 step::WorkflowStepType::PageAction(page_action_step) => {
@@ -42,6 +59,17 @@ impl RunningWorkflow {
     }
 }
 
+#[derive(Debug)]
+pub struct SuccessfullWorkflow {
+    pub data: super::WorkflowData,
+}
+
+#[derive(Debug)]
+pub struct FailedWorkflow {
+    pub data: super::WorkflowData,
+    pub error: anyhow::Error,
+}
+
 impl super::Workflow {
     /// # Errors
     /// This function returns an error if the workflow fails to run.
@@ -50,31 +78,39 @@ impl super::Workflow {
             bail!("Cannot run a draft workflow");
         }
 
-        let data = match &self.state {
-            WorkflowState::Valid(data) => data,
-            WorkflowState::Running(_) => bail!("Workflow is already running"),
-            WorkflowState::Error(error) => bail!("Workflow is not valid: {error}"),
+        defer! {
+            CliLogger::default().reset();
+        }
+
+        let get_running_state = |data: &mut WorkflowData| {
+            WorkflowState::Running(Box::new(RunningWorkflow::new(mem::take(data), config)))
         };
 
-        log::info!("Running workflow: \"{}\"", data.name);
-
-        let browser = Arc::new(RwLock::new(Browser::new(&config.browser)));
-
-        self.state = WorkflowState::Running(RunningWorkflow {
-            data: data.clone(),
-            config,
-            browser,
-        });
+        self.state = match &mut self.state {
+            WorkflowState::SuccessfulRun(run) => get_running_state(&mut run.data),
+            WorkflowState::FailedRun(run) => get_running_state(&mut run.data),
+            WorkflowState::Valid(data) => get_running_state(data),
+            WorkflowState::Running(_) => bail!("Workflow is already running"),
+            WorkflowState::Invalid(error) => bail!("Cannot run invalid Workflow: {error}"),
+        };
 
         if let WorkflowState::Running(running_workflow) = &mut self.state {
+            running_workflow.logger.lock().await.info(&format!(
+                "Running workflow: \"{}\"",
+                running_workflow.data.name
+            ));
+
             match running_workflow.run_steps().await {
                 Ok(()) => {
-                    //TODO: set state to SuccessfulRun
-                    self.state = WorkflowState::Valid(running_workflow.data.clone());
+                    self.state = WorkflowState::SuccessfulRun(SuccessfullWorkflow {
+                        data: mem::take(&mut running_workflow.data),
+                    });
                 }
-                Err(e) => {
-                    //TODO: set state to FailedRun
-                    log::error!("Workflow failed to run: {e:?}");
+                Err(error) => {
+                    self.state = WorkflowState::FailedRun(FailedWorkflow {
+                        data: mem::take(&mut running_workflow.data),
+                        error,
+                    });
                 }
             }
         } else {
@@ -88,7 +124,7 @@ impl super::Workflow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::workflow::{JsonFile, Workflow, WorkflowState, load_from_file};
+    use crate::workflow::{JsonFile, Workflow, WorkflowState};
 
     fn default_config() -> Config {
         Config::default()
@@ -105,7 +141,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_draft_workflow_bails() {
         let mut draft = Workflow::new_draft();
-        let result = draft.run(Box::new(Config::default())).await;
+        let result = draft.run(Box::new(default_config())).await;
         assert!(result.is_err());
         assert!(
             result
@@ -118,33 +154,35 @@ mod tests {
     #[tokio::test]
     async fn test_run_invalid_state_bails() {
         let mut workflow = workflow_with_error_state();
-        assert!(matches!(workflow.state, WorkflowState::Error(_)));
-        let result = workflow.run(Box::new(Config::default())).await;
+        assert!(matches!(workflow.state, WorkflowState::Invalid(_)));
+        let result = workflow.run(Box::new(default_config())).await;
         assert!(result.is_err());
         assert!(
             result
                 .unwrap_err()
                 .to_string()
-                .contains("Workflow is not valid")
+                .contains("Cannot run invalid Workflow")
         );
     }
 
     #[tokio::test]
     async fn test_run_steps_empty_returns_ok() {
+        // Test that running a workflow with empty steps doesn't panic
+        // (browser may fail in CI, which is acceptable)
         let tmp = tempfile::tempdir().unwrap();
-        let wf_path = tmp.path().join("wf.json");
+        let wf_path = tmp.path().join("empty.json");
         std::fs::write(&wf_path, r#"{"name":"Empty","steps":[]}"#).unwrap();
-
-        let config = Box::new(Config::default());
-        let mut workflow = load_from_file(&wf_path).await.unwrap();
+        let config = Box::new(crate::cli::cli_runner::test_headless_config());
+        let mut workflow = crate::workflow::load_from_file(&wf_path).await.unwrap();
         let result = workflow.run(config).await;
-        // Should succeed with empty steps (only browser might fail in CI)
+        // Acceptable failures are browser-related
         if let Err(e) = result {
             let err_str = e.to_string();
             assert!(
                 err_str.contains("Chrome")
                     || err_str.contains("chromium")
-                    || err_str.contains("DevTools"),
+                    || err_str.contains("DevTools")
+                    || err_str.contains("browser"),
                 "Unexpected error: {err_str}"
             );
         }
@@ -152,17 +190,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_steps_with_navigate_uses_browser() {
-        // This test verifies workflow.run() with a valid step.
+        // Test that workflow.run() with a navigate step attempts browser interaction
         let tmp = tempfile::tempdir().unwrap();
-        let wf_path = tmp.path().join("wf.json");
+        let wf_path = tmp.path().join("navigate.json");
         std::fs::write(
             &wf_path,
             r#"{"name":"Test","steps":[{"type":"page-action","action":{"type":"navigate","url":"about:blank"}}]}"#,
         )
         .unwrap();
 
-        let config = Box::new(Config::default());
-        let mut workflow = load_from_file(&wf_path).await.unwrap();
+        let config = Box::new(crate::cli::cli_runner::test_headless_config());
+        let mut workflow = crate::workflow::load_from_file(&wf_path).await.unwrap();
         let result = workflow.run(config).await;
         // The only acceptable failure is browser-related (no Chrome in CI)
         if let Err(e) = result {

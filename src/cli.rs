@@ -1,11 +1,15 @@
+mod cli_logger;
+pub(crate) mod cli_runner;
 use clap::{Parser, Subcommand, ValueHint::FilePath};
 use std::path::PathBuf;
 
 use crate::config;
 
+pub use cli_logger::CliLogger;
+
 #[derive(Parser)]
 #[command(version, about = "If no command is provided, the TUI will be launched", long_about = None)]
-pub(crate) struct Cli {
+pub struct Cli {
     /// Relative or absolute path to config file
     #[arg(short, long, value_name = "json file", default_value = config::DEFAULT_CONFIG_FILE, value_hint=FilePath)]
     pub config_path: Option<PathBuf>,
@@ -15,7 +19,7 @@ pub(crate) struct Cli {
 }
 
 #[derive(Subcommand)]
-pub(crate) enum Commands {
+pub enum Commands {
     /// Runs a workflow
     Run {
         /// Workflow name or path to workflow file
@@ -40,7 +44,8 @@ pub(crate) enum Commands {
     },
 }
 
-pub(crate) fn get_cli() -> Cli {
+#[must_use]
+pub fn get_cli() -> Cli {
     Cli::parse()
 }
 

@@ -1,5 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
-
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

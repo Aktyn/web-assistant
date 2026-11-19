@@ -6,7 +6,9 @@ use crate::llm;
 
 impl super::RunningWorkflow {
     pub(super) async fn run_agent_step(&self, step: &step::AgentStep) -> Result<()> {
-        log::info!("Running agent step: \"{step:?}\"");
+        let mut logger = self.logger.lock().await;
+        logger.info("Running agent");
+        log::info!("{step:#?}");
 
         let mut browser = self.browser.write().await;
 
@@ -21,39 +23,34 @@ impl super::RunningWorkflow {
             .prompt_mode(step.prompt_mode)
             .max_steps(step.max_steps);
 
-        //TODO:
-        // step.history_output
-
         let history = agent.run(&mut browser, &llm).await?;
-        log::info!("History: {history:?}");
 
         if let Some(ref result) = history.final_result() {
-            log::info!("\n=================== FINAL RESULT ===================");
-            log::info!("{result}");
-            log::info!("====================================================\n");
+            logger.success("=================== AGENT RESULT ===================");
+            logger.success(result);
+            logger.success("====================================================");
         } else {
-            log::info!("\nNo final result returned.");
+            logger.warning("No final result returned.");
         }
 
         // Save history to file
         if let Some(output_path) = &step.history_output {
-            // let history_file = Path::new("agent_history.json");
-            // agent.save_history(history_file)?;
             //TODO: output should be relative to workflow file
             history.save_to_file(output_path).await?;
-            log::info!("\nHistory saved to {}", output_path.display());
+            logger.info(&format!("\nHistory saved to \"{}\"", output_path.display()));
 
             // Variable detection capabilities on run history
             // let variables = agent.detect_variables();
             let variables = history.detect_variables();
-            log::info!("\nDetected {} variable(s) in task run:", variables.len());
+            logger.info(&format!(
+                "\nDetected {} variable(s) in task run:",
+                variables.len()
+            ));
             for (name, var) in &variables {
-                log::info!(
+                logger.info(&format!(
                     "  - {}: \"{}\" (format: {:?})",
-                    name,
-                    var.original_value,
-                    var.format
-                );
+                    name, var.original_value, var.format
+                ));
             }
         }
 

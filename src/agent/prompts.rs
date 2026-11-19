@@ -32,9 +32,10 @@ impl Default for SystemPrompt {
 impl SystemPrompt {
     #[must_use]
     pub fn new(mode: PromptMode) -> Self {
-        let mut s = Self::default();
-        s.mode = mode;
-        s
+        Self {
+            mode,
+            ..Self::default()
+        }
     }
 
     #[must_use]

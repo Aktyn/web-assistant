@@ -8,17 +8,37 @@ use jsonc_parser::{ParseOptions, errors::ParseError, parse_to_serde_value};
 pub(crate) use workflow_data::WorkflowData;
 #[cfg(test)]
 pub(crate) use workflow_loader::JsonFile;
-pub use workflow_loader::{load_from_directory, load_from_file};
+#[cfg(test)]
+pub(crate) use workflow_loader::load_from_file;
+pub use workflow_loader::{load_by_name_or_path, load_from_directory};
 
 #[derive(Debug)]
 pub enum WorkflowState {
-    Running(workflow_runtime::RunningWorkflow),
+    /// When workflow was successfully loaded from a valid json/jsonc file
     Valid(WorkflowData),
-    // Refers to json deserialization error
-    Error(ParseError),
+
+    /// When json/jsonc file couldn't been successfully parsed
+    Invalid(ParseError),
+
+    // NOTE: boxed RunningWorkflow to reduce enum size
+    /// During valid workflow run
+    Running(Box<workflow_runtime::RunningWorkflow>),
+
+    /// When workflow run was successful
+    SuccessfulRun(workflow_runtime::SuccessfullWorkflow),
+
+    /// When workflow run failed
+    FailedRun(workflow_runtime::FailedWorkflow),
 }
 
 // #[derive(Debug)]
+pub struct Workflow {
+    pub state: WorkflowState,
+
+    /// `file_path == None` indicates draft workflow
+    pub file_path: Option<PathBuf>,
+}
+
 impl std::fmt::Debug for Workflow {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -27,12 +47,6 @@ impl std::fmt::Debug for Workflow {
             self.state, self.file_path
         )
     }
-}
-
-pub struct Workflow {
-    pub state: WorkflowState,
-    /// No file path indicates draft workflow
-    pub file_path: Option<PathBuf>,
 }
 
 impl Workflow {
@@ -44,7 +58,7 @@ impl Workflow {
                 file_path: Some(json.path),
             },
             Err(e) => Workflow {
-                state: WorkflowState::Error(e),
+                state: WorkflowState::Invalid(e),
                 file_path: Some(json.path),
             },
         }
@@ -85,8 +99,8 @@ mod tests {
             WorkflowState::Valid(data) => {
                 assert_eq!(data.name, "Test Workflow");
             }
-            WorkflowState::Error(_) => panic!("Expected Valid variant"),
-            WorkflowState::Running(_) => panic!("Expected Valid variant"),
+            WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
+            _ => panic!("Expected Valid variant"),
         }
         assert_eq!(workflow.file_path, Some(path));
     }
@@ -99,9 +113,9 @@ mod tests {
         );
         let workflow = Workflow::new(json);
         match &workflow.state {
-            WorkflowState::Error(_) => {} // expected
+            WorkflowState::Invalid(_) => {} // expected
             WorkflowState::Valid(_) => panic!("Expected Error variant"),
-            WorkflowState::Running(_) => panic!("Expected Error variant"),
+            _ => panic!("Expected Error variant"),
         }
     }
 
@@ -113,9 +127,9 @@ mod tests {
         );
         let workflow = Workflow::new(json);
         match &workflow.state {
-            WorkflowState::Error(_) => {} // missing required `name` field → deserialize error
+            WorkflowState::Invalid(_) => {} // missing required `name` field → deserialize error
             WorkflowState::Valid(_) => panic!("Expected Error variant"),
-            WorkflowState::Running(_) => panic!("Expected Error variant"),
+            _ => panic!("Expected Error variant"),
         }
     }
 
@@ -124,9 +138,9 @@ mod tests {
         let json = JsonFile::from_raw(PathBuf::from("/fake/path3.json"), "{}".to_string());
         let workflow = Workflow::new(json);
         match &workflow.state {
-            WorkflowState::Error(_) => {}
+            WorkflowState::Invalid(_) => {}
             WorkflowState::Valid(_) => panic!("Expected Error variant"),
-            WorkflowState::Running(_) => panic!("Expected Error variant"),
+            _ => panic!("Expected Error variant"),
         }
     }
 
@@ -138,14 +152,10 @@ mod tests {
         );
         let workflow = Workflow::new(json);
         match &workflow.state {
-            WorkflowState::Error(_) => {}
+            WorkflowState::Invalid(_) => {}
             WorkflowState::Valid(_) => panic!("Expected Error variant"),
-            WorkflowState::Running(_) => panic!("Expected Error variant"),
+            _ => panic!("Expected Error variant"),
         }
-    }
-
-    #[test]
-    fn test_workflow_state_debug() {
         let data = WorkflowData {
             name: "My Workflow".to_string(),
             description: Some("description".to_string()),
@@ -165,8 +175,8 @@ mod tests {
         });
         match state {
             WorkflowState::Valid(d) => assert_eq!(d.name, "ok"),
-            WorkflowState::Error(_) => panic!("Expected Valid variant"),
-            WorkflowState::Running(_) => panic!("Expected Valid variant"),
+            WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
+            _ => panic!("Expected Valid variant"),
         }
     }
 
@@ -190,8 +200,8 @@ mod tests {
                 assert_eq!(d.name, "Draft workflow");
                 assert!(d.description.is_none());
             }
-            WorkflowState::Error(_) => panic!("Expected Valid variant"),
-            WorkflowState::Running(_) => panic!("Expected Valid variant"),
+            WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
+            _ => panic!("Expected Valid variant"),
         }
     }
 
@@ -200,14 +210,14 @@ mod tests {
         let json = JsonFile::from_raw(PathBuf::from("/tmp/bad.json"), "{invalid".to_string());
         let wf = Workflow::new(json);
         match &wf.state {
-            WorkflowState::Error(e) => {
+            WorkflowState::Invalid(e) => {
                 // Serde's exact wording varies; just check it contains something
                 // indicating a parse/expected token failure rather than being empty.
                 let err_str = e.to_string();
                 assert!(!err_str.is_empty(), "error message should not be empty");
             }
             WorkflowState::Valid(_) => panic!("Expected Error variant"),
-            WorkflowState::Running(_) => panic!("Expected Error variant"),
+            _ => panic!("Expected Error variant"),
         }
     }
 
@@ -253,13 +263,9 @@ mod tests {
                 assert_eq!(d.name, "MyWorkflow");
                 assert_eq!(d.description.as_deref(), Some("desc"));
             }
-            WorkflowState::Error(_) => panic!("Expected Valid variant"),
-            WorkflowState::Running(_) => panic!("Expected Valid variant"),
+            WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
+            _ => panic!("Expected Valid variant"),
         }
-    }
-
-    #[tokio::test]
-    async fn test_load_from_directory_ignores_non_json_files() {
         let tmp = tempfile::tempdir().unwrap();
         // Write a non-json file that should be ignored.
         tokio::fs::write(tmp.path().join("readme.txt"), "hello")
@@ -327,13 +333,9 @@ mod tests {
                 assert_eq!(data.name, "FromFile");
                 assert_eq!(data.description.as_deref(), Some("desc"));
             }
-            WorkflowState::Error(_) => panic!("Expected Valid variant"),
-            WorkflowState::Running(_) => panic!("Expected Valid variant"),
+            WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
+            _ => panic!("Expected Valid variant"),
         }
-    }
-
-    #[tokio::test]
-    async fn test_load_from_file_nonexistent_path() {
         let nonexistent = PathBuf::from("/tmp/does_not_exist_for_workflow_xyz.json");
         let result = load_from_file(&nonexistent).await;
         assert!(result.is_err());

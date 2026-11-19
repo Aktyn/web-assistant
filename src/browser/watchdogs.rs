@@ -1,5 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
-
 pub mod captcha;
 pub mod crash;
 pub mod downloads;

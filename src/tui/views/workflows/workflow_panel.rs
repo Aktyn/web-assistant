@@ -117,14 +117,20 @@ impl WorkflowPanel {
                         index,
                         workflow_file: workflow.file_path.clone(),
                         state: match &workflow.state {
-                            WorkflowState::Running(running_data) => {
-                                return_valid_selection(&running_data.data)
-                            }
                             WorkflowState::Valid(data) => return_valid_selection(data),
-                            WorkflowState::Error(error) => {
+                            WorkflowState::Invalid(error) => {
                                 let error_message = error.to_string();
                                 log::warn!("Invalid workflow: {error_message}");
                                 WorkflowSelectionState::Error(error_message)
+                            }
+                            WorkflowState::Running(running_workflow) => {
+                                return_valid_selection(&running_workflow.data)
+                            }
+                            WorkflowState::FailedRun(failed_workflow) => {
+                                return_valid_selection(&failed_workflow.data)
+                            }
+                            WorkflowState::SuccessfulRun(successful_workflow) => {
+                                return_valid_selection(&successful_workflow.data)
                             }
                         },
                     });
