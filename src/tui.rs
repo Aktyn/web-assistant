@@ -363,6 +363,7 @@ mod tests {
         let config = Config {
             workflows_directory: tmp.path().to_path_buf(),
             tui_colors: None,
+            agent: crate::config::AgentConfig::default(),
             browser: crate::config::BrowserConfig::default(),
         };
         let app = TuiApp::new(config).await;

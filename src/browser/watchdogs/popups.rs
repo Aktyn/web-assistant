@@ -190,4 +190,62 @@ mod tests {
         assert_eq!(truncated.len(), 100);
         assert_eq!(truncated, "a".repeat(100));
     }
+
+    #[test]
+    fn test_handle_dialog_prompt_dismissed() {
+        // Verify that prompt dialogs are dismissed (not accepted)
+        // The logic: alert/confirm/beforeunload → accept; prompt → dismiss
+        assert!(!matches_dialog_accept("prompt"));
+        assert!(matches_dialog_accept("alert"));
+        assert!(matches_dialog_accept("confirm"));
+        assert!(matches_dialog_accept("beforeunload"));
+    }
+
+    #[test]
+    fn test_popups_watchdog_construction() {
+        let wd = PopupsWatchdog::new(CdpClient::new_test_client());
+        assert_eq!(wd.handled_count(), 0);
+        assert!(!wd.page_enabled.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_handle_cdp_event_missing_method_returns_false() {
+        let wd = PopupsWatchdog::new(CdpClient::new_test_client());
+        let event = serde_json::json!({"params": {"type": "alert", "message": "hi"}});
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let handled = rt.block_on(wd.handle_cdp_event(&event)).unwrap();
+        assert!(!handled);
+    }
+
+    #[test]
+    fn test_handled_count_fetch_add() {
+        let wd = PopupsWatchdog {
+            client: CdpClient::new_test_client(),
+            handled_count: Arc::new(AtomicUsize::new(0)),
+            page_enabled: Arc::new(AtomicBool::new(false)),
+        };
+        wd.handled_count.fetch_add(5, Ordering::SeqCst);
+        assert_eq!(wd.handled_count(), 5);
+    }
+
+    #[test]
+    fn test_page_enabled_compare_exchange() {
+        let wd = PopupsWatchdog {
+            client: CdpClient::new_test_client(),
+            handled_count: Arc::new(AtomicUsize::new(0)),
+            page_enabled: Arc::new(AtomicBool::new(false)),
+        };
+        let prev = wd
+            .page_enabled
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .unwrap();
+        assert_eq!(prev, false);
+        assert!(wd.page_enabled.load(Ordering::SeqCst));
+
+        // Second exchange should fail since it's already true
+        let result =
+            wd.page_enabled
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+        assert!(result.is_err());
+    }
 }

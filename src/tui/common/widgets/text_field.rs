@@ -111,4 +111,45 @@ mod tests {
         let mut buf = Buffer::empty(area);
         field.draw(area, &mut buf);
     }
+
+    #[test]
+    fn test_text_field_estimate_width() {
+        let field = TextField::new("L".to_string(), "hello".to_string());
+        assert_eq!(field.estimate_width(), 7); // len("hello") + 2
+    }
+
+    #[test]
+    fn test_text_field_estimate_height_is_three() {
+        let field = TextField::new("L".to_string(), "v".to_string());
+        assert_eq!(field.estimate_height(), 3);
+    }
+
+    #[test]
+    fn test_text_field_clone() {
+        let field = TextField::new("Name".into(), "Alice".into());
+        let cloned = field.clone();
+        assert_eq!(cloned.label, "Name");
+        assert_eq!(cloned.value, "Alice");
+    }
+
+    #[test]
+    fn test_text_field_debug_display() {
+        let field = TextField::new("L".into(), "v".into());
+        let debug_str = format!("{field:?}");
+        assert!(debug_str.contains("TextField"));
+    }
+
+    #[test]
+    fn test_text_field_draw_with_small_area() {
+        let field = TextField::new("L".to_string(), "val".to_string());
+        let area = Rect::new(0, 0, 2, 1);
+        let mut buf = Buffer::empty(area);
+        field.draw(area, &mut buf);
+    }
+
+    #[test]
+    fn test_text_field_label_and_value_different() {
+        let field = TextField::new("Password".to_string(), "secret".to_string());
+        assert_ne!(field.label, field.value);
+    }
 }

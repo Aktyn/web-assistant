@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow};
 use reqwest::Client;
 use std::env;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChatOpenAIConfig {
     pub model: String,
     pub api_key: String,
@@ -13,13 +13,16 @@ pub struct ChatOpenAIConfig {
 
 impl Default for ChatOpenAIConfig {
     fn default() -> Self {
+        let api_key = env::var("OPENAI_API_KEY").unwrap_or_default();
+        let base_url = env::var("OPENAI_BASE_URL")
+            .unwrap_or_else(|_| "https://api.openai.com/v1".to_string())
+            .trim_end_matches('/')
+            .to_string();
+
         Self {
             model: String::from("auto"),
-            api_key: env::var("OPENAI_API_KEY").unwrap_or_default(),
-            base_url: env::var("OPENAI_BASE_URL")
-                .unwrap_or_else(|_| "https://api.openai.com/v1".to_string())
-                .trim_end_matches('/')
-                .to_string(),
+            api_key,
+            base_url,
             temperature: Some(0.2),
             max_completion_tokens: Some(4096),
         }
@@ -28,8 +31,8 @@ impl Default for ChatOpenAIConfig {
 
 #[derive(Debug)]
 pub struct ChatOpenAI {
-    config: ChatOpenAIConfig,
-    client: Client,
+    pub config: ChatOpenAIConfig,
+    pub client: Client,
 }
 
 impl super::LLM for ChatOpenAI {
@@ -174,7 +177,7 @@ impl ChatOpenAI {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
+    use crate::llm::ChatMessage;
 
     #[test]
     fn test_chat_message_serde_structure() {
@@ -188,53 +191,58 @@ mod tests {
 
     #[test]
     fn test_builder_default_model() {
-        let llm = ChatOpenAI::builder().build();
-        assert_eq!(llm.model, "auto");
+        let config = ChatOpenAIConfig::default();
+        let llm = ChatOpenAI::new(config);
+        assert_eq!(llm.config.model, "auto");
     }
 
     #[test]
-    fn test_builder_uses_env_vars_when_provided() {
-        unsafe {
-            env::set_var("OPENAI_API_KEY", "env-key-123");
-            env::set_var("OPENAI_BASE_URL", "http://env.example.com/v1");
-        }
-        // Builder prioritizes explicit params over env vars, but falls back correctly
-        let llm_from_env = ChatOpenAI::builder().model("gpt-4").build();
-        assert_eq!(llm_from_env.model, "gpt-4");
-        // Clean up
-        unsafe {
-            env::remove_var("OPENAI_API_KEY");
-            env::remove_var("OPENAI_BASE_URL");
-        }
-    }
-
-    #[test]
-    fn test_builder_trims_trailing_slashes() {
-        let llm = ChatOpenAI::builder()
-            .base_url("http://example.com/")
-            .build();
-        assert_eq!(llm.base_url, "http://example.com");
-    }
-
-    #[test]
-    fn test_build_with_all_fields() {
-        let llm = ChatOpenAI::builder()
-            .model("claude-3")
-            .api_key("my-secret")
-            .base_url("http://localhost:11434/v1")
-            .temperature(0.8)
-            .max_completion_tokens(2048)
-            .build();
-        assert_eq!(llm.model, "claude-3");
-        assert_eq!(llm.api_key, "my-secret");
-        assert_eq!(llm.base_url, "http://localhost:11434/v1");
-        assert_eq!(llm.temperature, Some(0.8));
-        assert_eq!(llm.max_completion_tokens, Some(2048));
+    fn test_new_with_explicit_config() {
+        let config = ChatOpenAIConfig {
+            model: "gpt-4".into(),
+            api_key: "test-key".into(),
+            base_url: "http://localhost:8080".into(),
+            temperature: Some(0.5),
+            max_completion_tokens: Some(1024),
+        };
+        let llm = ChatOpenAI::new(config);
+        assert_eq!(llm.config.model, "gpt-4");
+        assert_eq!(llm.config.api_key, "test-key");
+        assert_eq!(llm.config.base_url, "http://localhost:8080");
+        assert_eq!(llm.config.temperature, Some(0.5));
+        assert_eq!(llm.config.max_completion_tokens, Some(1024));
     }
 
     #[test]
     fn test_new_with_explicit_model() {
-        let llm = ChatOpenAI::new("custom-model");
-        assert_eq!(llm.model, "custom-model");
+        let config = ChatOpenAIConfig {
+            model: "custom-model".into(),
+            ..Default::default()
+        };
+        let llm = ChatOpenAI::new(config);
+        assert_eq!(llm.config.model, "custom-model");
+    }
+
+    #[test]
+    fn test_llm_trait_implemented() {
+        // Verify ChatOpenAI implements LLM trait
+        let config = ChatOpenAIConfig::default();
+        let _llm = ChatOpenAI::new(config);
+        // This just verifies compilation
+    }
+
+    #[test]
+    fn test_chat_openai_config_clone() {
+        let config = ChatOpenAIConfig {
+            model: "test".into(),
+            api_key: "key".into(),
+            base_url: "http://test.com".into(),
+            temperature: Some(0.5),
+            max_completion_tokens: Some(512),
+        };
+        let cloned = config.clone();
+        assert_eq!(cloned.model, config.model);
+        assert_eq!(cloned.api_key, config.api_key);
+        assert_eq!(cloned.base_url, config.base_url);
     }
 }

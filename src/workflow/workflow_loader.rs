@@ -117,6 +117,7 @@ mod tests {
                 assert_eq!(data.description.as_deref(), Some("A test"));
             }
             WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
+            _ => panic!("Expected Valid variant"),
         }
     }
 
@@ -144,6 +145,7 @@ mod tests {
         match &workflows[0].state {
             WorkflowState::Invalid(_) => {} // expected
             WorkflowState::Valid(_) => panic!("Expected Error variant"),
+            _ => panic!("Expected Error variant"),
         }
     }
 
@@ -181,6 +183,7 @@ mod tests {
         match &workflows[0].state {
             WorkflowState::Valid(data) => assert_eq!(data.name, "Top"),
             WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
+            _ => panic!("Expected Valid variant"),
         }
     }
 
@@ -212,6 +215,7 @@ mod tests {
                 assert_eq!(data.description.as_deref(), Some("desc"));
             }
             WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
+            _ => panic!("Expected Valid variant"),
         }
     }
 
@@ -233,14 +237,10 @@ mod tests {
         assert!(result.is_err());
         assert!(
             result
-                .unwrap_err()
+                .expect_err("expected an error")
                 .to_string()
                 .contains("File does not exist")
         );
-    }
-
-    #[tokio::test]
-    async fn test_load_from_file_with_wrong_extension() {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("workflow.txt");
         tokio::fs::write(&path, r#"{"name":"WrongExt"}"#)
@@ -250,7 +250,7 @@ mod tests {
         assert!(result.is_err());
         assert!(
             result
-                .unwrap_err()
+                .expect_err("expected an error")
                 .to_string()
                 .contains("Wrong file extension")
         );
