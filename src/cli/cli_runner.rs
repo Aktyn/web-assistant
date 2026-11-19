@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use std::{
     io::{Write as _, stdout},
     path::PathBuf,
@@ -9,7 +9,7 @@ use crate::{
     config::{self, Config},
     tui::inline::print_struct_docs,
     utils,
-    workflow::{self, WorkflowData},
+    workflow::{self, WorkflowData, WorkflowState},
 };
 use workflow::workflow_data::step as workflow_step;
 
@@ -40,28 +40,23 @@ impl super::Cli {
             .context("Config path is required")?;
         let config = config::load_config(config_path).await;
 
-        let possible_path = PathBuf::from(workflow_path_or_name);
-        let mut workflow = if possible_path.exists() && possible_path.is_file() {
-            workflow::load_from_file(&possible_path)
-                .await
-                .context("Couldn't load workflow from file")?
-        } else {
-            // Load all workflows from config.workflowsDirectory and find the one with matching name
-            let directory_workflows =
-                workflow::load_from_directory(&config.workflows_directory).await?;
-            let matching_workflow = directory_workflows.into_iter().find(|workflow| {
-            matches!(
-                &workflow.state,
-                workflow::WorkflowState::Valid(data) if data.name.eq_ignore_ascii_case(workflow_path_or_name)
-            )
-        });
-
-            matching_workflow.context(format!(
-                "No workflow found matching name \"{workflow_path_or_name}\""
-            ))?
-        };
+        let mut workflow = workflow::load_by_name_or_path(workflow_path_or_name, &config).await?;
 
         workflow.run(Box::new(config)).await?;
+
+        let mut logger = super::CliLogger::default();
+
+        match workflow.state {
+            WorkflowState::SuccessfulRun(_) => {
+                logger.success("Workflow finished successfully");
+            }
+            WorkflowState::FailedRun(failed_run) => {
+                logger.error(&format!("Workflow run failed: {}", failed_run.error));
+            }
+            WorkflowState::Valid(_) | WorkflowState::Invalid(_) | WorkflowState::Running(_) => {
+                bail!("Workflow state is not expected")
+            }
+        }
 
         Ok(())
     }

@@ -18,7 +18,8 @@ impl Default for CliLogger {
         let mut info_color = ColorSpec::new();
         info_color
             .set_bold(false)
-            .set_fg(Some(Color::Rgb(236, 239, 241)));
+            .set_fg(Some(Color::Rgb(178, 235, 242))); // Cyan 100
+        // .set_fg(Some(Color::Rgb(236, 239, 241)));
 
         let mut success_color = ColorSpec::new();
         success_color

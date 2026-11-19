@@ -1,5 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
-
 use anyhow::Result;
 use serde_json::Value;
 use std::sync::Arc;

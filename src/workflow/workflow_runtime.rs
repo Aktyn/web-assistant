@@ -3,6 +3,7 @@ mod page_action_runner;
 
 use anyhow::{Result, bail};
 use scopeguard::defer;
+use std::mem;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
@@ -11,9 +12,10 @@ use super::workflow_data::step;
 use crate::browser::Browser;
 use crate::cli::CliLogger;
 use crate::config::Config;
+use crate::workflow::WorkflowData;
 
 pub struct RunningWorkflow {
-    pub(crate) data: Box<super::WorkflowData>,
+    pub data: super::WorkflowData,
     config: Box<Config>,
     //TODO: try simplify this with just Mutex
     browser: Arc<RwLock<Browser>>,
@@ -21,7 +23,7 @@ pub struct RunningWorkflow {
 }
 
 impl RunningWorkflow {
-    fn new(data: Box<super::WorkflowData>, config: Box<Config>) -> Self {
+    fn new(data: super::WorkflowData, config: Box<Config>) -> Self {
         let browser = Arc::new(RwLock::new(Browser::new(&config.browser)));
         let logger = CliLogger::default();
 
@@ -49,6 +51,15 @@ impl RunningWorkflow {
     }
 }
 
+pub struct SuccessfullWorkflow {
+    pub data: super::WorkflowData,
+}
+
+pub struct FailedWorkflow {
+    pub data: super::WorkflowData,
+    pub error: anyhow::Error,
+}
+
 impl super::Workflow {
     /// # Errors
     /// This function returns an error if the workflow fails to run.
@@ -57,38 +68,39 @@ impl super::Workflow {
             bail!("Cannot run a draft workflow");
         }
 
-        let data = match &self.state {
-            WorkflowState::Valid(data) => data,
-            WorkflowState::Running(_) => bail!("Workflow is already running"),
-            WorkflowState::Error(error) => bail!("Workflow is not valid: {error}"),
-        };
-
-        //TODO: use it throughout the workflow run
-        // let mut logger = CliLogger::default();
-        // logger.info(&format!("Running workflow: {}", data.name));
-
         defer! {
-            // logger.reset();
             CliLogger::default().reset();
         }
 
-        self.state = WorkflowState::Running(RunningWorkflow::new(Box::new(data.clone()), config));
+        let get_running_state = |data: &mut WorkflowData| {
+            WorkflowState::Running(Box::new(RunningWorkflow::new(mem::take(data), config)))
+        };
+
+        self.state = match &mut self.state {
+            WorkflowState::SuccessfulRun(run) => get_running_state(&mut run.data),
+            WorkflowState::FailedRun(run) => get_running_state(&mut run.data),
+            WorkflowState::Valid(data) => get_running_state(data),
+            WorkflowState::Running(_) => bail!("Workflow is already running"),
+            WorkflowState::Invalid(error) => bail!("Cannot run invalid Workflow: {error}"),
+        };
 
         if let WorkflowState::Running(running_workflow) = &mut self.state {
+            running_workflow.logger.lock().await.info(&format!(
+                "Running workflow: \"{}\"",
+                running_workflow.data.name
+            ));
+
             match running_workflow.run_steps().await {
                 Ok(()) => {
-                    //TODO: set state to SuccessfulRun
-                    self.state = WorkflowState::Valid(*running_workflow.data.clone());
+                    self.state = WorkflowState::SuccessfulRun(SuccessfullWorkflow {
+                        data: mem::take(&mut running_workflow.data),
+                    });
                 }
-                Err(e) => {
-                    running_workflow
-                        .logger
-                        .lock()
-                        .await
-                        .error(&format!("Workflow failed to run: {e:?}"));
-                    //TODO: set state to FailedRun
-                    self.state = WorkflowState::Valid(*running_workflow.data.clone());
-                    // self.state = state_backup;
+                Err(error) => {
+                    self.state = WorkflowState::FailedRun(FailedWorkflow {
+                        data: mem::take(&mut running_workflow.data),
+                        error,
+                    });
                 }
             }
         } else {
@@ -132,7 +144,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_invalid_state_bails() {
         let mut workflow = workflow_with_error_state();
-        assert!(matches!(workflow.state, WorkflowState::Error(_)));
+        assert!(matches!(workflow.state, WorkflowState::Invalid(_)));
         let result = workflow.run(&default_config()).await;
         assert!(result.is_err());
         assert!(

@@ -1,13 +1,15 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context as _, Result, anyhow};
 use std::path::{Path, PathBuf};
 
-use crate::utils;
+use super::WorkflowState;
+use crate::{config::Config, utils};
 
 pub(crate) struct JsonFile {
     pub path: PathBuf,
     pub content: String,
 }
 
+/// Accepts also jsonc files
 impl JsonFile {
     async fn new(path: &Path) -> Result<Self> {
         if !path.exists() {
@@ -29,8 +31,6 @@ impl JsonFile {
         Err(anyhow!("Wrong file extension: \"{}\"", path.display()))
     }
 
-    /// Test-only constructor that builds a `JsonFile` from raw content
-    /// without touching the filesystem. Available only in test builds.
     #[cfg(test)]
     pub(crate) fn from_raw(path: PathBuf, content: String) -> Self {
         Self { path, content }
@@ -42,6 +42,31 @@ impl JsonFile {
 pub async fn load_from_file(workflow_file: &Path) -> Result<super::Workflow> {
     let json = JsonFile::new(workflow_file).await?;
     Ok(super::Workflow::new(json))
+}
+
+pub async fn load_by_name_or_path(
+    workflow_name_or_path: &str,
+    config: &Config,
+) -> Result<super::Workflow> {
+    let possible_path = PathBuf::from(workflow_name_or_path);
+    if possible_path.exists() && possible_path.is_file() {
+        return load_from_file(&possible_path)
+            .await
+            .context("Couldn't load workflow from file");
+    }
+
+    // Load all workflows from config.workflowsDirectory and find the one with matching name
+    let directory_workflows = load_from_directory(&config.workflows_directory).await?;
+    let matching_workflow = directory_workflows.into_iter().find(|workflow| {
+        matches!(
+            &workflow.state,
+            WorkflowState::Valid(data) if data.name.eq_ignore_ascii_case(workflow_name_or_path)
+        )
+    });
+
+    matching_workflow.context(format!(
+        "No workflow found matching name \"{workflow_name_or_path}\""
+    ))
 }
 
 /// # Errors
@@ -91,7 +116,7 @@ mod tests {
                 assert_eq!(data.name, "Test Workflow");
                 assert_eq!(data.description.as_deref(), Some("A test"));
             }
-            WorkflowState::Error(_) => panic!("Expected Valid variant"),
+            WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
         }
     }
 
@@ -117,7 +142,7 @@ mod tests {
         let workflows = load_from_directory(tmp.path()).await.unwrap();
         assert_eq!(workflows.len(), 1);
         match &workflows[0].state {
-            WorkflowState::Error(_) => {} // expected
+            WorkflowState::Invalid(_) => {} // expected
             WorkflowState::Valid(_) => panic!("Expected Error variant"),
         }
     }
@@ -155,7 +180,7 @@ mod tests {
         assert_eq!(workflows.len(), 1);
         match &workflows[0].state {
             WorkflowState::Valid(data) => assert_eq!(data.name, "Top"),
-            WorkflowState::Error(_) => panic!("Expected Valid variant"),
+            WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
         }
     }
 
@@ -186,7 +211,7 @@ mod tests {
                 assert_eq!(data.name, "FromFile");
                 assert_eq!(data.description.as_deref(), Some("desc"));
             }
-            WorkflowState::Error(_) => panic!("Expected Valid variant"),
+            WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
         }
     }
 
@@ -198,7 +223,7 @@ mod tests {
         let result = load_from_file(&path).await;
         assert!(result.is_ok());
         let workflow = result.unwrap();
-        assert!(matches!(workflow.state, WorkflowState::Error(_)));
+        assert!(matches!(workflow.state, WorkflowState::Invalid(_)));
     }
 
     #[tokio::test]

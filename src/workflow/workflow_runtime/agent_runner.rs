@@ -7,7 +7,8 @@ use crate::llm;
 impl super::RunningWorkflow {
     pub(super) async fn run_agent_step(&self, step: &step::AgentStep) -> Result<()> {
         let mut logger = self.logger.lock().await;
-        logger.info("Running agent step: \"{step:?}\"");
+        logger.info("Running agent");
+        log::info!("{step:#?}");
 
         let mut browser = self.browser.write().await;
 
@@ -22,27 +23,21 @@ impl super::RunningWorkflow {
             .prompt_mode(step.prompt_mode)
             .max_steps(step.max_steps);
 
-        //TODO:
-        // step.history_output
-
         let history = agent.run(&mut browser, &llm).await?;
-        logger.info(&format!("History: {history:?}"));
 
         if let Some(ref result) = history.final_result() {
-            logger.info("=================== FINAL RESULT ===================");
-            logger.info(result);
-            logger.info("====================================================");
+            logger.success("=================== AGENT RESULT ===================");
+            logger.success(result);
+            logger.success("====================================================");
         } else {
             logger.warning("No final result returned.");
         }
 
         // Save history to file
         if let Some(output_path) = &step.history_output {
-            // let history_file = Path::new("agent_history.json");
-            // agent.save_history(history_file)?;
             //TODO: output should be relative to workflow file
             history.save_to_file(output_path).await?;
-            logger.info(&format!("\nHistory saved to {}", output_path.display()));
+            logger.info(&format!("\nHistory saved to \"{}\"", output_path.display()));
 
             // Variable detection capabilities on run history
             // let variables = agent.detect_variables();
