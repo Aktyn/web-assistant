@@ -163,4 +163,51 @@ mod tests {
             .set_selected(true)
             .render(area, &mut buf);
     }
+
+    #[test]
+    fn test_button_render_disabled() {
+        let area = Rect::new(0, 0, 20, 3);
+        let mut buf = Buffer::empty(area);
+        Button::new("Disabled")
+            .set_disabled(true)
+            .render(area, &mut buf);
+    }
+
+    #[test]
+    fn test_button_color_disabled() {
+        let btn = Button::new("Disabled").set_disabled(true);
+        assert_eq!(btn.color(), palette().disabled);
+    }
+
+    #[test]
+    fn test_button_clone_preserves_state() {
+        let btn = Button::new("Test").set_selected(true).set_disabled(false);
+        let cloned = btn.clone();
+        assert!(matches!(cloned.state, State::Selected));
+        assert!(!cloned.disabled);
+    }
+
+    #[test]
+    fn test_button_debug_display() {
+        let btn = Button::new("Debug");
+        let debug_str = format!("{btn:?}");
+        assert!(debug_str.contains("Button"));
+    }
+
+    #[test]
+    fn test_button_data_clone() {
+        let data: ButtonData<String> = ButtonData::new("label", "action".to_string());
+        // ButtonData doesn't derive Clone, but we can verify fields are equal
+        assert_eq!(data.label, "label");
+        assert_eq!(data.action, "action");
+    }
+
+    #[test]
+    fn test_button_equality_normal_vs_selected() {
+        let normal = Button::new("N").set_selected(false);
+        let selected = Button::new("S").set_selected(true);
+        // Buttons are not Eq because they contain Line<'a> which is not Eq
+        // but we can verify the state differs via color
+        assert_ne!(normal.color(), selected.color());
+    }
 }

@@ -198,6 +198,72 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_print_struct_empty_fields_no_error() {
+        let docs = StructDocs {
+            description: "Empty struct",
+            field_names: &[],
+            field_docs: &[],
+            ..Default::default()
+        };
+        assert_terminal_failure_or_success(|| print_struct(&docs));
+    }
+
+    #[test]
+    fn test_print_struct_single_field() {
+        let docs = StructDocs {
+            description: "Single field",
+            field_names: &["name"],
+            field_docs: &["The name field"],
+            margin_left: Some(2),
+        };
+        assert_terminal_failure_or_success(|| print_struct(&docs));
+    }
+
+    #[test]
+    fn test_struct_docs_default() {
+        let docs = StructDocs::default();
+        assert_eq!(docs.description, "");
+        assert_eq!(docs.field_names.len(), 0);
+        assert_eq!(docs.margin_left, None);
+    }
+
+    #[test]
+    fn test_print_struct_mismatched_lengths_errors() {
+        // This should return an error before even attempting terminal init
+        let docs = StructDocs {
+            description: "Mismatch",
+            field_names: &["a", "b"],
+            field_docs: &["doc_a"],
+            ..Default::default()
+        };
+        let result = print_struct(&docs);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("same length"));
+    }
+
+    #[test]
+    fn test_panic_message_from_string_payload() {
+        let payload: Box<dyn std::any::Any + Send> =
+            Box::new(String::from("terminal initialization failed"));
+        let msg = panic_message(&payload);
+        assert_eq!(msg, "terminal initialization failed");
+    }
+
+    #[test]
+    fn test_panic_message_from_str_payload() {
+        let payload: Box<dyn std::any::Any + Send> = Box::new("some panic message" as &str);
+        let msg = panic_message(&payload);
+        assert_eq!(msg, "some panic message");
+    }
+
+    #[test]
+    fn test_panic_message_from_unknown_type_returns_empty() {
+        let payload: Box<dyn std::any::Any + Send> = Box::new(42i32);
+        let msg = panic_message(&payload);
+        assert_eq!(msg, "");
+    }
+
     /// `print_struct` with valid docs tries to initialize the terminal.
     #[test]
     fn test_print_struct_valid_docs_invokes_terminal() {
@@ -223,10 +289,9 @@ mod tests {
         assert_terminal_failure_or_success(|| print_struct(&docs));
     }
 
-    /// `print_success` also initializes a terminal.
+    /// Terminal init path is exercised through a no-op closure.
     #[test]
-    fn test_print_success_invokes_terminal() {
-        // print_success is not defined yet; this test verifies the terminal init path
+    fn test_assert_terminal_helper_accepts_ok_closure() {
         assert_terminal_failure_or_success(|| Ok(()));
     }
 }

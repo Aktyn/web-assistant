@@ -278,4 +278,85 @@ mod tests {
         assert_eq!(state.title, cloned.title);
         assert_eq!(state.text, cloned.text);
     }
+
+    #[test]
+    fn test_browser_state_format_with_multiple_elements() {
+        let state = BrowserState {
+            url: "https://multi.example.com".into(),
+            title: "Multi".into(),
+            elements: vec![
+                EnhancedElement {
+                    index: 1,
+                    tag: "button".into(),
+                    text: "First".into(),
+                    attributes: HashMap::new(),
+                    x: 0.0,
+                    y: 0.0,
+                },
+                EnhancedElement {
+                    index: 2,
+                    tag: "a".into(),
+                    text: "Link".into(),
+                    attributes: HashMap::from([("href".into(), "#".into())]),
+                    x: 0.0,
+                    y: 0.0,
+                },
+            ],
+            text: "Text".into(),
+        };
+        let formatted = state.format_for_prompt();
+        assert!(formatted.contains("[1]button>First</button"));
+        // Link with href attribute should appear in formatted output
+        assert!(formatted.contains("[2]a"));
+        assert!(formatted.contains("href=\"#\""));
+        assert!(formatted.contains("Link"));
+    }
+
+    #[test]
+    fn test_browser_state_format_text_truncation_at_boundary() {
+        // Exactly 3000 chars should not be truncated
+        let text_3000 = "x".repeat(3000);
+        let state = BrowserState {
+            url: "u".into(),
+            title: "t".into(),
+            elements: vec![],
+            text: text_3000.clone(),
+        };
+        let formatted = state.format_for_prompt();
+        assert!(!formatted.contains("..."));
+        assert!(formatted.contains(&text_3000));
+
+        // 3001 chars should be truncated
+        let text_3001 = "x".repeat(3001);
+        let state2 = BrowserState {
+            url: "u".into(),
+            title: "t".into(),
+            elements: vec![],
+            text: text_3001,
+        };
+        let formatted2 = state2.format_for_prompt();
+        assert!(formatted2.contains("..."));
+    }
+
+    #[test]
+    fn test_extract_dom_js_contains_key_features() {
+        assert!(EXTRACT_DOM_JS.contains("getBoundingClientRect"));
+        assert!(EXTRACT_DOM_JS.contains("getComputedStyle"));
+        assert!(EXTRACT_DOM_JS.contains("querySelectorAll"));
+        assert!(EXTRACT_DOM_JS.contains("window.location.href"));
+        assert!(EXTRACT_DOM_JS.contains("document.title"));
+    }
+
+    #[test]
+    fn test_element_rect_negative_coords() {
+        let rect = ElementRect {
+            x: -10.0,
+            y: -5.0,
+            width: 100.0,
+            height: 50.0,
+        };
+        let (cx, cy) = rect.center();
+        assert!((cx - 40.0).abs() < f64::EPSILON);
+        assert!((cy - 20.0).abs() < f64::EPSILON);
+    }
 }

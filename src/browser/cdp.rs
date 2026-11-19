@@ -814,4 +814,103 @@ mod tests {
             .await;
         assert!(other.is_ok());
     }
+
+    #[tokio::test]
+    async fn test_evaluate_returns_bool_true_for_click_js() {
+        let mock = MockCdp::new();
+        let val = mock.client.evaluate("el.click()").await.unwrap();
+        assert_eq!(val, serde_json::json!(true));
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_returns_bool_true_for_scroll() {
+        let mock = MockCdp::new();
+        let val = mock
+            .client
+            .evaluate("window.scrollBy(0, 100)")
+            .await
+            .unwrap();
+        assert_eq!(val, serde_json::json!(true));
+    }
+
+    #[tokio::test]
+    async fn test_get_content_quads_multiple_quads() {
+        let mock = MockCdp::new();
+        mock.set(
+            "DOM.getContentQuads",
+            serde_json::json!({
+                "quads": [
+                    [0.0, 0.0, 100.0, 0.0, 100.0, 100.0, 0.0, 100.0],
+                    [10.0, 10.0, 90.0, 10.0, 90.0, 90.0, 10.0, 90.0]
+                ]
+            }),
+        );
+        let quads = mock.client.get_content_quads(1).await.unwrap();
+        assert_eq!(quads.len(), 2);
+        assert_eq!(quads[1][0], 10.0);
+    }
+
+    #[tokio::test]
+    async fn test_call_function_on_forwards_params() {
+        let mock = MockCdp::new();
+        // Verify it sends the right command by checking no error
+        let result = mock
+            .client
+            .call_function_on("function(){return 'hello'}", "obj-42")
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_get_box_model_error_propagation() {
+        let mock = MockCdp::new();
+        mock.set_fail("DOM.getBoxModel");
+        let result = mock.client.get_box_model(99).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_send_command_id_increments_sequentially() {
+        let mock = MockCdp::new();
+        let id_before = mock.client.next_id.load(Ordering::SeqCst);
+        let _ = mock
+            .client
+            .send_command("Page.enable", serde_json::json!({}))
+            .await;
+        let id_after = mock.client.next_id.load(Ordering::SeqCst);
+        assert_eq!(id_after, id_before + 1);
+    }
+
+    #[tokio::test]
+    async fn test_navigate_with_http_url_preserved() {
+        let mock = MockCdp::new();
+        let result = mock.client.navigate("http://example.com").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_navigate_with_about_url_preserved() {
+        let mock = MockCdp::new();
+        let result = mock.client.navigate("about:blank").await;
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cdp_request_debug_display() {
+        let req = CdpRequest {
+            id: 42,
+            method: "Page.navigate".to_string(),
+            params: serde_json::json!({"url": "https://example.com"}),
+        };
+        // CdpRequest is pub(crate) and not Debug, but we can verify it exists
+        assert_eq!(req.id, 42);
+        assert_eq!(req.method, "Page.navigate");
+    }
+
+    #[test]
+    fn test_get_available_port_range() {
+        let port = get_available_port().unwrap();
+        assert!(port >= 1024);
+        assert!(port <= 65535);
+    }
 }

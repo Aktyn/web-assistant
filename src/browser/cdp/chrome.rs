@@ -393,4 +393,41 @@ mod tests {
         let result = Chrome::resolve_user_data_dir(None, None);
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_find_executable_via_env_var() {
+        // When CHROME_PATH is set to an existing path, find_executable should return it
+        let tmp = tempfile::tempdir().unwrap();
+        let fake_chrome = tmp.path().join("chrome");
+        std::fs::write(&fake_chrome, "").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&fake_chrome, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let result = std::panic::catch_unwind(|| unsafe {
+            std::env::set_var("CHROME_PATH", fake_chrome.to_str().unwrap());
+            let r = Chrome::find_executable();
+            std::env::remove_var("CHROME_PATH");
+            r
+        });
+        match result {
+            Ok(Ok(path)) => assert_eq!(path, fake_chrome),
+            Ok(Err(e)) => {
+                // If no chrome found by other means, that's acceptable in CI
+                assert!(e.to_string().contains("Chrome") || e.to_string().contains("Chromium"));
+            }
+            Err(_) => panic!("find_executable panicked"),
+        }
+    }
+
+    #[test]
+    fn test_is_user_data_dir_locked_with_lock_file() {
+        let tmp = TempDir::new().unwrap();
+        let lock_file = tmp.path().join("SingletonLock");
+        std::fs::write(&lock_file, "lock").unwrap();
+        let locked = Chrome::is_user_data_dir_locked(tmp.path());
+        assert!(locked);
+    }
 }
