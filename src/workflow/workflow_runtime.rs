@@ -4,8 +4,7 @@ mod page_action_runner;
 use anyhow::{Result, bail};
 use scopeguard::defer;
 use std::mem;
-use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 
 use super::WorkflowState;
 use super::workflow_data::step;
@@ -17,14 +16,13 @@ use crate::workflow::WorkflowData;
 pub struct RunningWorkflow {
     pub data: super::WorkflowData,
     config: Box<Config>,
-    //TODO: try simplify this with just Mutex
-    browser: Arc<RwLock<Browser>>,
+    browser: Mutex<Browser>,
     logger: Mutex<CliLogger>,
 }
 
 impl RunningWorkflow {
     fn new(data: super::WorkflowData, config: Box<Config>) -> Self {
-        let browser = Arc::new(RwLock::new(Browser::new(&config.browser)));
+        let browser = Mutex::new(Browser::new(&config.browser));
         let logger = CliLogger::default();
 
         Self {

@@ -10,7 +10,7 @@ impl super::RunningWorkflow {
         logger.info("Running agent");
         log::info!("{step:#?}");
 
-        let mut browser = self.browser.write().await;
+        let mut browser = self.browser.lock().await;
 
         // LLM inference interface
         let llm = llm::openai::ChatOpenAI::new(llm::ChatOpenAIConfig {
@@ -35,7 +35,6 @@ impl super::RunningWorkflow {
 
         // Save history to file
         if let Some(output_path) = &step.history_output {
-            //TODO: output should be relative to workflow file
             history.save_to_file(output_path).await?;
             logger.info(&format!("\nHistory saved to \"{}\"", output_path.display()));
 
