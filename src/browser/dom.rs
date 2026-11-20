@@ -85,63 +85,6 @@ impl BrowserState {
     }
 }
 
-pub const EXTRACT_DOM_JS: &str = r#"
-(() => {
-    const isVisible = (elem) => {
-        if (!elem) return false;
-        const style = window.getComputedStyle(elem);
-        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
-        const rect = elem.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0 && rect.bottom >= 0 && rect.top <= window.innerHeight;
-    };
-
-    const interactiveSelectors = [
-        'a[href]', 'button', 'input', 'textarea', 'select',
-        '[role="button"]', '[role="link"]', '[role="checkbox"]', '[role="menuitem"]',
-        '[role="tab"]', '[role="combobox"]', '[role="switch"]', '[tabindex]:not([tabindex="-1"])'
-    ];
-
-    const elements = [];
-    const matched = Array.from(document.querySelectorAll(interactiveSelectors.join(',')))
-        .filter(isVisible);
-
-    matched.slice(0, 100).forEach((el, i) => {
-        const index = i + 1;
-        const rect = el.getBoundingClientRect();
-        const attrs = {};
-        for (const attr of el.attributes) {
-            attrs[attr.name] = attr.value;
-        }
-
-        let text = (el.innerText || el.textContent || el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('value') || '').trim();
-        if (text.length > 80) {
-            text = text.substring(0, 77) + '...';
-        }
-
-        elements.push({
-            index: index,
-            tag: el.tagName.toLowerCase(),
-            text: text,
-            attributes: attrs,
-            x: rect.left + rect.width / 2,
-            y: rect.top + rect.height / 2
-        });
-    });
-
-    let bodyText = document.body ? document.body.innerText : '';
-    if (bodyText.length > 4000) {
-        bodyText = bodyText.substring(0, 4000) + '...';
-    }
-
-    return {
-        url: window.location.href,
-        title: document.title,
-        elements: elements,
-        text: bodyText
-    };
-})()
-"#;
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -215,8 +158,26 @@ mod tests {
 
     #[test]
     fn test_extract_dom_js_constant_exists() {
-        assert_ne!(EXTRACT_DOM_JS, "");
+        assert_ne!(EXTRACT_DOM_JS.as_str(), "");
         assert!(EXTRACT_DOM_JS.contains("getBoundingClientRect"));
         assert!(EXTRACT_DOM_JS.contains("interactiveSelectors"));
+    }
+
+    #[test]
+    fn test_build_element_info_js_uses_shared_fragments() {
+        let script = build_element_info_js(3);
+        assert!(script.contains("interactiveSelectors"));
+        assert!(script.contains("isVisible"));
+        assert!(script.contains("matched[3 - 1]"));
+    }
+
+    #[test]
+    fn test_build_input_js_uses_shared_fragments() {
+        let escaped = serde_json::to_string("hello").unwrap();
+        let script = build_input_js(2, &escaped);
+        assert!(script.contains("interactiveSelectors"));
+        assert!(script.contains("isVisible"));
+        assert!(script.contains("matched[2 - 1]"));
+        assert!(script.contains(&escaped));
     }
 }

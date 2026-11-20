@@ -1,4 +1,5 @@
 pub mod dom;
+mod js;
 mod utils;
 pub mod watchdogs;
 
@@ -235,7 +236,7 @@ impl Browser {
             .as_ref()
             .ok_or_else(|| anyhow!("Cannot refresh state: no page available"))?;
         let state: BrowserState = page
-            .evaluate(dom::EXTRACT_DOM_JS, None::<&()>)
+            .evaluate(js::EXTRACT_DOM_JS.as_str(), None::<&()>)
             .await
             .context("Failed to extract DOM from page")?;
         self.cached_state = Some(state.clone());
@@ -272,44 +273,7 @@ impl Browser {
             height: f64,
         }
 
-        let element_info_js = format!(
-            r#"
-            (() => {{
-                const isVisible = (elem) => {{
-                    if (!elem) return false;
-                    const style = window.getComputedStyle(elem);
-                    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
-                    const rect = elem.getBoundingClientRect();
-                    return rect.width > 0 && rect.height > 0 && rect.bottom >= 0 && rect.top <= window.innerHeight;
-                }};
-
-                const interactiveSelectors = [
-                    'a[href]', 'button', 'input', 'textarea', 'select',
-                    '[role="button"]', '[role="link"]', '[role="checkbox"]', '[role="menuitem"]',
-                    '[role="tab"]', '[role="combobox"]', '[role="switch"]', '[tabindex]:not([tabindex="-1"])'
-                ];
-
-                const matched = Array.from(document.querySelectorAll(interactiveSelectors.join(',')))
-                    .filter(isVisible);
-
-                const el = matched[{index} - 1];
-                if (!el) return null;
-
-                const rect = el.getBoundingClientRect();
-                const tagName = el.tagName.toLowerCase();
-                const type = el.getAttribute('type')?.toLowerCase() || '';
-
-                return {{
-                    tag: tagName,
-                    type: type,
-                    x: rect.left,
-                    y: rect.top,
-                    width: rect.width,
-                    height: rect.height
-                }};
-            }})()
-            "#
-        );
+        let element_info_js = js::build_element_info_js(index);
 
         let page = self
             .playwright_page
@@ -359,64 +323,7 @@ impl Browser {
     pub async fn input(&mut self, index: u32, text: &str) -> Result<()> {
         self.start().await?;
         let escaped_text = serde_json::to_string(text)?;
-        let input_js = format!(
-            r#"
-            (() => {{
-                const isVisible = (elem) => {{
-                    if (!elem) return false;
-                    const style = window.getComputedStyle(elem);
-                    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
-                    const rect = elem.getBoundingClientRect();
-                    return rect.width > 0 && rect.height > 0 && rect.bottom >= 0 && rect.top <= window.innerHeight;
-                }};
-
-                const interactiveSelectors = [
-                    'a[href]', 'button', 'input', 'textarea', 'select',
-                    '[role="button"]', '[role="link"]', '[role="checkbox"]', '[role="menuitem"]',
-                    '[role="tab"]', '[role="combobox"]', '[role="switch"]', '[tabindex]:not([tabindex="-1"])'
-                ];
-
-                const matched = Array.from(document.querySelectorAll(interactiveSelectors.join(',')))
-                    .filter(isVisible);
-
-                const el = matched[{index} - 1];
-                if (!el) return false;
-
-                el.scrollIntoView({{ behavior: 'instant', block: 'center' }});
-
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-                const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-
-                el.dispatchEvent(new FocusEvent('focus', {{ bubbles: true }}));
-
-                if (el instanceof HTMLInputElement) {{
-                    nativeInputValueSetter.call(el, {escaped_text});
-                }} else if (el instanceof HTMLTextAreaElement) {{
-                    nativeTextAreaValueSetter.call(el, {escaped_text});
-                }} else if (el.isContentEditable) {{
-                    el.focus();
-                    el.textContent = '';
-                    el.textContent = {escaped_text};
-                }} else {{
-                    nativeInputValueSetter.call(el, {escaped_text});
-                }}
-
-                const inputEvent = new Event('input', {{ bubbles: true, cancelable: true }});
-                el.dispatchEvent(inputEvent);
-
-                const changeEvent = new Event('change', {{ bubbles: true, cancelable: true }});
-                el.dispatchEvent(changeEvent);
-
-                el.dispatchEvent(new FocusEvent('blur', {{ bubbles: true }}));
-
-                if (typeof jQuery !== 'undefined' && jQuery.fn) {{
-                    try {{ jQuery(el).trigger('change'); }} catch (e) {{}}
-                }}
-
-                return true;
-            }})()
-            "#
-        );
+        let input_js = js::build_input_js(index, &escaped_text);
 
         let page = self
             .playwright_page
@@ -495,10 +402,6 @@ impl Default for Browser {
         Self::new(&BrowserConfig::default())
     }
 }
-
-// ---------------------------------------------------------------------------
-// Test-only helpers — kept in a dedicated section at the bottom of the file.
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
