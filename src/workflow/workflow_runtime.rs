@@ -1,9 +1,10 @@
 mod agent_runner;
 mod page_action_runner;
 
-use anyhow::{Result, bail};
+use anyhow::{Context as _, Result, bail};
 use scopeguard::defer;
 use std::mem;
+use std::path::Path;
 use tokio::sync::Mutex;
 
 use super::WorkflowState;
@@ -33,14 +34,15 @@ impl RunningWorkflow {
         }
     }
 
-    async fn run_steps(&self) -> Result<()> {
+    async fn run_steps(&self, file_path: &Path) -> Result<()> {
         for step in &self.data.steps {
             match step {
                 step::WorkflowStepType::PageAction(page_action_step) => {
+                    self.browser.lock().await.start().await?;
                     self.run_page_action_step(page_action_step).await?;
                 }
                 step::WorkflowStepType::Agent(agent_step) => {
-                    self.run_agent_step(agent_step).await?;
+                    self.run_agent_step(agent_step, file_path).await?;
                 }
             }
         }
@@ -62,33 +64,37 @@ impl super::Workflow {
     /// # Errors
     /// This function returns an error if the workflow fails to run.
     pub async fn run(&mut self, config: Box<Config>) -> Result<()> {
-        if self.is_draft() {
-            bail!("Cannot run a draft workflow");
-        }
-
         defer! {
             CliLogger::default().reset();
         }
 
-        let get_running_state = |data: &mut WorkflowData| {
-            WorkflowState::Running(Box::new(RunningWorkflow::new(mem::take(data), config)))
+        let get_running_state = |data: &mut WorkflowData| -> Result<WorkflowState> {
+            let file_path = self
+                .file_path
+                .as_ref()
+                .context("Cannot run a draft workflow")?;
+
+            Ok(WorkflowState::Running(
+                Box::new(RunningWorkflow::new(mem::take(data), config)),
+                file_path.clone(),
+            ))
         };
 
         self.state = match &mut self.state {
-            WorkflowState::SuccessfulRun(run) => get_running_state(&mut run.data),
-            WorkflowState::FailedRun(run) => get_running_state(&mut run.data),
-            WorkflowState::Valid(data) => get_running_state(data),
-            WorkflowState::Running(_) => bail!("Workflow is already running"),
+            WorkflowState::SuccessfulRun(run) => get_running_state(&mut run.data)?,
+            WorkflowState::FailedRun(run) => get_running_state(&mut run.data)?,
+            WorkflowState::Valid(data) => get_running_state(data)?,
+            WorkflowState::Running(..) => bail!("Workflow is already running"),
             WorkflowState::Invalid(error) => bail!("Cannot run invalid Workflow: {error}"),
         };
 
-        if let WorkflowState::Running(running_workflow) = &mut self.state {
+        if let WorkflowState::Running(running_workflow, file_path) = &mut self.state {
             running_workflow.logger.lock().await.info(&format!(
                 "Running workflow: \"{}\"",
                 running_workflow.data.name
             ));
 
-            match running_workflow.run_steps().await {
+            match running_workflow.run_steps(file_path).await {
                 Ok(()) => {
                     self.state = WorkflowState::SuccessfulRun(SuccessfullWorkflow {
                         data: mem::take(&mut running_workflow.data),
@@ -162,7 +168,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_steps_with_navigate_uses_browser() {
-        use crate::browser::cdp::MockCdp;
+        use crate::browser::MockCdp;
 
         let state_json = serde_json::json!({
             "url": "https://example.com",

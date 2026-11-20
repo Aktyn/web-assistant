@@ -8,17 +8,21 @@ use std::path::PathBuf;
 pub struct BrowserConfig {
     /// Whether to run browser in headless mode
     pub headless: bool,
+
     /// The path to the browser executable
     /// If omitted, the browser will be searched for in common locations
     #[serde(alias = "executablePath", rename = "executablePath")]
     pub executable_path: Option<PathBuf>,
+
     /// The path to the user data directory
     /// Useful to preserve browser state between runs
     #[serde(alias = "userDataDir", rename = "userDataDir")]
     pub user_data_dir: Option<PathBuf>,
+
     /// The path to the downloads directory
     #[serde(alias = "downloadsDir", rename = "downloadsDir")]
     pub downloads_dir: Option<PathBuf>,
+
     /// The URL of the Chrome DevTools Protocol (CDP) endpoint
     #[allow(clippy::doc_markdown)]
     #[serde(alias = "cdpUrl", rename = "cdpUrl")]

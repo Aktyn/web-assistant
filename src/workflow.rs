@@ -19,7 +19,7 @@ pub enum WorkflowState {
 
     // NOTE: boxed RunningWorkflow to reduce enum size
     /// During valid workflow run
-    Running(Box<workflow_runtime::RunningWorkflow>),
+    Running(Box<workflow_runtime::RunningWorkflow>, PathBuf),
 
     /// When workflow run was successful
     SuccessfulRun(workflow_runtime::SuccessfullWorkflow),
@@ -32,6 +32,7 @@ pub enum WorkflowState {
 pub struct Workflow {
     pub state: WorkflowState,
 
+    /// Location of the workflow file (json/jsonc)
     /// `file_path == None` indicates draft workflow
     pub file_path: Option<PathBuf>,
 }
@@ -63,9 +64,9 @@ impl Workflow {
         }
     }
 
-    fn is_draft(&self) -> bool {
-        self.file_path.is_none()
-    }
+    // fn is_draft(&self) -> bool {
+    //     self.file_path.is_none()
+    // }
 }
 
 #[cfg(test)]

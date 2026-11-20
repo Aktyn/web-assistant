@@ -8,7 +8,7 @@ use std::time::Duration;
 use tokio::sync::{Mutex, Notify};
 use tracing::{debug, info};
 
-use crate::browser::cdp::CdpClient;
+use super::CdpClient;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

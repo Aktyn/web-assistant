@@ -123,7 +123,7 @@ impl WorkflowPanel {
                                 log::warn!("Invalid workflow: {error_message}");
                                 WorkflowSelectionState::Error(error_message)
                             }
-                            WorkflowState::Running(running_workflow) => {
+                            WorkflowState::Running(running_workflow, ..) => {
                                 return_valid_selection(&running_workflow.data)
                             }
                             WorkflowState::FailedRun(failed_workflow) => {

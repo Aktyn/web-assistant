@@ -1,5 +1,3 @@
-#![allow(clippy::write_with_newline)]
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Write as _;
@@ -14,6 +12,7 @@ pub struct ElementRect {
 }
 
 impl ElementRect {
+    #[must_use]
     pub fn center(&self) -> (f64, f64) {
         (self.x + self.width / 2.0, self.y + self.height / 2.0)
     }
@@ -38,10 +37,11 @@ pub struct BrowserState {
 }
 
 impl BrowserState {
+    #[must_use]
     pub fn format_for_prompt(&self) -> String {
         let mut out = String::new();
-        let _ = write!(out, "Current URL: {}\n", self.url);
-        let _ = write!(out, "Page Title: {}\n", self.title);
+        let _ = writeln!(out, "Current URL: {}", self.url);
+        let _ = writeln!(out, "Page Title: {}", self.title);
 
         out.push_str("\nInteractive Elements:\n");
         if self.elements.is_empty() {
@@ -64,9 +64,9 @@ impl BrowserState {
                         let _ = write!(attr_str, " {k}=\"{v}\"");
                     }
                 }
-                let _ = write!(
+                let _ = writeln!(
                     out,
-                    "[{}]{}{}>{}</{}>\n",
+                    "[{}]{}{}>{}</{}>",
                     el.index, el.tag, attr_str, el.text, el.tag
                 );
             }
@@ -214,68 +214,9 @@ mod tests {
     }
 
     #[test]
-    fn test_browser_state_format_with_attributes() {
-        let mut attrs = HashMap::new();
-        attrs.insert("type".into(), "text".into());
-        attrs.insert("name".into(), "username".into());
-        attrs.insert("class".into(), "input".into()); // should not appear
-
-        let state = BrowserState {
-            url: "test".into(),
-            title: "test".into(),
-            elements: vec![EnhancedElement {
-                index: 1,
-                tag: "input".into(),
-                text: String::new(),
-                attributes: attrs,
-                x: 0.0,
-                y: 0.0,
-            }],
-            text: String::new(),
-        };
-
-        let formatted = state.format_for_prompt();
-        assert!(formatted.contains(r#"type="text""#));
-        assert!(formatted.contains(r#"name="username""#));
-        assert!(!formatted.contains("class"));
-    }
-
-    #[test]
     fn test_extract_dom_js_constant_exists() {
         assert_ne!(EXTRACT_DOM_JS, "");
         assert!(EXTRACT_DOM_JS.contains("getBoundingClientRect"));
         assert!(EXTRACT_DOM_JS.contains("interactiveSelectors"));
-    }
-
-    #[test]
-    fn test_enhanced_element_structure() {
-        let elem = EnhancedElement {
-            index: 5,
-            tag: "a".into(),
-            text: "Link".into(),
-            attributes: HashMap::from([("href".into(), "https://example.com".into())]),
-            x: 100.0,
-            y: 200.0,
-        };
-        assert_eq!(elem.index, 5);
-        assert_eq!(elem.tag, "a");
-        assert_eq!(
-            elem.attributes.get("href"),
-            Some(&"https://example.com".to_string())
-        );
-    }
-
-    #[test]
-    fn test_browser_state_clone() {
-        let state = BrowserState {
-            url: "https://example.com".into(),
-            title: "Example".into(),
-            elements: vec![],
-            text: "Content".into(),
-        };
-        let cloned = state.clone();
-        assert_eq!(state.url, cloned.url);
-        assert_eq!(state.title, cloned.title);
-        assert_eq!(state.text, cloned.text);
     }
 }

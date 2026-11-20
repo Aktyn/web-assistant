@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow::Result;
 
 use super::step;
@@ -5,7 +7,11 @@ use crate::agent;
 use crate::llm;
 
 impl super::RunningWorkflow {
-    pub(super) async fn run_agent_step(&self, step: &step::AgentStep) -> Result<()> {
+    pub(super) async fn run_agent_step(
+        &self,
+        step: &step::AgentStep,
+        workflow_path: impl AsRef<Path>,
+    ) -> Result<()> {
         let mut logger = self.logger.lock().await;
         logger.info("Running agent");
         log::info!("{step:#?}");
@@ -35,7 +41,17 @@ impl super::RunningWorkflow {
 
         // Save history to file
         if let Some(output_path) = &step.history_output {
-            history.save_to_file(output_path).await?;
+            if output_path.is_relative() {
+                let combined_path = workflow_path
+                    .as_ref()
+                    .parent()
+                    .unwrap_or(Path::new(""))
+                    .join(output_path);
+
+                history.save_to_file(combined_path).await?;
+            } else {
+                history.save_to_file(output_path).await?;
+            }
             logger.info(&format!("\nHistory saved to \"{}\"", output_path.display()));
 
             // Variable detection capabilities on run history

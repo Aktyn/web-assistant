@@ -17,7 +17,7 @@ pub struct AgentStep {
     pub max_steps: u16,
 
     /// Path to where the steps that agent did will be saved
-    /// Path can be absolute or relative to CWD
+    /// Path can be absolute or relative to the workflow file
     #[serde(alias = "historyOutput", rename = "historyOutput")]
     pub history_output: Option<PathBuf>,
 

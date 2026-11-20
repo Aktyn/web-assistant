@@ -47,13 +47,13 @@ impl super::Cli {
         let mut logger = super::CliLogger::default();
 
         match workflow.state {
-            WorkflowState::SuccessfulRun(_) => {
+            WorkflowState::SuccessfulRun(..) => {
                 logger.success("Workflow finished successfully");
             }
             WorkflowState::FailedRun(failed_run) => {
                 logger.error(&format!("Workflow run failed: {}", failed_run.error));
             }
-            WorkflowState::Valid(_) | WorkflowState::Invalid(_) | WorkflowState::Running(_) => {
+            WorkflowState::Valid(..) | WorkflowState::Invalid(..) | WorkflowState::Running(..) => {
                 bail!("Workflow state is not expected")
             }
         }

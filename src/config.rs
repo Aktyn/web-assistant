@@ -55,6 +55,7 @@ impl Config {
             return Self::default();
         }
 
+        //TODO: test and possible improve these errors handling for larger scope
         assert!(
             config_path.is_file(),
             "Config path must point to a file. Path: \"{}\"",
