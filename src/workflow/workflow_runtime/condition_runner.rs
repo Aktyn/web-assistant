@@ -7,7 +7,7 @@ impl super::RunningWorkflow {
     pub(super) async fn check_condition(
         &self,
         step: &step::ConditionStep,
-        file_path: &Path,
+        workflow_file_path: &Path,
     ) -> Result<()> {
         log::info!("{step:#?}");
         // let mut logger = self.logger.lock().await;
@@ -30,9 +30,9 @@ impl super::RunningWorkflow {
 
         //TODO: implement
         if is_met {
-            Box::pin(self.run_steps(&step.then, file_path)).await?;
+            Box::pin(self.run_steps(&step.then, workflow_file_path)).await?;
         } else {
-            Box::pin(self.run_steps(&step.else_, file_path)).await?;
+            Box::pin(self.run_steps(&step.else_, workflow_file_path)).await?;
         }
 
         Ok(())

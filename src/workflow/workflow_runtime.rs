@@ -1,6 +1,7 @@
 mod agent_runner;
 mod condition_runner;
 mod context_runner;
+mod iteration_runner;
 mod misc_runner;
 mod page_action_runner;
 mod procedure_runner;
@@ -13,6 +14,7 @@ use std::path::Path;
 use tokio::sync::Mutex;
 
 use super::WorkflowState;
+pub(crate) use super::context;
 use super::workflow_data::step;
 use crate::browser::Browser;
 use crate::cli::CliLogger;
@@ -24,6 +26,7 @@ pub struct RunningWorkflow {
     config: Box<Config>,
     browser: Mutex<Browser>,
     logger: Mutex<CliLogger>,
+    context: Mutex<context::WorkflowContext>,
 }
 
 impl RunningWorkflow {
@@ -36,10 +39,15 @@ impl RunningWorkflow {
             config,
             browser,
             logger: Mutex::new(logger),
+            context: Mutex::new(super::context::WorkflowContext::new()),
         }
     }
 
-    async fn run_steps(&self, steps: &Vec<step::WorkflowStepType>, file_path: &Path) -> Result<()> {
+    async fn run_steps(
+        &self,
+        steps: &Vec<step::WorkflowStepType>,
+        workflow_file_path: &Path,
+    ) -> Result<()> {
         for step in steps {
             match step {
                 step::WorkflowStepType::PageAction(page_action_step) => {
@@ -47,18 +55,19 @@ impl RunningWorkflow {
                     self.run_page_action(page_action_step).await?;
                 }
                 step::WorkflowStepType::Agent(agent_step) => {
-                    self.run_agent(agent_step, file_path).await?;
+                    self.run_agent(agent_step, workflow_file_path).await?;
                 }
                 step::WorkflowStepType::SystemAction(system_action_step) => {
                     self.run_system_action(system_action_step).await?;
                 }
 
                 step::WorkflowStepType::Condition(condition_step) => {
-                    self.check_condition(condition_step, file_path).await?;
+                    self.check_condition(condition_step, workflow_file_path)
+                        .await?;
                 }
-                step::WorkflowStepType::ForEach(_for_each_step) => {
-                    //TODO:
-                    // self.run_for_each_step(for_each_step, file_path).await?;
+                step::WorkflowStepType::ForEach(for_each_step) => {
+                    self.iterate_over_each(for_each_step, workflow_file_path)
+                        .await?;
                 }
                 step::WorkflowStepType::RunProcedure(run_procedure_step) => {
                     self.run_procedure(run_procedure_step).await?;
@@ -99,14 +108,14 @@ impl super::Workflow {
         }
 
         let get_running_state = |data: &mut WorkflowData| -> Result<WorkflowState> {
-            let file_path = self
+            let workflow_file_path = self
                 .file_path
                 .as_ref()
                 .context("Cannot run a draft workflow")?;
 
             Ok(WorkflowState::Running(
                 Box::new(RunningWorkflow::new(mem::take(data), config)),
-                file_path.clone(),
+                workflow_file_path.clone(),
             ))
         };
 
@@ -118,14 +127,14 @@ impl super::Workflow {
             WorkflowState::Invalid(error) => bail!("Cannot run invalid Workflow: {error}"),
         };
 
-        if let WorkflowState::Running(running_workflow, file_path) = &mut self.state {
+        if let WorkflowState::Running(running_workflow, workflow_file_path) = &mut self.state {
             running_workflow.logger.lock().await.info(&format!(
                 "Running workflow: \"{}\"",
                 running_workflow.data.name
             ));
 
             match running_workflow
-                .run_steps(&running_workflow.data.steps, file_path)
+                .run_steps(&running_workflow.data.steps, workflow_file_path)
                 .await
             {
                 Ok(()) => {

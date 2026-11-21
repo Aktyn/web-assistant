@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub(crate) use agent::AgentStep;
 pub(crate) use condition::{Condition, ConditionStep};
 pub(crate) use context::UpdateContextStep;
-pub(crate) use iteration::ForEachStep;
+pub(crate) use iteration::{ForEachStep, get_iteration_items};
 pub(crate) use misc::{AbortStep, WaitStep};
 pub(crate) use page_action::{PageAction, PageActionStep};
 pub(crate) use procedure::RunProcedureStep;

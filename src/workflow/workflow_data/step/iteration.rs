@@ -1,7 +1,11 @@
-use std::path::PathBuf;
+mod file_iterator;
 
+use anyhow::Result;
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+
+pub(crate) use super::super::super::context;
 
 /// `ForEachStep` - iterates over each item in given data
 #[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
@@ -9,7 +13,7 @@ use serde::{Deserialize, Serialize};
 pub struct ForEachStep {
     /// Name of the context used to store the iterating item
     #[serde(alias = "contextName", rename = "contextName")]
-    context_name: String,
+    pub context_name: String,
 
     /// Specifies external source of items
     /// Note that source file can be modified
@@ -17,7 +21,7 @@ pub struct ForEachStep {
     /// Contains "type" property (enum)
     /// See specific fields for each type:
     /// "file" --> `FileIterator`
-    items: IterationItems,
+    pub items: IterationItems,
 
     /// Whether to preserve or reset context after each iteration completes
     #[serde(
@@ -25,10 +29,17 @@ pub struct ForEachStep {
         alias = "preserveContext",
         rename = "preserveContext"
     )]
-    preserve_context: bool,
+    pub preserve_context: bool,
 
     /// List of steps to run in each iteration
-    steps: Vec<super::WorkflowStepType>,
+    pub steps: Vec<super::WorkflowStepType>,
+
+    /// Steps to perform when iteration fails
+    /// For example, can be used to abort the workflow
+    /// Note that error inside `on_error` steps will cause workflow failure
+    /// Omit this property to continue iterating after error
+    #[serde(alias = "onError", rename = "onError")]
+    pub on_error: Option<Vec<super::WorkflowStepType>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -44,4 +55,16 @@ pub struct FileIterator {
     /// Path to the file to iterate over
     #[serde(alias = "sourceFile", rename = "sourceFile")]
     pub source_file: PathBuf,
+}
+
+pub(crate) async fn get_iteration_items(
+    items: &IterationItems,
+    // Used for file iterator if source_file is relative
+    workflow_file_path: &Path,
+) -> Result<Vec<Box<dyn context::WorkflowContextItem>>> {
+    match items {
+        IterationItems::File(file_iterator) => {
+            file_iterator::get_file_iterator_items(file_iterator, workflow_file_path).await
+        }
+    }
 }
