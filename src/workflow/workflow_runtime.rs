@@ -1,5 +1,10 @@
 mod agent_runner;
+mod condition_runner;
+mod context_runner;
+mod misc_runner;
 mod page_action_runner;
+mod procedure_runner;
+mod system_action_runner;
 
 use anyhow::{Context as _, Result, bail};
 use scopeguard::defer;
@@ -34,15 +39,40 @@ impl RunningWorkflow {
         }
     }
 
-    async fn run_steps(&self, file_path: &Path) -> Result<()> {
-        for step in &self.data.steps {
+    async fn run_steps(&self, steps: &Vec<step::WorkflowStepType>, file_path: &Path) -> Result<()> {
+        for step in steps {
             match step {
                 step::WorkflowStepType::PageAction(page_action_step) => {
                     self.browser.lock().await.start().await?;
-                    self.run_page_action_step(page_action_step).await?;
+                    self.run_page_action(page_action_step).await?;
                 }
                 step::WorkflowStepType::Agent(agent_step) => {
-                    self.run_agent_step(agent_step, file_path).await?;
+                    self.run_agent(agent_step, file_path).await?;
+                }
+                step::WorkflowStepType::SystemAction(system_action_step) => {
+                    self.run_system_action(system_action_step).await?;
+                }
+
+                step::WorkflowStepType::Condition(condition_step) => {
+                    self.check_condition(condition_step, file_path).await?;
+                }
+                step::WorkflowStepType::ForEach(_for_each_step) => {
+                    //TODO:
+                    // self.run_for_each_step(for_each_step, file_path).await?;
+                }
+                step::WorkflowStepType::RunProcedure(run_procedure_step) => {
+                    self.run_procedure(run_procedure_step).await?;
+                }
+
+                step::WorkflowStepType::UpdateContext(update_context_step) => {
+                    self.update_context(update_context_step).await?;
+                }
+
+                step::WorkflowStepType::Wait(wait_step) => {
+                    self.wait(wait_step).await?;
+                }
+                step::WorkflowStepType::Abort(abort_step) => {
+                    self.abort_workflow(abort_step)?;
                 }
             }
         }
@@ -94,7 +124,10 @@ impl super::Workflow {
                 running_workflow.data.name
             ));
 
-            match running_workflow.run_steps(file_path).await {
+            match running_workflow
+                .run_steps(&running_workflow.data.steps, file_path)
+                .await
+            {
                 Ok(()) => {
                     self.state = WorkflowState::SuccessfulRun(SuccessfullWorkflow {
                         data: mem::take(&mut running_workflow.data),

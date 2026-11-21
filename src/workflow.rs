@@ -5,9 +5,7 @@ mod workflow_runtime;
 use std::path::PathBuf;
 
 use jsonc_parser::{ParseOptions, errors::ParseError, parse_to_serde_value};
-pub(crate) use workflow_data::WorkflowData;
-#[cfg(test)]
-pub(crate) use workflow_loader::JsonFile;
+pub(crate) use workflow_data::{WorkflowData, WorkflowProcedure};
 pub use workflow_loader::{load_by_name_or_path, load_from_directory};
 
 pub enum WorkflowState {
@@ -58,21 +56,19 @@ impl Workflow {
             state: WorkflowState::Valid(WorkflowData {
                 name: "Draft workflow".to_string(),
                 description: None,
+                procedures: vec![],
                 steps: vec![],
             }),
             file_path: None,
         }
     }
-
-    // fn is_draft(&self) -> bool {
-    //     self.file_path.is_none()
-    // }
 }
 
 #[cfg(test)]
 #[allow(clippy::match_wildcard_for_single_variants)]
 mod tests {
     use super::*;
+    pub(crate) use workflow_loader::JsonFile;
     pub(crate) use workflow_loader::JsonFile;
 
     #[tokio::test]

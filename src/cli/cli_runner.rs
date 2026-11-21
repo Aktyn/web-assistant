@@ -9,7 +9,7 @@ use crate::{
     config::{self, Config},
     tui::inline::print_struct_docs,
     utils,
-    workflow::{self, WorkflowData, WorkflowState},
+    workflow::{self, WorkflowState},
 };
 use workflow::workflow_data::step as workflow_step;
 
@@ -97,21 +97,57 @@ fn explain_config() -> Result<()> {
 
 fn explain_workflow(include_example: bool) -> Result<()> {
     print_struct_docs!(workflow::WorkflowData)?;
-
+    utils::print_lines(1);
+    print_struct_docs!(workflow::WorkflowProcedure, 2)?;
     utils::print_lines(1);
 
     print_struct_docs!(workflow_step::PageActionStep, 2)?;
     utils::print_lines(1);
     print_struct_docs!(workflow_step::page_action::NavigateAction, 4)?;
     utils::print_lines(1);
+    print_struct_docs!(workflow_step::page_action::InputAction, 4)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::page_action::ClickAction, 4)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::page_action::EvaluateAction, 4)?;
+    utils::print_lines(1);
     print_struct_docs!(workflow_step::AgentStep, 2)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::ConditionStep, 2)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::condition::MatchRegexCondition, 4)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::condition::TruthyCondition, 4)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::condition::EqualCondition, 4)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::ForEachStep, 2)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::iteration::FileIterator, 4)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::RunProcedureStep, 2)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::UpdateContextStep, 2)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::SystemActionStep, 2)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::system_action::NotifyAction, 4)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::system_action::OpenUrlAction, 4)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::WaitStep, 2)?;
+    utils::print_lines(1);
+    print_struct_docs!(workflow_step::AbortStep, 2)?;
 
     if include_example {
         utils::print_lines(2);
 
-        let example: WorkflowData = workflow::WorkflowData {
+        let example: workflow::WorkflowData = workflow::WorkflowData {
             name: String::from("Example"),
             description: Some(String::from("Example workflow description")),
+            procedures: vec![
+                //TODO: Add example procedure
+            ],
             steps: vec![
                 workflow_step::WorkflowStepType::PageAction(workflow_step::PageActionStep {
                     page_index: 0,

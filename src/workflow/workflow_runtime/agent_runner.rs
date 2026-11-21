@@ -7,7 +7,7 @@ use crate::agent;
 use crate::llm;
 
 impl super::RunningWorkflow {
-    pub(super) async fn run_agent_step(
+    pub(super) async fn run_agent(
         &self,
         step: &step::AgentStep,
         workflow_path: impl AsRef<Path>,

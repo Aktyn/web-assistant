@@ -1,7 +1,7 @@
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
 
-/// `PageActionStep`
+/// `PageActionStep` - interacts with the page
 #[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct PageActionStep {
@@ -14,6 +14,9 @@ pub struct PageActionStep {
     /// Contains "type" property (enum)
     /// See specific fields for each type:
     /// "navigate" --> `NavigateAction`
+    /// "input" --> `InputAction`
+    /// "click" --> `ClickAction`
+    /// "evaluate" --> `EvaluateAction`
     pub action: PageAction,
 }
 
@@ -21,6 +24,9 @@ pub struct PageActionStep {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum PageAction {
     Navigate(NavigateAction),
+    Input(InputAction),
+    Click(ClickAction),
+    Evaluate(EvaluateAction),
 }
 
 /// `NavigateAction`
@@ -29,6 +35,48 @@ pub enum PageAction {
 pub struct NavigateAction {
     /// URL to navigate to
     pub url: String,
+}
+
+/// `InputAction`
+#[derive(Debug, Deserialize, Serialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
+pub struct InputAction {
+    /// CSS selector to find the input element
+    pub selector: String,
+
+    /// Value to type inside the input element
+    /// Input field will be cleared beforehand
+    pub value: String,
+}
+
+/// `ClickAction`
+#[derive(Debug, Deserialize, Serialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
+pub struct ClickAction {
+    /// CSS selector to find the click element
+    pub selector: String,
+
+    /// Expects the page to redirect after clicking an element
+    /// If the navigation won't occur, workflow will fail
+    #[serde(
+        default = "bool::default",
+        alias = "waitForNavigation",
+        rename = "waitForNavigation"
+    )]
+    pub wait_for_navigation: bool,
+}
+
+/// `EvaluateAction`
+#[derive(Debug, Deserialize, Serialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
+pub struct EvaluateAction {
+    /// Either path to JavaScript file or code to evaluate on the page
+    pub script: String,
+
+    /// Upserts context with the value returned from evaluated code
+    /// If not provided, the context will not be created/updated
+    #[serde(default, alias = "contextName", rename = "contextName")]
+    pub context_name: Option<String>,
 }
 
 #[cfg(test)]

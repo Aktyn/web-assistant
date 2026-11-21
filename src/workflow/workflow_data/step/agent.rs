@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use crate::agent;
 
-/// `AgentStep`
+/// `AgentStep` - runs an AI agent to perform a task
 #[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct AgentStep {

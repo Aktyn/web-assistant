@@ -87,7 +87,7 @@ pub fn print_struct(docs: &StructDocs) -> anyhow::Result<()> {
                 .fg(palette().muted_foreground)
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .title(format!(" {} ", docs.description));
+                .title(format!(" {} ", docs.description).bold());
             frame.render_widget(block, area);
 
             let content_area = area.inner(Margin::from(1));
@@ -122,7 +122,10 @@ pub fn print_struct(docs: &StructDocs) -> anyhow::Result<()> {
                 let docs = Text::from(
                     docs.field_docs[index]
                         .split('\n')
-                        .map(|line| Line::from(format!("// {line}")))
+                        .enumerate()
+                        .map(|(index, line)| {
+                            Line::from(format!("{} {}", if index == 0 { "--" } else { "  " }, line))
+                        })
                         .collect::<Vec<Line>>(),
                 );
                 frame.render_widget(docs, doc_area);

@@ -42,6 +42,11 @@ lto = true
 codegen-units = 1
 strip = true
 
+[profile.dev]
+opt-level = 0
+lto = false
+strip = false
+
 [lints.clippy]
 print_stdout = "deny"
 print_stderr = "deny"
