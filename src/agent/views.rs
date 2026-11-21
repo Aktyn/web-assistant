@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
+use tokio::fs;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -36,6 +36,7 @@ pub enum Action {
 
 impl Action {
     #[must_use]
+    #[allow(unused)] //TODO:
     pub fn name(&self) -> &'static str {
         match self {
             Action::Navigate { .. } => "navigate",
@@ -74,6 +75,7 @@ pub struct ActionResult {
     pub extracted_content: Option<String>,
 }
 
+// TODO: turn it into enum
 impl ActionResult {
     pub fn success(content: impl Into<String>) -> Self {
         Self {
@@ -121,7 +123,7 @@ pub struct AgentStepState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct AgentHistory {
+pub struct AgentHistoryItem {
     pub model_output: Option<AgentOutput>,
     #[serde(default)]
     pub result: Vec<ActionResult>,
@@ -132,30 +134,30 @@ pub struct AgentHistory {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AgentHistoryList {
     #[serde(default)]
-    pub history: Vec<AgentHistory>,
+    pub items: Vec<AgentHistoryItem>,
 }
 
 impl AgentHistoryList {
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            history: Vec::new(),
-        }
+        Self { items: Vec::new() }
     }
 
     #[must_use]
+    #[allow(unused)] //TODO:
     pub fn is_empty(&self) -> bool {
-        self.history.is_empty()
+        self.items.is_empty()
     }
 
     #[must_use]
+    #[allow(unused)] //TODO:
     pub fn len(&self) -> usize {
-        self.history.len()
+        self.items.len()
     }
 
     #[must_use]
     pub fn final_result(&self) -> Option<String> {
-        if let Some(last_step) = self.history.last()
+        if let Some(last_step) = self.items.last()
             && let Some(last_res) = last_step.result.last()
             && let Some(ref content) = last_res.extracted_content
         {
@@ -165,8 +167,9 @@ impl AgentHistoryList {
     }
 
     #[must_use]
+    #[allow(unused)] //TODO:
     pub fn is_done(&self) -> bool {
-        if let Some(last_step) = self.history.last()
+        if let Some(last_step) = self.items.last()
             && let Some(last_res) = last_step.result.last()
         {
             return last_res.is_done;
@@ -175,8 +178,9 @@ impl AgentHistoryList {
     }
 
     #[must_use]
+    #[allow(unused)] //TODO:
     pub fn is_successful(&self) -> Option<bool> {
-        if let Some(last_step) = self.history.last()
+        if let Some(last_step) = self.items.last()
             && let Some(last_res) = last_step.result.last()
             && last_res.is_done
         {
@@ -185,24 +189,27 @@ impl AgentHistoryList {
         None
     }
 
-    pub fn save_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
+    pub async fn save_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
         let p = path.as_ref();
         if let Some(parent) = p.parent()
             && !parent.as_os_str().is_empty()
         {
             fs::create_dir_all(parent)
+                .await
                 .with_context(|| format!("Failed to create directory {}", parent.display()))?;
         }
         let json_str = serde_json::to_string_pretty(self)
             .context("Failed to serialize AgentHistoryList to JSON")?;
         fs::write(p, json_str)
+            .await
             .with_context(|| format!("Failed to write history to {}", p.display()))?;
         Ok(())
     }
 
-    pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self> {
+    pub async fn load_from_file(path: impl AsRef<Path>) -> Result<Self> {
         let p = path.as_ref();
         let content = fs::read_to_string(p)
+            .await
             .with_context(|| format!("Failed to read history from {}", p.display()))?;
         let history = serde_json::from_str(&content)
             .with_context(|| format!("Failed to parse JSON history from {}", p.display()))?;
@@ -365,7 +372,7 @@ mod tests {
     #[test]
     fn test_agent_history_list_is_done_but_not_successful() {
         let list = AgentHistoryList {
-            history: vec![AgentHistory {
+            items: vec![AgentHistoryItem {
                 model_output: None,
                 result: vec![ActionResult::error("Something failed")],
                 state: None,
@@ -380,7 +387,7 @@ mod tests {
     fn test_agent_history_list_done_with_no_extracted_content() {
         // A done result without extracted_content → final_result is None.
         let list = AgentHistoryList {
-            history: vec![AgentHistory {
+            items: vec![AgentHistoryItem {
                 model_output: None,
                 result: vec![ActionResult {
                     is_done: true,
@@ -408,7 +415,7 @@ mod tests {
         let nested = temp_dir.path().join("a/b/history.json");
 
         let list = AgentHistoryList {
-            history: vec![AgentHistory {
+            items: vec![AgentHistoryItem {
                 model_output: Some(AgentOutput {
                     thought: Some("thinking".into()),
                     memory: None,

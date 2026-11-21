@@ -12,7 +12,7 @@ impl View for EmptyView {
         &mut self,
         _event: &crossterm::event::Event,
         _terminal: &mut ratatui::DefaultTerminal,
-    ) -> anyhow::Result<()> {
+    ) -> bool {
         unreachable!("EmptyView should not be used to handle events")
     }
 

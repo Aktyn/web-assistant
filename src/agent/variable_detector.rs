@@ -1,32 +1,44 @@
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
+
+static EMAIL_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[\w\.-]+@[\w\.-]+\.\w+$").expect("valid email regex"));
+static PHONE_CHARS_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[\d\s\-\(\)\+]+$").expect("valid phone regex"));
+static DATE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2}$").expect("valid date regex"));
 
 use super::views::{Action, AgentHistoryList, DetectedVariable, InteractedElementMetadata};
 
-#[must_use]
-pub fn detect_variables_in_history(
-    history: &AgentHistoryList,
-) -> HashMap<String, DetectedVariable> {
-    let mut detected: HashMap<String, DetectedVariable> = HashMap::new();
-    let mut detected_values: HashSet<String> = HashSet::new();
+// #[must_use]
+// fn detect_variables_in_history(
+//     history: &AgentHistoryList,
+// ) -> HashMap<String, DetectedVariable> {
+impl AgentHistoryList {
+    #[must_use]
+    pub fn detect_variables(&self) -> HashMap<String, DetectedVariable> {
+        let mut detected: HashMap<String, DetectedVariable> = HashMap::new();
+        let mut detected_values: HashSet<String> = HashSet::new();
 
-    for history_item in &history.history {
-        let Some(model_output) = &history_item.model_output else {
-            continue;
-        };
+        for history_item in &self.items {
+            let Some(model_output) = &history_item.model_output else {
+                continue;
+            };
 
-        for (action_idx, action) in model_output.action.iter().enumerate() {
-            let element = history_item
-                .state
-                .as_ref()
-                .and_then(|s| s.interacted_element.as_ref())
-                .and_then(|elements| elements.get(action_idx));
+            for (action_idx, action) in model_output.action.iter().enumerate() {
+                let element = history_item
+                    .state
+                    .as_ref()
+                    .and_then(|s| s.interacted_element.as_ref())
+                    .and_then(|elements| elements.get(action_idx));
 
-            detect_in_action(action, element, &mut detected, &mut detected_values);
+                detect_in_action(action, element, &mut detected, &mut detected_values);
+            }
         }
-    }
 
-    detected
+        detected
+    }
 }
 
 fn detect_in_action(
@@ -205,23 +217,18 @@ pub fn detect_from_attributes(
 }
 
 pub fn detect_from_value_pattern(value: &str) -> Option<(String, Option<String>)> {
-    if value.contains('@') && value.contains('.') {
-        let email_regex = Regex::new(r"^[\w\.-]+@[\w\.-]+\.\w+$").unwrap();
-        if email_regex.is_match(value) {
-            return Some(("email".into(), Some("email".into())));
-        }
+    if value.contains('@') && value.contains('.') && EMAIL_REGEX.is_match(value) {
+        return Some(("email".into(), Some("email".into())));
     }
 
-    let phone_chars_regex = Regex::new(r"^[\d\s\-\(\)\+]+$").unwrap();
-    if phone_chars_regex.is_match(value) {
+    if PHONE_CHARS_REGEX.is_match(value) {
         let digits_only: String = value.chars().filter(char::is_ascii_digit).collect();
         if digits_only.len() >= 10 {
             return Some(("phone".into(), Some("phone".into())));
         }
     }
 
-    let date_regex = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
-    if date_regex.is_match(value) {
+    if DATE_REGEX.is_match(value) {
         return Some(("date".into(), Some("date".into())));
     }
 
@@ -268,7 +275,8 @@ pub fn substitute_variables_in_history<S: ::std::hash::BuildHasher + Default>(
     history: &AgentHistoryList,
     variables: &HashMap<String, String, S>,
 ) -> AgentHistoryList {
-    let detected = detect_variables_in_history(history);
+    // let detected = detect_variables_in_history(history);
+    let detected = history.detect_variables();
 
     let mut value_replacements: HashMap<String, String> = HashMap::default();
     for (var_name, new_val) in variables {
@@ -282,7 +290,7 @@ pub fn substitute_variables_in_history<S: ::std::hash::BuildHasher + Default>(
     }
 
     let mut modified = history.clone();
-    for item in &mut modified.history {
+    for item in &mut modified.items {
         if let Some(ref mut output) = item.model_output {
             for action in &mut output.action {
                 substitute_in_action(action, &value_replacements);
@@ -336,7 +344,7 @@ fn substitute_in_json(val: &mut serde_json::Value, replacements: &HashMap<String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::views::{AgentHistory, AgentOutput, AgentStepState};
+    use crate::agent::views::{AgentHistoryItem, AgentOutput, AgentStepState};
 
     #[test]
     fn test_variable_detection_by_element_attribute() {
@@ -355,7 +363,7 @@ mod tests {
         };
 
         let history = AgentHistoryList {
-            history: vec![AgentHistory {
+            items: vec![AgentHistoryItem {
                 model_output: Some(AgentOutput {
                     thought: None,
                     memory: None,
@@ -386,7 +394,7 @@ mod tests {
         };
 
         let history = AgentHistoryList {
-            history: vec![AgentHistory {
+            items: vec![AgentHistoryItem {
                 model_output: Some(AgentOutput {
                     action: vec![action],
                     ..Default::default()
@@ -418,8 +426,8 @@ mod tests {
         name_attrs.insert("name".into(), "full_name".into());
 
         let history = AgentHistoryList {
-            history: vec![
-                AgentHistory {
+            items: vec![
+                AgentHistoryItem {
                     model_output: Some(AgentOutput {
                         action: vec![action1],
                         ..Default::default()
@@ -434,7 +442,7 @@ mod tests {
                     }),
                     ..Default::default()
                 },
-                AgentHistory {
+                AgentHistoryItem {
                     model_output: Some(AgentOutput {
                         action: vec![action2],
                         ..Default::default()
@@ -457,8 +465,8 @@ mod tests {
         subs.insert("full_name".into(), "Jane Smith".into());
 
         let new_hist = substitute_variables_in_history(&history, &subs);
-        let first_act = &new_hist.history[0].model_output.as_ref().unwrap().action[0];
-        let second_act = &new_hist.history[1].model_output.as_ref().unwrap().action[0];
+        let first_act = &new_hist.items[0].model_output.as_ref().unwrap().action[0];
+        let second_act = &new_hist.items[1].model_output.as_ref().unwrap().action[0];
 
         match first_act {
             Action::Input { text, .. } => assert_eq!(text, "new@example.com"),

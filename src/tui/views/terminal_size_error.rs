@@ -1,5 +1,7 @@
 use ratatui::widgets::Widget as _;
 
+use crate::tui::common::palette;
+
 use super::View;
 use super::common::consts::MINIMUM_TERMINAL_SIZE;
 use super::common::widgets::ErrorAlert;
@@ -14,6 +16,8 @@ impl TerminalSizeErrorView {
 
 impl View for TerminalSizeErrorView {
     fn draw(&mut self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
+        buf.set_style(area, palette().style);
+
         let text = vec![
             "Terminal is too small!".into(),
             format!("Current size: {}x{}", area.width, area.height).into(),
@@ -30,8 +34,8 @@ impl View for TerminalSizeErrorView {
         &mut self,
         _event: &crossterm::event::Event,
         _terminal: &mut ratatui::DefaultTerminal,
-    ) -> anyhow::Result<()> {
-        Ok(())
+    ) -> bool {
+        false
     }
 
     fn get_action(&self) -> Option<super::ViewAction> {
@@ -96,8 +100,7 @@ mod tests {
     fn test_terminal_size_error_view_handle_event_returns_ok() {
         let mut view = TerminalSizeErrorView::new();
         let event = Event::Key(KeyCode::Enter.into());
-        let result = view.handle_event(&event, unsafe { &mut *no_read_term() });
-        assert!(result.is_ok());
+        let _handled = view.handle_event(&event, unsafe { &mut *no_read_term() });
     }
 
     #[test]

@@ -20,11 +20,18 @@ regex = "1"
 tokio-tungstenite = { version = "0.30", features = ["connect"] }
 futures-util = "0.3"
 url = "2"
-ratatui = "0.30.2"
+ratatui = { version = "0.30.2", features = ["unstable-rendered-line-info"] }
 crossterm = "0.29.0"
-clap = { version = "4.6.7", features = ["derive"] }
+clap = { version = "4.6.8", features = ["derive"] }
 tui-logger = "0.18.3"
 log = "0.4.35"
+documented = "0.10.0"
+env_logger = "0.11.11"
+jsonc-parser = { version = "0.34", features = ["serde"] }
+termcolor = "1.4.1"
+scopeguard = "1.2.0"
+base64 = "0.23"
+playwright-rs = "0.21"
 
 [dev-dependencies]
 tempfile = "3"
@@ -35,8 +42,15 @@ lto = true
 codegen-units = 1
 strip = true
 
+[profile.dev]
+opt-level = 0
+lto = false
+strip = false
+
 [lints.clippy]
 print_stdout = "deny"
 print_stderr = "deny"
 unused_self = "warn"
-pedantic = "warn"
+must_use_candidate = "deny"
+pedantic = { level = "warn", priority = -1 }
+missing_errors_doc = "allow"

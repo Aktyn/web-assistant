@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use web_assistant::agent::views::{
-    Action, AgentHistory, AgentHistoryList, AgentOutput, AgentStepState, InteractedElementMetadata,
+    Action, AgentHistoryItem, AgentHistoryList, AgentOutput, AgentStepState,
+    InteractedElementMetadata,
 };
 use web_assistant::agent::{detect_variables_in_history, substitute_variables_in_history};
 
@@ -19,7 +20,7 @@ fn test_all_input_types_detection() {
         attrs.insert("type".into(), input_type.into());
 
         let history = AgentHistoryList {
-            history: vec![AgentHistory {
+            items: vec![AgentHistoryItem {
                 model_output: Some(AgentOutput {
                     action: vec![Action::Input {
                         index: 1,
@@ -67,7 +68,7 @@ fn test_semantic_attributes_detection() {
         attrs.insert("id".into(), id_attr.into());
 
         let history = AgentHistoryList {
-            history: vec![AgentHistory {
+            items: vec![AgentHistoryItem {
                 model_output: Some(AgentOutput {
                     action: vec![Action::Input {
                         index: 1,
@@ -104,8 +105,8 @@ fn test_duplicate_variable_naming() {
     attrs2.insert("name".into(), "first_name".into());
 
     let history = AgentHistoryList {
-        history: vec![
-            AgentHistory {
+        items: vec![
+            AgentHistoryItem {
                 model_output: Some(AgentOutput {
                     action: vec![Action::Input {
                         index: 1,
@@ -123,7 +124,7 @@ fn test_duplicate_variable_naming() {
                 }),
                 ..Default::default()
             },
-            AgentHistory {
+            AgentHistoryItem {
                 model_output: Some(AgentOutput {
                     action: vec![Action::Input {
                         index: 2,
@@ -155,7 +156,7 @@ fn test_duplicate_variable_naming() {
 #[test]
 fn test_substitute_variables_partial_and_nested() {
     let history = AgentHistoryList {
-        history: vec![AgentHistory {
+        items: vec![AgentHistoryItem {
             model_output: Some(AgentOutput {
                 action: vec![
                     Action::Input {
