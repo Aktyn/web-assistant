@@ -1,6 +1,8 @@
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
 
+use super::WorkflowString;
+
 /// `PageActionStep` - interacts with the page
 #[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
@@ -34,7 +36,7 @@ pub enum PageAction {
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct NavigateAction {
     /// URL to navigate to
-    pub url: String,
+    pub url: WorkflowString,
 }
 
 /// `InputAction`
@@ -42,11 +44,11 @@ pub struct NavigateAction {
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct InputAction {
     /// CSS selector to find the input element
-    pub selector: String,
+    pub selector: WorkflowString,
 
     /// Value to type inside the input element
     /// Input field will be cleared beforehand
-    pub value: String,
+    pub value: WorkflowString,
 }
 
 /// `ClickAction`
@@ -54,7 +56,7 @@ pub struct InputAction {
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct ClickAction {
     /// CSS selector to find the click element
-    pub selector: String,
+    pub selector: WorkflowString,
 
     /// Expects the page to redirect after clicking an element
     /// If the navigation won't occur, workflow will fail

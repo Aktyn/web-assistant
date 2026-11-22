@@ -153,12 +153,14 @@ fn explain_workflow(include_example: bool) -> Result<()> {
                     page_index: 0,
                     action: workflow_step::PageAction::Navigate(
                         workflow_step::page_action::NavigateAction {
-                            url: String::from("https://github.com/Aktyn/web-assistant"),
+                            url: workflow::workflow_data::WorkflowString::from(
+                                "https://github.com/Aktyn/web-assistant",
+                            ),
                         },
                     ),
                 }),
                 workflow_step::WorkflowStepType::Agent(workflow_step::AgentStep {
-                    task: String::from(
+                    task: workflow::workflow_data::WorkflowString::from(
                         "Star this repository and print total number of stars the repository has.",
                     ),
                     max_steps: 16,

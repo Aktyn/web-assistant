@@ -25,7 +25,8 @@ impl super::RunningWorkflow {
             api_key: self.config.agent.api_key.clone(),
             ..llm::ChatOpenAIConfig::default()
         });
-        let mut agent = agent::Agent::new(&step.task)
+
+        let mut agent = agent::Agent::new(&step.task.parse(self).await?)
             .prompt_mode(step.prompt_mode)
             .max_steps(step.max_steps);
 

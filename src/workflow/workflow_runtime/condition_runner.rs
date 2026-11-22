@@ -9,7 +9,7 @@ impl super::RunningWorkflow {
         step: &step::ConditionStep,
         workflow_file_path: &Path,
     ) -> Result<()> {
-        log::info!("{step:#?}");
+        // log::info!("{step:#?}");
         // let mut logger = self.logger.lock().await;
         // logger.info(&format!("Waiting for {} milliseconds", step.duration));
 
@@ -18,17 +18,14 @@ impl super::RunningWorkflow {
                 //TODO:
                 // match_regex_condition.pattern;
                 // match_regex_condition.value;
-                true
+                todo!()
             }
-            step::Condition::Truthy(_truthy_condition) => {
-                //TODO:
-                // truthy_condition.value;
-                true
+            step::Condition::Truthy(truthy_condition) => {
+                !truthy_condition.value.parse(self).await?.is_empty()
             }
             step::Condition::Equal(_equal_condition) => true,
         };
 
-        //TODO: implement
         if is_met {
             Box::pin(self.run_steps(&step.then, workflow_file_path)).await?;
         } else {

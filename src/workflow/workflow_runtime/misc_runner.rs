@@ -14,7 +14,10 @@ impl super::RunningWorkflow {
     }
 
     #[allow(clippy::unused_self)]
-    pub(super) fn abort_workflow(&self, step: &step::AbortStep) -> Result<()> {
-        Err(anyhow::anyhow!("Aborting workflow. {}", step.message))
+    pub(super) async fn abort_workflow(&self, step: &step::AbortStep) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "Aborting workflow. {}",
+            step.message.parse(self).await?
+        ))
     }
 }

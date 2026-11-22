@@ -1,7 +1,9 @@
 use anyhow::{Context as _, Result, anyhow};
 use jsonc_parser::{ParseOptions, parse_to_serde_value};
-use std::path::Path;
-use tokio::fs;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tokio::fs as async_fs;
+use tokio::sync::Mutex;
 
 use super::context;
 
@@ -9,6 +11,11 @@ use super::context;
 
 struct FileContextItem {
     data: serde_json::Value,
+    /// Basically content of json source file
+    array: Arc<Mutex<Vec<serde_json::Value>>>,
+    /// Index of the current item used during update
+    index: usize,
+    file_path: PathBuf,
 }
 
 impl context::WorkflowContextItem for FileContextItem {
@@ -16,18 +23,42 @@ impl context::WorkflowContextItem for FileContextItem {
         &self.data
     }
 
-    fn get_value(&self, path: &context::PropertyPath) -> Option<serde_json::Value> {
+    fn get_value(&self, _path: &context::PropertyPath) -> Option<serde_json::Value> {
         todo!()
     }
 
-    fn update(&self, path: &context::PropertyPath, value: serde_json::Value) -> bool {
-        todo!()
+    fn update(
+        &self,
+        _path: &context::PropertyPath,
+        _value: serde_json::Value,
+    ) -> Result<&serde_json::Value> {
+        //TODO: update self.data
+
+        log::info!("Updating file: {}", self.file_path.display());
+        let mut array = self.array.blocking_lock();
+        array[self.index] = self.data.clone();
+        let json_array_content =
+            serde_json::to_string_pretty::<Vec<serde_json::Value>>(&array.clone())?;
+        std::fs::write(&self.file_path, &json_array_content)
+            .context("Failed to create config file")?;
+
+        Ok(&self.data)
     }
 }
 
 impl FileContextItem {
-    fn new(data: serde_json::Value) -> Self {
-        Self { data }
+    fn new(
+        data: serde_json::Value,
+        array: Arc<Mutex<Vec<serde_json::Value>>>,
+        index: usize,
+        file_path: &Path,
+    ) -> Self {
+        Self {
+            data,
+            array,
+            index,
+            file_path: file_path.to_path_buf(),
+        }
     }
 }
 
@@ -51,7 +82,7 @@ pub(super) async fn get_file_iterator_items(
         ));
     }
 
-    let content = fs::read_to_string(&source_path)
+    let content = async_fs::read_to_string(&source_path)
         .await
         .with_context(|| "Cannot read source file")?;
 
@@ -59,12 +90,21 @@ pub(super) async fn get_file_iterator_items(
         parse_to_serde_value::<serde_json::Value>(&content, &ParseOptions::default())?;
 
     if let serde_json::Value::Array(array) = source_json {
-        Ok(array
-            .into_iter()
-            .map(|item| {
-                Box::new(FileContextItem::new(item))
+        let shared_array: Arc<Mutex<Vec<serde_json::Value>>> = Arc::new(Mutex::new(array));
+
+        let items = shared_array
+            .lock()
+            .await
+            .iter()
+            .enumerate()
+            .map(|(index, item)| {
+                let context_item =
+                    FileContextItem::new(item.clone(), shared_array.clone(), index, source_path);
+                Box::new(context_item) as Box<dyn context::WorkflowContextItem>
             })
-            .collect::<Vec<Box<dyn context::WorkflowContextItem>>>())
+            .collect();
+
+        Ok(items)
     } else {
         Err(anyhow!(
             "Source file must be a json/jsonc file containing an array: {}",

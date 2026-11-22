@@ -9,6 +9,7 @@ pub(crate) mod system_action;
 
 use serde::{Deserialize, Serialize};
 
+pub(crate) use super::WorkflowString;
 pub(crate) use agent::AgentStep;
 pub(crate) use condition::{Condition, ConditionStep};
 pub(crate) use context::UpdateContextStep;

@@ -12,27 +12,31 @@ impl super::RunningWorkflow {
 
         match &step.action {
             step::PageAction::Navigate(navigate_action) => {
-                logger.info(&format!("Navigating to: \"{}\"", navigate_action.url));
+                let url = navigate_action.url.parse(self).await?;
+
+                logger.info(&format!("Navigating to: \"{url}\""));
 
                 self.browser
                     .lock()
                     .await
-                    .navigate(&navigate_action.url)
+                    .navigate(&url)
                     .await
                     .context("Failed to navigate to the URL")?;
             }
 
             step::PageAction::Input(input_action) => {
-                logger.info(&format!(
-                    "Inputting: \"{}\" into \"{}\"",
-                    input_action.value, input_action.selector
-                ));
+                let value = input_action.value.parse(self).await?;
+                let selector = input_action.selector.parse(self).await?;
+
+                logger.info(&format!("Inputting: \"{value}\" into \"{selector}\""));
 
                 //TODO: implement
             }
 
             step::PageAction::Click(click_action) => {
-                logger.info(&format!("Clicking: \"{}\"", click_action.selector));
+                let selector = click_action.selector.parse(self).await?;
+
+                logger.info(&format!("Clicking: \"{selector}\""));
 
                 //TODO: implement
             }

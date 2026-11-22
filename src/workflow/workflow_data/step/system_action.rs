@@ -1,6 +1,8 @@
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
 
+use super::WorkflowString;
+
 /// `SystemActionStep` - performs system actions
 #[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
@@ -26,7 +28,7 @@ pub enum SystemAction {
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct NotifyAction {
     /// Message to notify
-    pub message: String,
+    pub message: WorkflowString,
 }
 
 /// `OpenUrlAction` - opens given url in default browser
@@ -34,5 +36,5 @@ pub struct NotifyAction {
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct OpenUrlAction {
     /// URL to open
-    pub url: String,
+    pub url: WorkflowString,
 }

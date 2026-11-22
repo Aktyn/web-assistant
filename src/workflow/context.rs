@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::collections::HashMap;
 
 // use jsonc_parser::{JsonObject, JsonValue};
@@ -16,7 +17,7 @@ pub(crate) struct WorkflowContext {
 ///     }
 /// }
 /// ```
-pub(super) type PropertyPath = str;
+pub(crate) type PropertyPath<'a> = Vec<&'a str>;
 
 /// Stores all context objects used throughout the workflow run
 impl WorkflowContext {
@@ -37,7 +38,7 @@ impl WorkflowContext {
     }
 
     pub fn get_item(&self, name: &str) -> Option<&dyn WorkflowContextItem> {
-        //TODO: investigate if this &**v pattern is no causing unnecessary clones
+        //TODO: investigate whether this &**v pattern is not causing unnecessary clones
         self.store.get(name).map(|v| &**v)
     }
 }
@@ -51,6 +52,6 @@ pub(crate) trait WorkflowContextItem {
 
     /// Updates specific context object value
     /// path is string of dot-joined properties (e.g. "user.name")
-    /// Returns true if the update was successful, false otherwise
-    fn update(&self, path: &PropertyPath, value: serde_json::Value) -> bool;
+    /// Returns reference to whole object data after update
+    fn update(&self, path: &PropertyPath, value: serde_json::Value) -> Result<&serde_json::Value>;
 }

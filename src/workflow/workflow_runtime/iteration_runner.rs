@@ -27,7 +27,7 @@ impl super::RunningWorkflow {
             // Closure for temporary context access
             {
                 let mut context = self.context.lock().await;
-                if !for_each_step.preserve_context {
+                if !for_each_step.preserve_context && index > 0 {
                     context.reset();
                 }
                 context.set_item(&for_each_step.context_name, item);

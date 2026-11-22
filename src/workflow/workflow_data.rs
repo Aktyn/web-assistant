@@ -1,7 +1,10 @@
 pub(crate) mod step;
+mod workflow_string;
 
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
+
+pub(crate) use workflow_string::WorkflowString;
 
 /// Workflow must be a json file with the following fields:
 #[derive(Debug, Default, Serialize, Deserialize, Clone, DocumentedFields, Documented)]

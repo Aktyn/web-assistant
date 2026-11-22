@@ -24,9 +24,9 @@ use crate::workflow::WorkflowData;
 pub struct RunningWorkflow {
     pub data: super::WorkflowData,
     config: Box<Config>,
-    browser: Mutex<Browser>,
-    logger: Mutex<CliLogger>,
-    context: Mutex<context::WorkflowContext>,
+    pub(crate) browser: Mutex<Browser>,
+    pub(crate) logger: Mutex<CliLogger>,
+    pub(crate) context: Mutex<context::WorkflowContext>,
 }
 
 impl RunningWorkflow {
@@ -81,7 +81,7 @@ impl RunningWorkflow {
                     self.wait(wait_step).await?;
                 }
                 step::WorkflowStepType::Abort(abort_step) => {
-                    self.abort_workflow(abort_step)?;
+                    self.abort_workflow(abort_step).await?;
                 }
             }
         }

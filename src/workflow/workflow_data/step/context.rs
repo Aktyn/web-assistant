@@ -1,6 +1,8 @@
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
 
+use super::WorkflowString;
+
 /// `UpdateContextStep`
 #[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
@@ -9,5 +11,5 @@ pub struct UpdateContextStep {
     pub key: String,
 
     /// Value to set for given key
-    pub value: String,
+    pub value: Option<WorkflowString>,
 }

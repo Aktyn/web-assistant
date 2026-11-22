@@ -1,6 +1,8 @@
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
 
+use super::WorkflowString;
+
 /// `WaitStep` - pauses the workflow for given time
 #[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
@@ -15,5 +17,5 @@ pub struct WaitStep {
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct AbortStep {
     /// Error message to display
-    pub message: String,
+    pub message: WorkflowString,
 }

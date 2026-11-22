@@ -2,6 +2,7 @@ use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use super::WorkflowString;
 use crate::agent;
 
 /// `AgentStep` - runs an AI agent to perform a task
@@ -9,7 +10,7 @@ use crate::agent;
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct AgentStep {
     /// Prompt sent to the agent
-    pub task: String,
+    pub task: WorkflowString,
 
     /// Maximum number of steps the agent is allowed to take
     /// Default is 64

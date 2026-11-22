@@ -1,6 +1,8 @@
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
 
+use super::WorkflowString;
+
 /// `ConditionStep` - controls the workflow flow based on given condition
 #[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
@@ -35,7 +37,7 @@ pub enum Condition {
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct MatchRegexCondition {
     /// Value to match against a regex
-    pub value: String,
+    pub value: WorkflowString,
 
     /// String containing regex pattern
     pub pattern: String,
@@ -46,7 +48,7 @@ pub struct MatchRegexCondition {
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct TruthyCondition {
     /// Value to check if it is truthy
-    pub value: String,
+    pub value: WorkflowString,
 }
 
 /// `EqualCondition` - compares two values equality
@@ -54,8 +56,8 @@ pub struct TruthyCondition {
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct EqualCondition {
     /// Left value to compare
-    pub left: String,
+    pub left: WorkflowString,
 
     /// Right value to compare
-    pub right: String,
+    pub right: WorkflowString,
 }
