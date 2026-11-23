@@ -11,7 +11,7 @@ use std::path::Path;
 use tracing::{debug, info, warn};
 
 pub use prompts::{PromptMode, SystemPrompt};
-use variable_detector::substitute_variables_in_history;
+pub use variable_detector::{detect_variables_in_history, substitute_variables_in_history};
 use views::{
     Action, ActionResult, AgentHistoryItem, AgentHistoryList, AgentOutput, AgentStepState,
     InteractedElementMetadata,
@@ -44,11 +44,11 @@ impl Agent {
         self
     }
 
-    // #[must_use]
-    // pub fn system_prompt(mut self, prompt: SystemPrompt) -> Self {
-    //     self.system_prompt = prompt;
-    //     self
-    // }
+    #[must_use]
+    pub fn system_prompt(mut self, prompt: SystemPrompt) -> Self {
+        self.system_prompt = prompt;
+        self
+    }
 
     #[allow(clippy::too_many_lines)]
     pub async fn run<LlmType: llm::LLM>(
@@ -374,6 +374,7 @@ fn extract_json_str(raw: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::openai::ChatOpenAI;
 
     #[test]
     fn test_parse_agent_output_standard() {
@@ -620,75 +621,36 @@ mod tests {
 
     #[test]
     fn test_agent_new_construction() {
-        let llm = ChatOpenAI::builder()
-            .model("auto")
-            .api_key("")
-            .base_url("http://localhost:9999")
-            .build();
-        let agent = Agent::new("Test task", llm.clone());
+        let agent = Agent::new("Test task");
         assert_eq!(agent.task, "Test task");
         assert_eq!(agent.max_steps, 20);
-        assert_eq!(agent.history.len(), 0);
         assert_eq!(agent.system_prompt.mode, PromptMode::Standard);
     }
 
     #[test]
-    fn test_agent_new_with_browser() {
-        let llm = ChatOpenAI::builder()
-            .model("auto")
-            .api_key("")
-            .base_url("http://localhost:9999")
-            .build();
-        let browser = Browser::new(&crate::config::BrowserConfig::default());
-        let agent = Agent::new_with_browser("Browser test", llm, browser);
-        assert_eq!(agent.task, "Browser test");
-        assert_eq!(agent.max_steps, 20);
-    }
-
-    #[test]
     fn test_agent_max_steps_fluent_builder() {
-        let llm = ChatOpenAI::builder()
-            .model("auto")
-            .api_key("")
-            .base_url("http://localhost:9999")
-            .build();
-        let agent = Agent::new("Task", llm).max_steps(5);
+        let agent = Agent::new("Task").max_steps(5);
         assert_eq!(agent.max_steps, 5);
     }
 
     #[test]
     fn test_agent_prompt_mode_builder() {
-        let llm = ChatOpenAI::builder()
-            .model("auto")
-            .api_key("")
-            .base_url("http://localhost:9999")
-            .build();
-        let agent = Agent::new("Task", llm).prompt_mode(PromptMode::Flash);
+        let agent = Agent::new("Task").prompt_mode(PromptMode::Flash);
         assert_eq!(agent.system_prompt.mode, PromptMode::Flash);
     }
 
     #[test]
     fn test_agent_system_prompt_builder() {
-        let llm = ChatOpenAI::builder()
-            .model("auto")
-            .api_key("")
-            .base_url("http://localhost:9999")
-            .build();
         let custom_prompt = SystemPrompt::builder().mode(PromptMode::NoThinking).build();
-        let agent = Agent::new("Task", llm).system_prompt(custom_prompt);
+        let agent = Agent::new("Task").system_prompt(custom_prompt);
         assert_eq!(agent.system_prompt.mode, PromptMode::NoThinking);
     }
 
     #[test]
     fn test_agent_default_history_is_empty() {
-        let llm = ChatOpenAI::builder()
-            .model("auto")
-            .api_key("")
-            .base_url("http://localhost:9999")
-            .build();
-        let agent = Agent::new("Task", llm);
-        assert!(agent.history.is_empty());
-        assert_eq!(agent.history.len(), 0);
+        let history = AgentHistoryList::new();
+        assert!(history.is_empty());
+        assert_eq!(history.len(), 0);
     }
 
     // =========================================================================
@@ -816,20 +778,13 @@ mod tests {
     // Agent lifecycle and history management tests
     // =========================================================================
 
-    #[test]
-    fn test_save_history_to_file() {
+    #[tokio::test]
+    async fn test_save_history_to_file() {
         let temp_dir = tempfile::tempdir().unwrap();
         let file_path = temp_dir.path().join("history.json");
 
-        let llm = ChatOpenAI::builder()
-            .model("auto")
-            .api_key("")
-            .base_url("http://localhost:9999")
-            .build();
-        let mut agent = Agent::new("Test task", llm);
-
         // Build some history manually
-        agent.history = AgentHistoryList {
+        let history = AgentHistoryList {
             items: vec![AgentHistoryItem {
                 model_output: Some(AgentOutput {
                     thought: Some("Start".into()),
@@ -848,37 +803,26 @@ mod tests {
             }],
         };
 
-        let result = agent.save_history(&file_path);
+        let result = history.save_to_file(&file_path).await;
         assert!(result.is_ok());
         assert!(file_path.exists());
 
         // Verify we can load it back
-        let loaded = AgentHistoryList::load_from_file(&file_path).unwrap();
+        let loaded = AgentHistoryList::load_from_file(&file_path).await.unwrap();
         assert_eq!(loaded.len(), 1);
     }
 
     #[test]
     fn test_detect_variables_empty_history() {
-        let llm = ChatOpenAI::builder()
-            .model("auto")
-            .api_key("")
-            .base_url("http://localhost:9999")
-            .build();
-        let agent = Agent::new("Task", llm);
-        let vars = agent.detect_variables();
+        let history = AgentHistoryList::new();
+        let vars = history.detect_variables();
         assert!(vars.is_empty());
     }
 
     #[test]
     fn test_agent_builder_pattern() {
-        let llm = ChatOpenAI::builder()
-            .model("auto")
-            .api_key("")
-            .base_url("http://localhost:9999")
-            .build();
-
         // Test builder pattern chaining
-        let agent = Agent::new("Complex task", llm)
+        let agent = Agent::new("Complex task")
             .max_steps(10)
             .prompt_mode(PromptMode::Flash);
 

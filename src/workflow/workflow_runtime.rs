@@ -92,10 +92,20 @@ impl RunningWorkflow {
     }
 }
 
+impl std::fmt::Debug for RunningWorkflow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RunningWorkflow")
+            .field("data", &self.data)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug)]
 pub struct SuccessfullWorkflow {
     pub data: super::WorkflowData,
 }
 
+#[derive(Debug)]
 pub struct FailedWorkflow {
     pub data: super::WorkflowData,
     pub error: anyhow::Error,
@@ -179,7 +189,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_draft_workflow_bails() {
         let mut draft = Workflow::new_draft();
-        let result = draft.run(&default_config()).await;
+        let result = draft.run(Box::new(default_config())).await;
         assert!(result.is_err());
         assert!(
             result
@@ -193,20 +203,30 @@ mod tests {
     async fn test_run_invalid_state_bails() {
         let mut workflow = workflow_with_error_state();
         assert!(matches!(workflow.state, WorkflowState::Invalid(_)));
-        let result = workflow.run(&default_config()).await;
+        let result = workflow.run(Box::new(default_config())).await;
         assert!(result.is_err());
         assert!(
             result
                 .unwrap_err()
                 .to_string()
-                .contains("Workflow is not valid")
+                .contains("Cannot run invalid Workflow")
         );
     }
 
     #[tokio::test]
     async fn test_run_steps_empty_returns_ok() {
-        let mut browser = Browser::new(&crate::config::BrowserConfig::default());
-        let result = run_steps(&Vec::new(), &mut browser).await;
+        let runner = RunningWorkflow::new(
+            WorkflowData {
+                name: "Test".to_string(),
+                description: None,
+                procedures: vec![],
+                steps: vec![],
+            },
+            Box::new(default_config()),
+        );
+        let result = runner
+            .run_steps(&Vec::new(), Path::new("/tmp/test.json"))
+            .await;
         assert!(result.is_ok());
     }
 
@@ -225,15 +245,26 @@ mod tests {
             "Runtime.evaluate",
             serde_json::json!({"result": {"value": state_json}}),
         );
-        let mut browser = Browser::new_with_client(mock.client);
+        let browser = Browser::new_with_client(mock.client);
+
+        let runner = RunningWorkflow::new(
+            WorkflowData {
+                name: "Test".to_string(),
+                description: None,
+                procedures: vec![],
+                steps: vec![],
+            },
+            Box::new(default_config()),
+        );
+        *runner.browser.lock().await = browser;
 
         let steps = vec![step::WorkflowStepType::PageAction(step::PageActionStep {
             page_index: 0,
             action: step::PageAction::Navigate(step::page_action::NavigateAction {
-                url: "https://example.com".to_string(),
+                url: "https://example.com".into(),
             }),
         })];
-        let result = run_steps(&steps, &mut browser).await;
+        let result = runner.run_steps(&steps, Path::new("/tmp/test.json")).await;
         assert!(result.is_ok());
     }
 }

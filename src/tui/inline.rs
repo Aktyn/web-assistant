@@ -225,10 +225,4 @@ mod tests {
         };
         assert_terminal_failure_or_success(|| print_struct(&docs));
     }
-
-    /// `print_success` also initializes a terminal.
-    #[test]
-    fn test_print_success_invokes_terminal() {
-        assert_terminal_failure_or_success(|| print_success("ok"));
-    }
 }

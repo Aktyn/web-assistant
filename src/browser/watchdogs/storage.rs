@@ -287,8 +287,8 @@ fn normalize_cookie_expiry(mut cookie: Value) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::MockCdp;
     use super::*;
+    use crate::browser::MockCdp;
     use tempfile::tempdir;
 
     fn mock_storage() -> (StorageStateWatchdog, MockCdp) {

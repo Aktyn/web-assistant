@@ -365,6 +365,7 @@ mod tests {
             workflows_directory: tmp.path().to_path_buf(),
             tui_colors: None,
             browser: crate::config::BrowserConfig::default(),
+            agent: crate::config::AgentConfig::default(),
         };
         let app = TuiApp::new(config).await;
         // Should not panic during construction.

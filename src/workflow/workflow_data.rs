@@ -88,6 +88,7 @@ mod tests {
         let data = WorkflowData {
             name: "clone".to_string(),
             description: Some("desc".to_string()),
+            procedures: vec![],
             steps: vec![],
         };
         let cloned = data.clone();

@@ -66,7 +66,8 @@ mod tests {
     #[test]
     fn test_agent_step_serializes_with_camel_case() {
         let step = AgentStep {
-            task: "task".to_string(),
+            task: "task".into(),
+            prompt_mode: agent::PromptMode::Standard,
             max_steps: 8,
             history_output: Some(PathBuf::from("./h.json")),
         };
@@ -79,7 +80,8 @@ mod tests {
     #[test]
     fn test_agent_step_clone_and_debug() {
         let step = AgentStep {
-            task: "clone me".to_string(),
+            task: "clone me".into(),
+            prompt_mode: agent::PromptMode::Standard,
             max_steps: 32,
             history_output: None,
         };

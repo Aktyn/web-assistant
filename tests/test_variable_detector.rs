@@ -182,7 +182,7 @@ fn test_substitute_variables_partial_and_nested() {
     subs.insert("email".into(), "newuser@domain.org".into());
 
     let modified = substitute_variables_in_history(&history, &subs);
-    let actions = &modified.history[0].model_output.as_ref().unwrap().action;
+    let actions = &modified.items[0].model_output.as_ref().unwrap().action;
 
     match &actions[0] {
         Action::Input { text, .. } => assert_eq!(text, "newuser@domain.org"),

@@ -160,7 +160,7 @@ mod tests {
 
     #[test]
     fn test_default_config_file_constant() {
-        assert_eq!(DEFAULT_CONFIG_FILE, "./config.json");
+        assert_eq!(DEFAULT_CONFIG_FILE, "./config.jsonc");
     }
 
     #[tokio::test]

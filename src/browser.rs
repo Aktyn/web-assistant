@@ -48,7 +48,7 @@ impl CdpClient {
         // Test mocks intercept here.
         #[cfg(test)]
         {
-            let guard = self.mock_responses.lock().await;
+            let guard = self.mock_responses.lock().unwrap();
             if let Some(resp) = guard.get(_method) {
                 return Ok(resp.clone());
             }
@@ -451,18 +451,20 @@ impl Default for Browser {
 }
 
 #[cfg(test)]
+pub(crate) use tests::MockCdp;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::sync::Arc;
-    use tokio::sync::Mutex;
 
     impl CdpClient {
         #[cfg(test)]
         pub(crate) fn new_test_client() -> Self {
             Self {
                 page: None,
-                mock_responses: Arc::new(Mutex::new(HashMap::new())),
+                mock_responses: Arc::new(std::sync::Mutex::new(HashMap::new())),
             }
         }
     }

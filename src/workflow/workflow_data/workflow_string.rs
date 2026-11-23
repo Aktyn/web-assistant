@@ -2,9 +2,15 @@ use anyhow::{Context, Result, bail};
 use documented::{Documented, DocumentedFields};
 use regex::{Match, Regex};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::sync::LazyLock;
 
 use super::super::context::{PropertyPath, WorkflowContextItem};
 use super::super::workflow_runtime::RunningWorkflow;
+
+static SPECIAL_VALUE_GROUP_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\{\{[^}]*\}\}").expect("valid regex"));
+static INNER_GROUP_VALUE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\{\{\s*(?P<value>[^}]*)\s*\}\}").expect("valid regex"));
 
 /// String value containing special code that unwraps into dynamic value
 /// Examples:
@@ -27,17 +33,15 @@ impl WorkflowString {
     }
 
     pub(crate) async fn parse(&self, workflow: &RunningWorkflow) -> Result<String> {
-        let special_value_group_regex = Regex::new(r"\{\{[^}]*\}\}").unwrap();
-        let matches_vec: Vec<Match<'_>> = special_value_group_regex
+        let matches_vec: Vec<Match<'_>> = SPECIAL_VALUE_GROUP_REGEX
             .find_iter(&self.raw_value)
             .collect();
 
         let mut parsed = self.raw_value.clone();
 
-        let inner_group_value_regex = Regex::new(r"\{\{\s*(?P<value>[^}]*)\s*\}\}").unwrap();
         for result in matches_vec.into_iter().rev() {
             let group = &self.raw_value[result.start()..result.end()];
-            if let Some(captures) = inner_group_value_regex.captures(group) {
+            if let Some(captures) = INNER_GROUP_VALUE_REGEX.captures(group) {
                 let value = &captures["value"];
                 if !value.is_empty() {
                     let parsed_value = parse_special_value(value, workflow).await?;

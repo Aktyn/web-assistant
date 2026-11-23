@@ -30,15 +30,23 @@ impl Default for SystemPrompt {
 }
 
 impl SystemPrompt {
-    // #[must_use]
-    // pub fn new(mode: PromptMode) -> Self {
-    //     Self {
-    //         mode,
-    //         max_actions_per_step: 3,
-    //         override_system_message: None,
-    //         extend_system_message: None,
-    //     }
-    // }
+    #[must_use]
+    pub fn new(mode: PromptMode) -> Self {
+        Self {
+            mode,
+            max_actions_per_step: 3,
+            override_system_message: None,
+            extend_system_message: None,
+        }
+    }
+
+    #[must_use]
+    pub fn builder() -> SystemPromptBuilder {
+        SystemPromptBuilder {
+            max_actions_per_step: 3,
+            ..Default::default()
+        }
+    }
 
     #[must_use]
     pub fn get_system_message(&self) -> String {
@@ -158,6 +166,54 @@ Respond ONLY with JSON:
 "#,
             max_actions = self.max_actions_per_step
         )
+    }
+}
+
+#[derive(Default)]
+pub struct SystemPromptBuilder {
+    mode: PromptMode,
+    max_actions_per_step: usize,
+    override_system_message: Option<String>,
+    extend_system_message: Option<String>,
+}
+
+impl SystemPromptBuilder {
+    #[must_use]
+    pub fn mode(mut self, mode: PromptMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
+    #[must_use]
+    pub fn max_actions_per_step(mut self, max: usize) -> Self {
+        self.max_actions_per_step = max;
+        self
+    }
+
+    #[must_use]
+    pub fn override_system_message(mut self, msg: impl Into<String>) -> Self {
+        self.override_system_message = Some(msg.into());
+        self
+    }
+
+    #[must_use]
+    pub fn extend_system_message(mut self, msg: impl Into<String>) -> Self {
+        self.extend_system_message = Some(msg.into());
+        self
+    }
+
+    #[must_use]
+    pub fn build(self) -> SystemPrompt {
+        SystemPrompt {
+            mode: self.mode,
+            max_actions_per_step: if self.max_actions_per_step == 0 {
+                3
+            } else {
+                self.max_actions_per_step
+            },
+            override_system_message: self.override_system_message,
+            extend_system_message: self.extend_system_message,
+        }
     }
 }
 

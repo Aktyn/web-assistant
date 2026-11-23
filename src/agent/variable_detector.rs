@@ -11,10 +11,13 @@ static DATE_REGEX: LazyLock<Regex> =
 
 use super::views::{Action, AgentHistoryList, DetectedVariable, InteractedElementMetadata};
 
-// #[must_use]
-// fn detect_variables_in_history(
-//     history: &AgentHistoryList,
-// ) -> HashMap<String, DetectedVariable> {
+#[must_use]
+pub fn detect_variables_in_history(
+    history: &AgentHistoryList,
+) -> HashMap<String, DetectedVariable> {
+    history.detect_variables()
+}
+
 impl AgentHistoryList {
     #[must_use]
     pub fn detect_variables(&self) -> HashMap<String, DetectedVariable> {
