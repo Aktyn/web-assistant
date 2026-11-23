@@ -1,6 +1,6 @@
 mod agent;
 pub(crate) mod condition;
-mod context;
+pub(crate) mod context;
 pub(crate) mod iteration;
 mod misc;
 pub(crate) mod page_action;

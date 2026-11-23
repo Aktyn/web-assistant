@@ -41,10 +41,10 @@ pub struct WorkflowData {
 pub struct WorkflowProcedure {
     /// Name of the procedure
     /// Works as identifier
-    name: String,
+    pub name: String,
 
     /// List of steps to be performed (same as in `WorkflowData`)
-    steps: Vec<step::WorkflowStepType>,
+    pub steps: Vec<step::WorkflowStepType>,
 }
 
 #[cfg(test)]

@@ -52,7 +52,8 @@ impl RunningWorkflow {
             match step {
                 step::WorkflowStepType::PageAction(page_action_step) => {
                     self.browser.lock().await.start().await?;
-                    self.run_page_action(page_action_step).await?;
+                    self.run_page_action(page_action_step, workflow_file_path)
+                        .await?;
                 }
                 step::WorkflowStepType::Agent(agent_step) => {
                     self.run_agent(agent_step, workflow_file_path).await?;
@@ -70,7 +71,8 @@ impl RunningWorkflow {
                         .await?;
                 }
                 step::WorkflowStepType::RunProcedure(run_procedure_step) => {
-                    self.run_procedure(run_procedure_step).await?;
+                    self.run_procedure(run_procedure_step, workflow_file_path)
+                        .await?;
                 }
 
                 step::WorkflowStepType::UpdateContext(update_context_step) => {

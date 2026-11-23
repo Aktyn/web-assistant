@@ -7,7 +7,8 @@ use anyhow::{Context, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose};
 use dom::{BrowserState, ElementRect, EnhancedElement};
 use playwright_rs::{
-    BrowserContext, BrowserContextOptions, GotoOptions, LaunchOptions, Page, Playwright, WaitUntil,
+    BrowserContext, BrowserContextOptions, ClickOptions, GotoOptions, LaunchOptions, Locator, Page,
+    Playwright, WaitUntil,
 };
 use serde_json::Value;
 use std::time::Duration;
@@ -16,16 +17,7 @@ use utils::chrome;
 use watchdogs::BrowserWatchdogs;
 
 use crate::config::BrowserConfig;
-
-pub struct Browser {
-    config: BrowserConfig,
-    client: Option<CdpClient>,
-    watchdogs: Option<BrowserWatchdogs>,
-    cached_state: Option<BrowserState>,
-    playwright_page: Option<Page>,
-    context: Option<BrowserContext>,
-    playwright: Option<Playwright>,
-}
+use crate::utils as crate_utils;
 
 /// Internal CDP client used when connecting to a remote browser via WebSocket URL.
 /// When using Playwright's native launch mode, this field remains `None`.
@@ -69,11 +61,21 @@ impl CdpClient {
     pub async fn evaluate(&self, expression: &str) -> Result<Value> {
         if let Some(ref page) = self.page {
             let val_str = page.evaluate_value(expression).await?;
-            Ok(serde_json::from_str(&val_str)?)
+            Ok(crate_utils::json_parse(&val_str))
         } else {
             Err(anyhow!("No page available for evaluation"))
         }
     }
+}
+
+pub struct Browser {
+    config: BrowserConfig,
+    client: Option<CdpClient>,
+    watchdogs: Option<BrowserWatchdogs>,
+    cached_state: Option<BrowserState>,
+    playwright_page: Option<Page>,
+    context: Option<BrowserContext>,
+    playwright: Option<Playwright>,
 }
 
 impl Browser {
@@ -94,8 +96,6 @@ impl Browser {
         if self.client.is_some() || self.playwright_page.is_some() {
             return Ok(());
         }
-
-        log::info!("Starting browser");
 
         let executable_path = if let Some(path) = &self.config.executable_path {
             Ok(path.clone())
@@ -138,6 +138,10 @@ impl Browser {
         if let Some(downloads_dir) = &self.config.downloads_dir {
             context_options = context_options.downloads_path(downloads_dir.display().to_string());
         }
+        log::info!(
+            "Starting browser {:#?}",
+            (&executable_path, &user_data_dir, &headless)
+        );
 
         if let Ok(data_dir) = user_data_dir {
             let context = chromium
@@ -224,6 +228,15 @@ impl Browser {
         self.refresh_state().await?;
         Ok(())
     }
+    pub async fn wait_for_navigation(&mut self) -> Result<()> {
+        let page = self
+            .playwright_page
+            .as_ref()
+            .ok_or_else(|| anyhow!("No page available"))?;
+        page.wait_for_load_state(Some(WaitUntil::NetworkIdle))
+            .await?;
+        Ok(())
+    }
 
     pub async fn get_state(&mut self) -> Result<BrowserState> {
         self.start().await?;
@@ -248,6 +261,14 @@ impl Browser {
             .as_ref()
             .and_then(|s| s.elements.iter().find(|el| el.index == index).cloned())
     }
+    pub fn get_selector(&self, selector: &str) -> Result<Locator> {
+        let page = self
+            .playwright_page
+            .as_ref()
+            .ok_or_else(|| anyhow!("No page available"))?;
+
+        Ok(page.locator(selector))
+    }
 
     pub async fn click(&mut self, index: u32) -> Result<()> {
         self.start().await?;
@@ -258,6 +279,18 @@ impl Browser {
         self.playwright_click(center_x, center_y).await?;
         sleep(Duration::from_millis(500)).await;
         self.refresh_state().await?;
+        Ok(())
+    }
+    pub async fn click_selector(&self, selector: &str, wait_for_navigation: bool) -> Result<()> {
+        let element = self.get_selector(selector)?;
+        element
+            .click(
+                ClickOptions::builder()
+                    .no_wait_after(!wait_for_navigation)
+                    .build(),
+            )
+            .await?;
+
         Ok(())
     }
 
@@ -340,6 +373,12 @@ impl Browser {
         self.refresh_state().await?;
         Ok(())
     }
+    pub async fn input_selector(&self, selector: &str, text: &str) -> Result<()> {
+        let element = self.get_selector(selector)?;
+        element.fill(text, None).await?;
+
+        Ok(())
+    }
 
     pub async fn scroll(&mut self, amount: i32) -> Result<()> {
         self.start().await?;
@@ -362,14 +401,17 @@ impl Browser {
         Ok(())
     }
 
-    pub async fn evaluate(&mut self, script: &str) -> Result<serde_json::Value> {
+    /// Executes javascript code in the page and returns the script's output as serde value
+    pub async fn run_script(&mut self, script: &str) -> Result<Option<serde_json::Value>> {
         self.start().await?;
         let page = self
             .playwright_page
             .as_ref()
             .ok_or_else(|| anyhow!("No page available for evaluation"))?;
-        let val_str = page.evaluate_value(script).await?;
-        Ok(serde_json::from_str(&val_str)?)
+        let js_expression = format!(r"() => {{ {script} }}");
+        let response: Option<serde_json::Value> =
+            page.evaluate(&js_expression, None::<&()>).await?;
+        Ok(response)
     }
 
     pub async fn screenshot(&mut self) -> Result<String> {
@@ -380,6 +422,10 @@ impl Browser {
             .ok_or_else(|| anyhow!("No page available for screenshot"))?;
         let bytes = page.screenshot(None).await?;
         Ok(general_purpose::STANDARD.encode(&bytes))
+    }
+
+    pub fn get_url(&self) -> Option<String> {
+        self.playwright_page.as_ref().map(playwright_rs::Page::url)
     }
 
     pub async fn close(&mut self) -> Result<()> {

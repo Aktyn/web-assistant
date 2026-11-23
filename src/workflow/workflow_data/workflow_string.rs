@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use documented::{Documented, DocumentedFields};
 use regex::{Match, Regex};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -74,7 +74,31 @@ async fn parse_special_value(special_value: &str, workflow: &RunningWorkflow) ->
             }
         }
         "url" => {
-            todo!()
+            let browser = workflow.browser.lock().await;
+            let url = browser.get_url().unwrap_or_default();
+
+            if !url.is_empty()
+                && let Some(url_property) = segments.next()
+                && let Ok(url_object) = url::Url::parse(&url)
+            {
+                let property_value = match url_property {
+                    "pathname" | "path" => url_object.path().to_string(),
+                    "hostname" | "host" => url_object
+                        .host()
+                        .unwrap_or(url::Host::Domain(""))
+                        .to_string(),
+                    // "origin" => return url_object.origin().into(),
+                    "protocol" | "scheme" => url_object.scheme().to_string(),
+                    "domain" => url_object.domain().unwrap_or_default().to_string(),
+                    "port" => url_object.port().unwrap_or_default().to_string(),
+                    "querystring" | "query" => url_object.query().unwrap_or_default().to_string(),
+                    _ => bail!("Invalid URL property: {url_property}"),
+                };
+
+                return Ok(property_value);
+            }
+
+            Ok(url)
         }
         _ => Err(anyhow::anyhow!("Invalid root segment: {root_segment}")),
     }

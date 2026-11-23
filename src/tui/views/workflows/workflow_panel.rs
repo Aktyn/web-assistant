@@ -214,8 +214,19 @@ impl WorkflowPanel {
 
         match action {
             WorkflowAction::OpenFile => {
+                let open_file = |file_path: &PathBuf| -> anyhow::Result<()> {
+                    let absolute_path = file_path.canonicalize().map_err(|e| {
+                        anyhow::anyhow!(
+                            "failed to get absolute path of \"{}\": {e}",
+                            file_path.display()
+                        )
+                    })?;
+                    utils::run_open_command(absolute_path.to_str().unwrap_or(""))?;
+                    Ok(())
+                };
+
                 if let Some(file_path) = selected_workflow.workflow_file.as_ref()
-                    && let Err(err) = utils::open_file(file_path)
+                    && let Err(err) = open_file(file_path)
                 {
                     log::error!("Failed to open file: {err}");
                 }

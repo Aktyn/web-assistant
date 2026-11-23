@@ -13,13 +13,14 @@ pub struct ConditionStep {
     /// "match-regex" --> `MatchRegexCondition`
     /// "truthy" --> `TruthyCondition`
     /// "equal" --> `EqualCondition`
+    /// "has-element" --> `HasElementCondition`
     pub condition: Condition,
 
     /// Steps to run if the condition is met
     pub then: Vec<super::WorkflowStepType>,
 
     /// Steps to run if the condition is not met
-    #[serde(alias = "else", rename = "else")]
+    #[serde(default = "Vec::new", alias = "else", rename = "else")]
     pub else_: Vec<super::WorkflowStepType>,
 }
 
@@ -30,6 +31,8 @@ pub enum Condition {
     MatchRegex(MatchRegexCondition),
     Truthy(TruthyCondition),
     Equal(EqualCondition),
+    #[serde(rename = "has-element")]
+    HasElement(HasElementCondition),
 }
 
 /// `MatchRegexCondition`
@@ -60,4 +63,12 @@ pub struct EqualCondition {
 
     /// Right value to compare
     pub right: WorkflowString,
+}
+
+/// `HasElementCondition` - checks if the element is present in the page
+#[derive(Debug, Deserialize, Serialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
+pub struct HasElementCondition {
+    /// Selector to check if the element is present
+    pub selector: WorkflowString,
 }

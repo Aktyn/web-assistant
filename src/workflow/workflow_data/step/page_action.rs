@@ -1,5 +1,8 @@
+use anyhow::Result;
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use tokio::fs;
 
 use super::WorkflowString;
 
@@ -79,6 +82,24 @@ pub struct EvaluateAction {
     /// If not provided, the context will not be created/updated
     #[serde(default, alias = "contextName", rename = "contextName")]
     pub context_name: Option<String>,
+}
+
+pub(crate) async fn get_script_content(script: &str, root_path: &Path) -> Result<String> {
+    let mut possible_script_path = PathBuf::from(script);
+    if possible_script_path.is_relative() {
+        possible_script_path = root_path.join(possible_script_path);
+    }
+
+    if possible_script_path.exists() && possible_script_path.is_file() {
+        log::info!(
+            "Reading script content from {}",
+            possible_script_path.display()
+        );
+        let code = fs::read_to_string(possible_script_path).await?;
+        return Ok(code);
+    }
+
+    Ok(script.to_string())
 }
 
 #[cfg(test)]

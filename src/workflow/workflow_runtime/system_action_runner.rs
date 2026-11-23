@@ -1,22 +1,22 @@
 use anyhow::Result;
 
 use super::step;
+use crate::utils;
 
 impl super::RunningWorkflow {
     pub(super) async fn run_system_action(&self, step: &step::SystemActionStep) -> Result<()> {
-        // let mut logger = self.logger.lock().await;
-        log::info!("{step:#?}");
-
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let mut logger = self.logger.lock().await;
 
         match &step.action {
-            step::SystemAction::Notify(_notify_action) => {
-                // logger.info(&format!("Navigating to: \"{}\"", notify_action.url));
-
-                //TODO: implement
+            step::SystemAction::Notify(notify_action) => {
+                let message = notify_action.message.parse(self).await?;
+                logger.info(&format!("Sending notification: \"{message}\""));
+                notifica::notify("Web Assistant", &message)?;
             }
-            step::SystemAction::OpenUrl(_open_url_action) => {
-                //TODO: implement
+            step::SystemAction::OpenUrl(open_url_action) => {
+                let url = open_url_action.url.parse(self).await?;
+                logger.info(&format!("Opening url: {url}"));
+                utils::run_open_command(&url)?;
             }
         }
 

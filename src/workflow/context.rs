@@ -1,23 +1,14 @@
-use anyhow::Result;
+mod basic_context_item;
+mod utils;
+
+use anyhow::{Context as _, Result};
+pub(crate) use basic_context_item::*;
 use std::collections::HashMap;
+pub(crate) use utils::*;
 
-// use jsonc_parser::{JsonObject, JsonValue};
-
-//TODO: it's possible that this struct is redundant and using HashMap would be enough
 pub(crate) struct WorkflowContext {
     store: HashMap<String, Box<dyn WorkflowContextItem>>,
 }
-
-/// Dot path to specific object property
-/// e.g. "user.name" will get "John" from the following object:
-/// ```json
-/// {
-///     "user": {
-///         "name": "John"
-///     }
-/// }
-/// ```
-pub(crate) type PropertyPath<'a> = Vec<&'a str>;
 
 /// Stores all context objects used throughout the workflow run
 impl WorkflowContext {
@@ -37,21 +28,66 @@ impl WorkflowContext {
         self.store.insert(name.to_string(), item);
     }
 
-    pub fn get_item(&self, name: &str) -> Option<&dyn WorkflowContextItem> {
+    pub fn get_item(&self, context_name: &str) -> Option<&dyn WorkflowContextItem> {
         //TODO: investigate whether this &**v pattern is not causing unnecessary clones
-        self.store.get(name).map(|v| &**v)
+        self.store.get(context_name).map(|v| &**v)
+    }
+
+    pub fn update_item_value(
+        &mut self,
+        context_name: &str,
+        path: &PropertyPath,
+        value: &serde_json::Value,
+    ) -> Result<&dyn WorkflowContextItem> {
+        let item = self
+            .store
+            .get_mut(context_name)
+            .with_context(|| format!("No context is set with name: {context_name}"))?;
+
+        item.update(path, value)?;
+        Ok(&**item)
     }
 }
 
-pub(crate) trait WorkflowContextItem {
+pub(crate) trait WorkflowContextItem: std::fmt::Debug {
     /// Returns reference to the whole object data
     fn get_data(&self) -> &serde_json::Value;
 
     /// Returns reference to specific value located by path
-    fn get_value(&self, path: &PropertyPath) -> Option<serde_json::Value>;
+    /// None is returned if specific value couldn't be located by the path
+    fn get_value(&self, path: &PropertyPath) -> Option<serde_json::Value> {
+        let mut result = self.get_data();
+        for property_name in path {
+            match result {
+                // Return None for non-object values
+                serde_json::Value::Null
+                | serde_json::Value::Bool(..)
+                | serde_json::Value::Number(..)
+                | serde_json::Value::String(..) => return None,
+
+                serde_json::Value::Array(values) => {
+                    if let Ok(index) = property_name.parse::<usize>() {
+                        result = values.get(index).unwrap_or(&serde_json::Value::Null);
+                    } else {
+                        // Not a valid index
+                        return None;
+                    }
+                }
+                serde_json::Value::Object(map) => {
+                    result = map.get(*property_name).unwrap_or(&serde_json::Value::Null);
+                }
+            }
+        }
+
+        Some(result.clone())
+    }
 
     /// Updates specific context object value
     /// path is string of dot-joined properties (e.g. "user.name")
     /// Returns reference to whole object data after update
-    fn update(&self, path: &PropertyPath, value: serde_json::Value) -> Result<&serde_json::Value>;
+    fn update(
+        &mut self,
+        path: &PropertyPath,
+        value: &serde_json::Value,
+    ) -> Result<&serde_json::Value>;
 }

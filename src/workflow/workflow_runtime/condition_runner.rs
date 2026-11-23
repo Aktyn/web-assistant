@@ -1,4 +1,5 @@
 use anyhow::Result;
+use regex::Regex;
 use std::path::Path;
 
 use super::step;
@@ -9,21 +10,28 @@ impl super::RunningWorkflow {
         step: &step::ConditionStep,
         workflow_file_path: &Path,
     ) -> Result<()> {
-        // log::info!("{step:#?}");
-        // let mut logger = self.logger.lock().await;
-        // logger.info(&format!("Waiting for {} milliseconds", step.duration));
-
         let is_met: bool = match &step.condition {
-            step::Condition::MatchRegex(_match_regex_condition) => {
-                //TODO:
-                // match_regex_condition.pattern;
-                // match_regex_condition.value;
-                todo!()
+            step::Condition::MatchRegex(match_regex_condition) => {
+                let regex = Regex::new(&match_regex_condition.pattern).unwrap();
+                let value = match_regex_condition.value.parse(self).await?;
+                regex.is_match(&value)
             }
             step::Condition::Truthy(truthy_condition) => {
                 !truthy_condition.value.parse(self).await?.is_empty()
             }
-            step::Condition::Equal(_equal_condition) => true,
+            step::Condition::Equal(equal_condition) => {
+                let left_value = equal_condition.left.parse(self).await?;
+                let right_value = equal_condition.right.parse(self).await?;
+                log::info!("Comparing {left_value} == {right_value}");
+                left_value == right_value
+            }
+            step::Condition::HasElement(has_element_condition) => {
+                let selector = has_element_condition.selector.parse(self).await?;
+
+                let browser = self.browser.lock().await;
+                let locator = browser.get_selector(&selector)?;
+                locator.is_visible().await?
+            }
         };
 
         if is_met {

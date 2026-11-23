@@ -121,6 +121,8 @@ fn explain_workflow(include_example: bool) -> Result<()> {
     utils::print_lines(1);
     print_struct_docs!(workflow_step::condition::EqualCondition, 4)?;
     utils::print_lines(1);
+    print_struct_docs!(workflow_step::condition::HasElementCondition, 4)?;
+    utils::print_lines(1);
     print_struct_docs!(workflow_step::ForEachStep, 2)?;
     utils::print_lines(1);
     print_struct_docs!(workflow_step::iteration::FileIterator, 4)?;

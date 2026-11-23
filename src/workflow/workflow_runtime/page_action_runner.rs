@@ -1,11 +1,16 @@
 use anyhow::{Context, Result};
+use std::path::Path;
 
+use super::context;
 use super::step;
 
 impl super::RunningWorkflow {
-    pub(super) async fn run_page_action(&self, step: &step::PageActionStep) -> Result<()> {
+    pub(super) async fn run_page_action(
+        &self,
+        step: &step::PageActionStep,
+        workflow_file_path: &Path,
+    ) -> Result<()> {
         let mut logger = self.logger.lock().await;
-        log::info!("{step:#?}");
 
         //TODO: support multi-page workflows
         // step.page_index;
@@ -30,21 +35,55 @@ impl super::RunningWorkflow {
 
                 logger.info(&format!("Inputting: \"{value}\" into \"{selector}\""));
 
-                //TODO: implement
+                self.browser
+                    .lock()
+                    .await
+                    .input_selector(&selector, &value)
+                    .await?;
             }
 
             step::PageAction::Click(click_action) => {
                 let selector = click_action.selector.parse(self).await?;
+                let mut browser = self.browser.lock().await;
 
                 logger.info(&format!("Clicking: \"{selector}\""));
 
-                //TODO: implement
+                browser
+                    .click_selector(&selector, click_action.wait_for_navigation)
+                    .await?;
+                if click_action.wait_for_navigation {
+                    browser.wait_for_navigation().await?;
+                }
             }
 
-            step::PageAction::Evaluate(_evaluate_action) => {
+            step::PageAction::Evaluate(evaluate_action) => {
                 logger.info("Evaluating code");
 
-                //TODO: implement
+                let code = step::page_action::get_script_content(
+                    &evaluate_action.script,
+                    workflow_file_path.parent().unwrap_or_else(|| Path::new("")),
+                )
+                .await?;
+
+                let mut browser = self.browser.lock().await;
+
+                match browser.run_script(&code).await {
+                    Ok(evaluated_response) => {
+                        logger.info(&format!("Evaluated response: \"{evaluated_response:#?}\""));
+                        if let Some(context_name) = &evaluate_action.context_name {
+                            let basic_context_item = Box::new(context::BasicContextItem::new(
+                                evaluated_response.unwrap_or(serde_json::Value::Null),
+                            ));
+                            self.context
+                                .lock()
+                                .await
+                                .set_item(context_name, basic_context_item);
+                        }
+                    }
+                    Err(e) => {
+                        logger.warning(&format!("Failed to evaluate code: \"{e}\""));
+                    }
+                }
             }
         }
 

@@ -1,19 +1,18 @@
 use anyhow::{Context as _, Result, anyhow};
 use jsonc_parser::{ParseOptions, parse_to_serde_value};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use tokio::fs as async_fs;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use super::context;
 
-// type SerdeJsonObject = serde_json::Map<String, serde_json::Value>;
-
+#[derive(Debug)]
 struct FileContextItem {
     data: serde_json::Value,
-    /// Basically content of json source file
+    /// Shared in-memory array. All items from the same source file share this
+    /// so that updates to one item remain visible to others without round-tripping
+    /// through the filesystem on every write.
     array: Arc<Mutex<Vec<serde_json::Value>>>,
-    /// Index of the current item used during update
+    /// Index of the current item within the shared array.
     index: usize,
     file_path: PathBuf,
 }
@@ -23,26 +22,25 @@ impl context::WorkflowContextItem for FileContextItem {
         &self.data
     }
 
-    fn get_value(&self, _path: &context::PropertyPath) -> Option<serde_json::Value> {
-        todo!()
-    }
-
     fn update(
-        &self,
-        _path: &context::PropertyPath,
-        _value: serde_json::Value,
+        &mut self,
+        path: &context::PropertyPath,
+        value: &serde_json::Value,
     ) -> Result<&serde_json::Value> {
-        //TODO: update self.data
+        self.data = context::set_nested_property(&self.data, path, value.clone());
 
-        log::info!("Updating file: {}", self.file_path.display());
-        let mut array = self.array.blocking_lock();
-        array[self.index] = self.data.clone();
-        let json_array_content =
-            serde_json::to_string_pretty::<Vec<serde_json::Value>>(&array.clone())?;
-        std::fs::write(&self.file_path, &json_array_content)
-            .context("Failed to create config file")?;
+        if let Ok(mut arr) = self.array.lock()
+            && self.index < arr.len()
+        {
+            arr[self.index] = self.data.clone();
+            log::info!("Updating file: {}", self.file_path.display());
 
-        Ok(&self.data)
+            let json_array_content = serde_json::to_string_pretty(&*arr)?;
+            std::fs::write(&self.file_path, &json_array_content)
+                .context("Failed to write updated file")?;
+        }
+
+        Ok(self.get_data())
     }
 }
 
@@ -82,7 +80,7 @@ pub(super) async fn get_file_iterator_items(
         ));
     }
 
-    let content = async_fs::read_to_string(&source_path)
+    let content = tokio::fs::read_to_string(&source_path)
         .await
         .with_context(|| "Cannot read source file")?;
 
@@ -94,7 +92,7 @@ pub(super) async fn get_file_iterator_items(
 
         let items = shared_array
             .lock()
-            .await
+            .unwrap()
             .iter()
             .enumerate()
             .map(|(index, item)| {
