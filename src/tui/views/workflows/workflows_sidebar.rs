@@ -53,7 +53,7 @@ impl panel::Panel for WorkflowsSidebar {
                 workflows
                     .iter()
                     .map(|w| match &w.state {
-                        WorkflowState::Running(running_workflow) => {
+                        WorkflowState::Running(running_workflow, ..) => {
                             let label = utils::truncate_text(
                                 &running_workflow.data.name,
                                 WorkflowsSidebar::WIDTH.into(),

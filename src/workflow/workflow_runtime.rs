@@ -1,13 +1,20 @@
 mod agent_runner;
+mod condition_runner;
+mod context_runner;
+mod iteration_runner;
+mod misc_runner;
 mod page_action_runner;
+mod procedure_runner;
+mod system_action_runner;
 
-use anyhow::{Result, bail};
+use anyhow::{Context as _, Result, bail};
 use scopeguard::defer;
 use std::mem;
-use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use std::path::Path;
+use tokio::sync::Mutex;
 
 use super::WorkflowState;
+pub(crate) use super::context;
 use super::workflow_data::step;
 use crate::browser::Browser;
 use crate::cli::CliLogger;
@@ -17,9 +24,9 @@ use crate::workflow::WorkflowData;
 pub struct RunningWorkflow {
     pub data: super::WorkflowData,
     config: Box<Config>,
-    //TODO: try simplify this with just Mutex
-    browser: Arc<RwLock<Browser>>,
-    logger: Mutex<CliLogger>,
+    pub(crate) browser: Mutex<Browser>,
+    pub(crate) logger: Mutex<CliLogger>,
+    pub(crate) context: Mutex<context::WorkflowContext>,
 }
 
 impl std::fmt::Debug for RunningWorkflow {
@@ -32,7 +39,7 @@ impl std::fmt::Debug for RunningWorkflow {
 
 impl RunningWorkflow {
     fn new(data: super::WorkflowData, config: Box<Config>) -> Self {
-        let browser = Arc::new(RwLock::new(Browser::new(&config.browser)));
+        let browser = Mutex::new(Browser::new(&config.browser));
         let logger = CliLogger::default();
 
         Self {
@@ -40,17 +47,51 @@ impl RunningWorkflow {
             config,
             browser,
             logger: Mutex::new(logger),
+            context: Mutex::new(super::context::WorkflowContext::new()),
         }
     }
 
-    pub(crate) async fn run_steps(&self) -> Result<()> {
-        for step in &self.data.steps {
+    async fn run_steps(
+        &self,
+        steps: &Vec<step::WorkflowStepType>,
+        workflow_file_path: &Path,
+    ) -> Result<()> {
+        for step in steps {
             match step {
                 step::WorkflowStepType::PageAction(page_action_step) => {
-                    self.run_page_action_step(page_action_step).await?;
+                    self.browser.lock().await.start().await?;
+                    self.run_page_action(page_action_step, workflow_file_path)
+                        .await?;
                 }
                 step::WorkflowStepType::Agent(agent_step) => {
-                    self.run_agent_step(agent_step).await?;
+                    self.run_agent(agent_step, workflow_file_path).await?;
+                }
+                step::WorkflowStepType::SystemAction(system_action_step) => {
+                    self.run_system_action(system_action_step).await?;
+                }
+
+                step::WorkflowStepType::Condition(condition_step) => {
+                    self.check_condition(condition_step, workflow_file_path)
+                        .await?;
+                }
+                step::WorkflowStepType::ForEach(for_each_step) => {
+                    self.iterate_over_each(for_each_step, workflow_file_path)
+                        .await?;
+                }
+                step::WorkflowStepType::RunProcedure(run_procedure_step) => {
+                    self.run_procedure(run_procedure_step, workflow_file_path)
+                        .await?;
+                }
+
+                step::WorkflowStepType::UpdateContext(update_context_step) => {
+                    self.update_context(update_context_step).await?;
+                }
+
+                step::WorkflowStepType::Wait(wait_step) => {
+                    self.wait(wait_step).await?;
+                }
+                step::WorkflowStepType::Abort(abort_step) => {
+                    self.abort_workflow(abort_step).await?;
                 }
             }
         }
@@ -74,33 +115,40 @@ impl super::Workflow {
     /// # Errors
     /// This function returns an error if the workflow fails to run.
     pub async fn run(&mut self, config: Box<Config>) -> Result<()> {
-        if self.is_draft() {
-            bail!("Cannot run a draft workflow");
-        }
-
         defer! {
             CliLogger::default().reset();
         }
 
-        let get_running_state = |data: &mut WorkflowData| {
-            WorkflowState::Running(Box::new(RunningWorkflow::new(mem::take(data), config)))
+        let get_running_state = |data: &mut WorkflowData| -> Result<WorkflowState> {
+            let workflow_file_path = self
+                .file_path
+                .as_ref()
+                .context("Cannot run a draft workflow")?;
+
+            Ok(WorkflowState::Running(
+                Box::new(RunningWorkflow::new(mem::take(data), config)),
+                workflow_file_path.clone(),
+            ))
         };
 
         self.state = match &mut self.state {
-            WorkflowState::SuccessfulRun(run) => get_running_state(&mut run.data),
-            WorkflowState::FailedRun(run) => get_running_state(&mut run.data),
-            WorkflowState::Valid(data) => get_running_state(data),
-            WorkflowState::Running(_) => bail!("Workflow is already running"),
+            WorkflowState::SuccessfulRun(run) => get_running_state(&mut run.data)?,
+            WorkflowState::FailedRun(run) => get_running_state(&mut run.data)?,
+            WorkflowState::Valid(data) => get_running_state(data)?,
+            WorkflowState::Running(..) => bail!("Workflow is already running"),
             WorkflowState::Invalid(error) => bail!("Cannot run invalid Workflow: {error}"),
         };
 
-        if let WorkflowState::Running(running_workflow) = &mut self.state {
+        if let WorkflowState::Running(running_workflow, workflow_file_path) = &mut self.state {
             running_workflow.logger.lock().await.info(&format!(
                 "Running workflow: \"{}\"",
                 running_workflow.data.name
             ));
 
-            match running_workflow.run_steps().await {
+            match running_workflow
+                .run_steps(&running_workflow.data.steps, workflow_file_path)
+                .await
+            {
                 Ok(()) => {
                     self.state = WorkflowState::SuccessfulRun(SuccessfullWorkflow {
                         data: mem::take(&mut running_workflow.data),

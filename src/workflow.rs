@@ -1,3 +1,4 @@
+pub(crate) mod context;
 pub(crate) mod workflow_data;
 mod workflow_loader;
 mod workflow_runtime;
@@ -5,7 +6,7 @@ mod workflow_runtime;
 use std::path::PathBuf;
 
 use jsonc_parser::{ParseOptions, errors::ParseError, parse_to_serde_value};
-pub(crate) use workflow_data::WorkflowData;
+pub(crate) use workflow_data::{WorkflowData, WorkflowProcedure};
 #[cfg(test)]
 pub(crate) use workflow_loader::JsonFile;
 #[cfg(test)]
@@ -22,7 +23,7 @@ pub enum WorkflowState {
 
     // NOTE: boxed RunningWorkflow to reduce enum size
     /// During valid workflow run
-    Running(Box<workflow_runtime::RunningWorkflow>),
+    Running(Box<workflow_runtime::RunningWorkflow>, PathBuf),
 
     /// When workflow run was successful
     SuccessfulRun(workflow_runtime::SuccessfullWorkflow),
@@ -35,6 +36,7 @@ pub enum WorkflowState {
 pub struct Workflow {
     pub state: WorkflowState,
 
+    /// Location of the workflow file (json/jsonc)
     /// `file_path == None` indicates draft workflow
     pub file_path: Option<PathBuf>,
 }
@@ -70,14 +72,11 @@ impl Workflow {
             state: WorkflowState::Valid(WorkflowData {
                 name: "Draft workflow".to_string(),
                 description: None,
+                procedures: vec![],
                 steps: vec![],
             }),
             file_path: None,
         }
-    }
-
-    fn is_draft(&self) -> bool {
-        self.file_path.is_none()
     }
 }
 
@@ -159,6 +158,7 @@ mod tests {
         let data = WorkflowData {
             name: "My Workflow".to_string(),
             description: Some("description".to_string()),
+            procedures: vec![],
             steps: vec![],
         };
         let state = WorkflowState::Valid(data);
@@ -171,6 +171,7 @@ mod tests {
         let state = WorkflowState::Valid(WorkflowData {
             name: "ok".to_string(),
             description: None,
+            procedures: vec![],
             steps: vec![],
         });
         match state {
@@ -185,6 +186,7 @@ mod tests {
         let data = WorkflowData {
             name: "clone-test".to_string(),
             description: Some("test description".to_string()),
+            procedures: vec![],
             steps: vec![],
         };
         let cloned = data.clone();
@@ -226,6 +228,7 @@ mod tests {
         let state = WorkflowState::Valid(WorkflowData {
             name: "Test".to_string(),
             description: None,
+            procedures: vec![],
             steps: vec![],
         });
         let s = format!("{state:?}");

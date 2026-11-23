@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow::Result;
 
 use super::step;
@@ -5,12 +7,16 @@ use crate::agent;
 use crate::llm;
 
 impl super::RunningWorkflow {
-    pub(super) async fn run_agent_step(&self, step: &step::AgentStep) -> Result<()> {
+    pub(super) async fn run_agent(
+        &self,
+        step: &step::AgentStep,
+        workflow_path: impl AsRef<Path>,
+    ) -> Result<()> {
         let mut logger = self.logger.lock().await;
         logger.info("Running agent");
         log::info!("{step:#?}");
 
-        let mut browser = self.browser.write().await;
+        let mut browser = self.browser.lock().await;
 
         // LLM inference interface
         let llm = llm::openai::ChatOpenAI::new(llm::ChatOpenAIConfig {
@@ -19,7 +25,8 @@ impl super::RunningWorkflow {
             api_key: self.config.agent.api_key.clone(),
             ..llm::ChatOpenAIConfig::default()
         });
-        let mut agent = agent::Agent::new(&step.task)
+
+        let mut agent = agent::Agent::new(&step.task.parse(self).await?)
             .prompt_mode(step.prompt_mode)
             .max_steps(step.max_steps);
 
@@ -35,8 +42,17 @@ impl super::RunningWorkflow {
 
         // Save history to file
         if let Some(output_path) = &step.history_output {
-            //TODO: output should be relative to workflow file
-            history.save_to_file(output_path).await?;
+            if output_path.is_relative() {
+                let combined_path = workflow_path
+                    .as_ref()
+                    .parent()
+                    .unwrap_or(Path::new(""))
+                    .join(output_path);
+
+                history.save_to_file(combined_path).await?;
+            } else {
+                history.save_to_file(output_path).await?;
+            }
             logger.info(&format!("\nHistory saved to \"{}\"", output_path.display()));
 
             // Variable detection capabilities on run history

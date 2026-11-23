@@ -2,14 +2,15 @@ use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use super::WorkflowString;
 use crate::agent;
 
-/// `AgentStep`
+/// `AgentStep` - runs an AI agent to perform a task
 #[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct AgentStep {
     /// Prompt sent to the agent
-    pub task: String,
+    pub task: WorkflowString,
 
     /// Maximum number of steps the agent is allowed to take
     /// Default is 64
@@ -17,7 +18,7 @@ pub struct AgentStep {
     pub max_steps: u16,
 
     /// Path to where the steps that agent did will be saved
-    /// Relative to workflow file
+    /// Path can be absolute or relative to the workflow file
     #[serde(alias = "historyOutput", rename = "historyOutput")]
     pub history_output: Option<PathBuf>,
 

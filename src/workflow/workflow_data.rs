@@ -1,7 +1,10 @@
 pub(crate) mod step;
+mod workflow_string;
 
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
+
+pub(crate) use workflow_string::WorkflowString;
 
 /// Workflow must be a json file with the following fields:
 #[derive(Debug, Default, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
@@ -13,11 +16,34 @@ pub struct WorkflowData {
     /// Description of the workflow
     pub description: Option<String>,
 
-    /// List of steps to be performed
+    /// Named group of steps for easier workflow management
+    /// See `WorkflowProcedure` for more info
+    /// Can be thought of as functions in programming
+    pub procedures: Vec<WorkflowProcedure>,
+
+    /// Main list of steps to be performed
     /// Each step is an object that contains "type" property (enum)
     /// See specific fields for each type:
     /// "page-action" --> `PageActionStep`
     /// "agent" --> `AgentStep`
+    /// "system-action" --> `SystemActionStep`
+    /// "condition" --> `ConditionStep`
+    /// "for-each" --> `ForEachStep`
+    /// "update-context" --> `UpdateContextStep`
+    /// "wait" --> `WaitStep`
+    /// "abort" --> `AbortStep`
+    pub steps: Vec<step::WorkflowStepType>,
+}
+
+/// `WorkflowProcedure`
+#[derive(Debug, Default, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
+pub struct WorkflowProcedure {
+    /// Name of the procedure
+    /// Works as identifier
+    pub name: String,
+
+    /// List of steps to be performed (same as in `WorkflowData`)
     pub steps: Vec<step::WorkflowStepType>,
 }
 

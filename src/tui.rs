@@ -62,7 +62,8 @@ impl TuiApp {
                     .display()
             );
         }
-
+        //TODO: remove this warning suppressor and resolve the issue
+        #[allow(clippy::arc_with_non_send_sync)]
         let workflows_arc = Arc::new(RwLock::new(workflows));
         let config_arc = Arc::new(RwLock::new(config));
 

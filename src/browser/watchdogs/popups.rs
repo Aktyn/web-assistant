@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tracing::{debug, warn};
 
-use crate::browser::cdp::CdpClient;
+use super::CdpClient;
 
 #[derive(Clone)]
 pub struct PopupsWatchdog {

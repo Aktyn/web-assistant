@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 use tracing::{error, warn};
 
-use crate::browser::cdp::CdpClient;
+use super::CdpClient;
 
 #[derive(Clone)]
 pub struct CrashWatchdog {

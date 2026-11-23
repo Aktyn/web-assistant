@@ -31,7 +31,6 @@
         "url": "http://example.com"
       }
     },
-
     // Run agent task
     {
       "type": "agent",

@@ -9,7 +9,7 @@ use tracing::debug;
 /// Cookie fingerprint key: (name, domain, path).
 type CookieFingerprint = std::collections::HashSet<(String, String, String)>;
 
-use crate::browser::cdp::CdpClient;
+use super::CdpClient;
 
 /// Storage item representing a single origin's local or session storage data
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -287,8 +287,8 @@ fn normalize_cookie_expiry(mut cookie: Value) -> Value {
 
 #[cfg(test)]
 mod tests {
+    use super::super::super::MockCdp;
     use super::*;
-    use crate::browser::cdp::MockCdp;
     use tempfile::tempdir;
 
     fn mock_storage() -> (StorageStateWatchdog, MockCdp) {

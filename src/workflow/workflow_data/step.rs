@@ -1,10 +1,23 @@
 mod agent;
+pub(crate) mod condition;
+pub(crate) mod context;
+pub(crate) mod iteration;
+mod misc;
 pub(crate) mod page_action;
+mod procedure;
+pub(crate) mod system_action;
 
 use serde::{Deserialize, Serialize};
 
+pub(crate) use super::WorkflowString;
 pub(crate) use agent::AgentStep;
+pub(crate) use condition::{Condition, ConditionStep};
+pub(crate) use context::UpdateContextStep;
+pub(crate) use iteration::{ForEachStep, get_iteration_items};
+pub(crate) use misc::{AbortStep, WaitStep};
 pub(crate) use page_action::{PageAction, PageActionStep};
+pub(crate) use procedure::RunProcedureStep;
+pub(crate) use system_action::{SystemAction, SystemActionStep};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -12,6 +25,20 @@ pub enum WorkflowStepType {
     #[serde(alias = "page-action", rename = "page-action")]
     PageAction(page_action::PageActionStep),
     Agent(agent::AgentStep),
+    #[serde(alias = "system-action", rename = "system-action")]
+    SystemAction(system_action::SystemActionStep),
+
+    Condition(condition::ConditionStep),
+    #[serde(alias = "for-each", rename = "for-each")]
+    ForEach(iteration::ForEachStep),
+    #[serde(alias = "run-procedure", rename = "run-procedure")]
+    RunProcedure(procedure::RunProcedureStep),
+
+    #[serde(alias = "update-context", rename = "update-context")]
+    UpdateContext(context::UpdateContextStep),
+
+    Wait(misc::WaitStep),
+    Abort(misc::AbortStep),
 }
 
 #[cfg(test)]

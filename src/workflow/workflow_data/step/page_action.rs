@@ -1,7 +1,12 @@
+use anyhow::Result;
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use tokio::fs;
 
-/// `PageActionStep`
+use super::WorkflowString;
+
+/// `PageActionStep` - interacts with the page
 #[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct PageActionStep {
@@ -14,6 +19,9 @@ pub struct PageActionStep {
     /// Contains "type" property (enum)
     /// See specific fields for each type:
     /// "navigate" --> `NavigateAction`
+    /// "input" --> `InputAction`
+    /// "click" --> `ClickAction`
+    /// "evaluate" --> `EvaluateAction`
     pub action: PageAction,
 }
 
@@ -21,6 +29,9 @@ pub struct PageActionStep {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum PageAction {
     Navigate(NavigateAction),
+    Input(InputAction),
+    Click(ClickAction),
+    Evaluate(EvaluateAction),
 }
 
 /// `NavigateAction`
@@ -28,7 +39,67 @@ pub enum PageAction {
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct NavigateAction {
     /// URL to navigate to
-    pub url: String,
+    pub url: WorkflowString,
+}
+
+/// `InputAction`
+#[derive(Debug, Deserialize, Serialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
+pub struct InputAction {
+    /// CSS selector to find the input element
+    pub selector: WorkflowString,
+
+    /// Value to type inside the input element
+    /// Input field will be cleared beforehand
+    pub value: WorkflowString,
+}
+
+/// `ClickAction`
+#[derive(Debug, Deserialize, Serialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
+pub struct ClickAction {
+    /// CSS selector to find the click element
+    pub selector: WorkflowString,
+
+    /// Expects the page to redirect after clicking an element
+    /// If the navigation won't occur, workflow will fail
+    #[serde(
+        default = "bool::default",
+        alias = "waitForNavigation",
+        rename = "waitForNavigation"
+    )]
+    pub wait_for_navigation: bool,
+}
+
+/// `EvaluateAction`
+#[derive(Debug, Deserialize, Serialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
+pub struct EvaluateAction {
+    /// Either path to JavaScript file or code to evaluate on the page
+    pub script: String,
+
+    /// Upserts context with the value returned from evaluated code
+    /// If not provided, the context will not be created/updated
+    #[serde(default, alias = "contextName", rename = "contextName")]
+    pub context_name: Option<String>,
+}
+
+pub(crate) async fn get_script_content(script: &str, root_path: &Path) -> Result<String> {
+    let mut possible_script_path = PathBuf::from(script);
+    if possible_script_path.is_relative() {
+        possible_script_path = root_path.join(possible_script_path);
+    }
+
+    if possible_script_path.exists() && possible_script_path.is_file() {
+        log::info!(
+            "Reading script content from {}",
+            possible_script_path.display()
+        );
+        let code = fs::read_to_string(possible_script_path).await?;
+        return Ok(code);
+    }
+
+    Ok(script.to_string())
 }
 
 #[cfg(test)]

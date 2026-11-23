@@ -55,6 +55,7 @@ impl Config {
             return Self::default();
         }
 
+        //TODO: test and possible improve these errors handling for larger scope
         assert!(
             config_path.is_file(),
             "Config path must point to a file. Path: \"{}\"",
@@ -138,7 +139,7 @@ pub async fn create_default_config(path: Option<&Path>) -> Result<&Path> {
 
     let default_config = Config::default();
     let json =
-        serde_json::to_vec_pretty(&default_config).expect("Failed to serialize default config");
+        serde_json::to_vec_pretty(&default_config).context("Failed to serialize default config")?;
     tokio::fs::write(&config_path, &json)
         .await
         .context("Failed to create config file")?;

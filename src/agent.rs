@@ -8,7 +8,6 @@ use crate::{browser::Browser, llm};
 use anyhow::{Context, Result, anyhow};
 use std::collections::HashMap;
 use std::path::Path;
-use tokio::sync::RwLockWriteGuard;
 use tracing::{debug, info, warn};
 
 pub use prompts::{PromptMode, SystemPrompt};
@@ -22,7 +21,6 @@ pub struct Agent {
     pub task: String,
     pub system_prompt: SystemPrompt,
     pub max_steps: u16,
-    // pub history: AgentHistoryList,
 }
 
 impl Agent {
@@ -31,7 +29,6 @@ impl Agent {
             task: task.into(),
             system_prompt: SystemPrompt::default(),
             max_steps: 20,
-            // history: AgentHistoryList::new(),
         }
     }
 
@@ -56,7 +53,7 @@ impl Agent {
     #[allow(clippy::too_many_lines)]
     pub async fn run<LlmType: llm::LLM>(
         &mut self,
-        browser: &mut RwLockWriteGuard<'_, Browser>,
+        browser: &mut Browser,
         llm: &LlmType,
     ) -> Result<AgentHistoryList> {
         info!("Starting agent task: {}", self.task);

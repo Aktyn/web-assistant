@@ -89,15 +89,11 @@ pub fn home_dir() -> Option<PathBuf> {
 /// Runs system command that opens given file in its default application
 /// # Errors
 /// Returns an error if the command fails
-pub fn open_file(path: &Path) -> Result<std::process::Child> {
-    let absolute_path = path
-        .canonicalize()
-        .map_err(|e| anyhow!("failed to get absolute path of \"{}\": {e}", path.display()))?;
-
+pub fn run_open_command(target: &str) -> Result<std::process::Child> {
     let mut command = if cfg!(target_os = "windows") {
         let mut cmd = std::process::Command::new("cmd");
         cmd.args(["/C", "start", ""]);
-        cmd.arg(&absolute_path);
+        cmd.arg(target);
         cmd
     } else {
         let program = if cfg!(target_os = "macos") {
@@ -106,18 +102,28 @@ pub fn open_file(path: &Path) -> Result<std::process::Child> {
             "xdg-open"
         };
         let mut cmd = std::process::Command::new(program);
-        cmd.arg(&absolute_path);
+        cmd.arg(target);
         cmd
     };
 
     command
         .stdout(std::process::Stdio::null())
         .spawn()
-        .map_err(|e| anyhow!("failed to open \"{}\": {e}", absolute_path.display()))
+        .map_err(|e| anyhow!("failed to open \"{target}\": {e}"))
 }
 
 pub fn print_lines(count: u16) {
     stdout().write_all(&b"\r\n".repeat(count.into())).ok();
+}
+
+#[must_use]
+pub fn json_parse(json_string: &str) -> serde_json::Value {
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(json_string) {
+        return v;
+    }
+
+    // Fall back to string
+    serde_json::Value::String(json_string.to_string())
 }
 
 #[cfg(test)]
@@ -305,7 +311,7 @@ mod tests {
 
     #[test]
     fn test_open_file_with_nonexistent_path_fails() {
-        let result = open_file(Path::new("/tmp/does_not_exist_for_testing_xyz"));
+        let result = run_open_command(Path::new("/tmp/does_not_exist_for_testing_xyz"));
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(

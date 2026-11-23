@@ -1,7 +1,7 @@
 use anyhow::Result;
 use tracing::debug;
 
-use crate::browser::cdp::CdpClient;
+use super::CdpClient;
 
 #[derive(Clone)]
 pub struct PermissionsWatchdog {
