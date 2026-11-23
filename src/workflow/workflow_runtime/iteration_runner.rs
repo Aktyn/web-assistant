@@ -17,6 +17,7 @@ impl super::RunningWorkflow {
 
         let total_items = items.len();
 
+        //TODO: option for reverse and random order iterations
         for (index, item) in items.into_iter().enumerate() {
             self.logger.lock().await.info(&format!(
                 "Starting iteration {} of {}",

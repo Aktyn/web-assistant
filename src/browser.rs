@@ -220,6 +220,7 @@ impl Browser {
         )
         .await
         .with_context(|| format!("Failed to goto {formatted_url}"))?;
+        self.wait(1).await?;
 
         if let Some(wd) = &self.watchdogs {
             wd.on_after_navigate(&formatted_url).await?;
