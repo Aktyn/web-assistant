@@ -347,8 +347,8 @@ mod tests {
         let result = set_nested_property(&data, &["flag"], serde_json::json!(false));
         assert_eq!(result, serde_json::json!({"flag": false}));
 
-        let result2 = set_nested_property(&data, &["num"], serde_json::json!(3.14));
-        assert_eq!(result2, serde_json::json!({"num": 3.14}));
+        let result2 = set_nested_property(&data, &["num"], serde_json::json!(2.71));
+        assert_eq!(result2, serde_json::json!({"num": 2.71}));
     }
 
     #[test]

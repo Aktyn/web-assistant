@@ -19,6 +19,7 @@ pub struct WorkflowData {
     /// Named group of steps for easier workflow management
     /// See `WorkflowProcedure` for more info
     /// Can be thought of as functions in programming
+    #[serde(default)]
     pub procedures: Vec<WorkflowProcedure>,
 
     /// Main list of steps to be performed
@@ -88,6 +89,7 @@ mod tests {
         let data = WorkflowData {
             name: "clone".to_string(),
             description: Some("desc".to_string()),
+            procedures: vec![],
             steps: vec![],
         };
         let cloned = data.clone();

@@ -88,6 +88,7 @@ impl BrowserState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::browser::js::{EXTRACT_DOM_JS, build_element_info_js, build_input_js};
     use std::collections::HashMap;
 
     #[test]

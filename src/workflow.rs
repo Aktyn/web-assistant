@@ -78,6 +78,11 @@ impl Workflow {
             file_path: None,
         }
     }
+
+    #[must_use]
+    pub fn is_draft(&self) -> bool {
+        self.file_path.is_none()
+    }
 }
 
 #[cfg(test)]

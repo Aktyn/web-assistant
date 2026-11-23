@@ -49,7 +49,7 @@ mod tests {
     fn test_agent_step_defaults_max_steps() {
         let json = r#"{"task":"do something"}"#;
         let step: AgentStep = serde_json::from_str(json).unwrap();
-        assert_eq!(step.task, "do something");
+        assert_eq!(step.task, WorkflowString::new("do something"));
         assert_eq!(step.max_steps, 64);
         assert!(step.history_output.is_none());
     }
@@ -58,7 +58,7 @@ mod tests {
     fn test_agent_step_explicit_max_steps_and_history_output() {
         let json = r#"{"task":"go","maxSteps":16,"historyOutput":"./out.json"}"#;
         let step: AgentStep = serde_json::from_str(json).unwrap();
-        assert_eq!(step.task, "go");
+        assert_eq!(step.task, WorkflowString::new("go"));
         assert_eq!(step.max_steps, 16);
         assert_eq!(step.history_output, Some(PathBuf::from("./out.json")));
     }
@@ -66,7 +66,7 @@ mod tests {
     #[test]
     fn test_agent_step_serializes_with_camel_case() {
         let step = AgentStep {
-            task: "task".to_string(),
+            task: WorkflowString::new("task"),
             max_steps: 8,
             history_output: Some(PathBuf::from("./h.json")),
             prompt_mode: agent::PromptMode::Standard,
@@ -80,7 +80,7 @@ mod tests {
     #[test]
     fn test_agent_step_clone_and_debug() {
         let step = AgentStep {
-            task: "clone me".to_string(),
+            task: WorkflowString::new("clone me"),
             max_steps: 32,
             history_output: None,
             prompt_mode: agent::PromptMode::Standard,

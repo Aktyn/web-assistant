@@ -43,12 +43,13 @@ pub enum WorkflowStepType {
 
 #[cfg(test)]
 mod tests {
+    use super::super::workflow_string::WorkflowString;
     use super::*;
 
     #[test]
     fn test_navigate_step_serde_roundtrip() {
         let step = page_action::NavigateAction {
-            url: "https://example.com".to_string(),
+            url: WorkflowString::new("https://example.com"),
         };
         let json = serde_json::to_string(&step).unwrap();
         let parsed: page_action::NavigateAction = serde_json::from_str(&json).unwrap();
@@ -64,7 +65,7 @@ mod tests {
                 assert_eq!(page_action_step.page_index, 0);
                 assert!(matches!(page_action_step.action, PageAction::Navigate(_)));
             }
-            WorkflowStepType::Agent(_) => panic!("Expected PageAction variant"),
+            _ => panic!("Expected PageAction variant"),
         }
     }
 
@@ -87,7 +88,7 @@ mod tests {
         let step = WorkflowStepType::PageAction(page_action::PageActionStep {
             page_index: 0,
             action: PageAction::Navigate(page_action::NavigateAction {
-                url: "https://example.com".to_string(),
+                url: WorkflowString::new("https://example.com"),
             }),
         });
         let json = serde_json::to_string(&step).unwrap();
@@ -101,10 +102,10 @@ mod tests {
         let step: WorkflowStepType = serde_json::from_str(json).unwrap();
         match step {
             WorkflowStepType::Agent(agent_step) => {
-                assert_eq!(agent_step.task, "do something");
+                assert_eq!(agent_step.task, WorkflowString::new("do something"));
                 assert_eq!(agent_step.max_steps, 8);
             }
-            WorkflowStepType::PageAction(_) => panic!("Expected Agent variant"),
+            _ => panic!("Expected Agent variant"),
         }
     }
 
@@ -116,7 +117,7 @@ mod tests {
             WorkflowStepType::Agent(agent_step) => {
                 assert_eq!(agent_step.max_steps, 64);
             }
-            WorkflowStepType::PageAction(_) => panic!("Expected Agent variant"),
+            _ => panic!("Expected Agent variant"),
         }
     }
 }

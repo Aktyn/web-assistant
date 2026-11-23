@@ -11,6 +11,8 @@ use playwright_rs::{
     Playwright, WaitUntil,
 };
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::sleep;
 use utils::chrome;
@@ -48,7 +50,7 @@ impl CdpClient {
         // Test mocks intercept here.
         #[cfg(test)]
         {
-            let guard = self.mock_responses.lock().await;
+            let guard = self.mock_responses.lock().unwrap();
             if let Some(resp) = guard.get(_method) {
                 return Ok(resp.clone());
             }
@@ -59,6 +61,18 @@ impl CdpClient {
     }
 
     pub async fn evaluate(&self, expression: &str) -> Result<Value> {
+        // In tests, check mock responses even without a live page
+        #[cfg(test)]
+        {
+            let guard = self.mock_responses.lock().unwrap();
+            if let Some(resp) = guard.get("Runtime.evaluate") {
+                // Mock may store the full JSON-RPC response; extract .result.value
+                if let Some(inner) = resp.get("result").and_then(|r| r.get("value")) {
+                    return Ok(inner.clone());
+                }
+                return Ok(resp.clone());
+            }
+        }
         if let Some(ref page) = self.page {
             let val_str = page.evaluate_value(expression).await?;
             Ok(crate_utils::json_parse(&val_str))
@@ -454,8 +468,7 @@ impl Default for Browser {
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
+    use std::sync::{Arc, Mutex};
 
     impl CdpClient {
         #[cfg(test)]
@@ -510,7 +523,7 @@ mod tests {
 
     /// Test-only mock CDP server that responds to commands with canned JSON.
     #[allow(dead_code)]
-    pub(crate) struct MockCdp {
+    pub struct MockCdp {
         pub client: CdpClient,
         overrides: Arc<std::sync::Mutex<HashMap<String, Value>>>,
         fails: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,

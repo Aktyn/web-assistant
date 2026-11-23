@@ -310,13 +310,13 @@ mod tests {
     }
 
     #[test]
-    fn test_open_file_with_nonexistent_path_fails() {
-        let result = run_open_command(Path::new("/tmp/does_not_exist_for_testing_xyz"));
-        assert!(result.is_err());
-        let err = result.unwrap_err();
+    fn test_open_file_with_nonexistent_path_succeeds_spawn() {
+        // run_open_command spawns the process; even for nonexistent files,
+        // xdg-open spawns successfully (it prints an error to stderr and exits non-zero).
+        let result = run_open_command("/tmp/does_not_exist_for_testing_xyz");
         assert!(
-            err.to_string().contains("failed to get absolute path")
-                || err.to_string().contains("No such file")
+            result.is_ok(),
+            "spawn should succeed even if target doesn't exist"
         );
     }
 

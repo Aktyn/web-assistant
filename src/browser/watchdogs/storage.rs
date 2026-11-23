@@ -287,8 +287,8 @@ fn normalize_cookie_expiry(mut cookie: Value) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::MockCdp;
     use super::*;
+    use crate::browser::tests::MockCdp;
     use tempfile::tempdir;
 
     fn mock_storage() -> (StorageStateWatchdog, MockCdp) {
@@ -641,6 +641,10 @@ mod tests {
     async fn test_maybe_save_on_change_with_change_returns_true() {
         let (wd, mock) = mock_storage();
         mock.set("Storage.getCookies", serde_json::json!({"cookies": []}));
+        mock.set(
+            "Runtime.evaluate",
+            serde_json::json!({"result": {"value": []}}),
+        );
         let tmp = tempdir().unwrap();
         let path = tmp.path().join("state.json");
         assert!(!wd.maybe_save_on_change(&path).await.unwrap());
