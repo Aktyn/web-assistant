@@ -11,7 +11,7 @@ use std::path::Path;
 use tracing::{debug, info, warn};
 
 pub use prompts::{PromptMode, SystemPrompt};
-pub use variable_detector::substitute_variables_in_history;
+pub use variable_detector::{detect_variables_in_history, substitute_variables_in_history};
 use views::{
     Action, ActionResult, AgentHistoryItem, AgentHistoryList, AgentOutput, AgentStepState,
     InteractedElementMetadata,
@@ -44,11 +44,11 @@ impl Agent {
         self
     }
 
-    // #[must_use]
-    // pub fn system_prompt(mut self, prompt: SystemPrompt) -> Self {
-    //     self.system_prompt = prompt;
-    //     self
-    // }
+    #[must_use]
+    pub fn system_prompt(mut self, prompt: SystemPrompt) -> Self {
+        self.system_prompt = prompt;
+        self
+    }
 
     #[allow(clippy::too_many_lines)]
     pub async fn run<LlmType: llm::LLM>(
@@ -559,7 +559,7 @@ mod tests {
     fn test_chat_openai_new_with_explicit_model() {
         let config = crate::llm::ChatOpenAIConfig {
             model: "custom-model".into(),
-            api_key: "".into(),
+            api_key: String::new(),
             base_url: "http://localhost:8080".into(),
             temperature: None,
             max_completion_tokens: None,
@@ -643,6 +643,20 @@ mod tests {
 
         assert_eq!(agent.max_steps, 10);
         assert_eq!(agent.system_prompt.mode, PromptMode::Flash);
+    }
+
+    #[test]
+    fn test_agent_system_prompt_builder() {
+        let custom_prompt = SystemPrompt::builder().mode(PromptMode::NoThinking).build();
+        let agent = Agent::new("Task").system_prompt(custom_prompt);
+        assert_eq!(agent.system_prompt.mode, PromptMode::NoThinking);
+    }
+
+    #[test]
+    fn test_agent_default_history_is_empty() {
+        let history = AgentHistoryList::new();
+        assert!(history.is_empty());
+        assert_eq!(history.len(), 0);
     }
 
     // =========================================================================
@@ -770,9 +784,8 @@ mod tests {
     // Agent lifecycle and history management tests
     // =========================================================================
 
-    #[test]
-    fn test_save_history_to_file() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+    #[tokio::test]
+    async fn test_save_history_to_file() {
         let temp_dir = tempfile::tempdir().unwrap();
         let file_path = temp_dir.path().join("history.json");
 
@@ -796,14 +809,12 @@ mod tests {
             }],
         };
 
-        let result = rt.block_on(history.save_to_file(&file_path));
+        let result = history.save_to_file(&file_path).await;
         assert!(result.is_ok());
         assert!(file_path.exists());
 
         // Verify we can load it back
-        let loaded = rt
-            .block_on(AgentHistoryList::load_from_file(&file_path))
-            .unwrap();
+        let loaded = AgentHistoryList::load_from_file(&file_path).await.unwrap();
         assert_eq!(loaded.len(), 1);
     }
 

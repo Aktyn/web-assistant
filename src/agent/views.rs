@@ -403,18 +403,14 @@ mod tests {
         assert_eq!(list.final_result(), None);
     }
 
-    #[test]
-    fn test_agent_history_list_load_from_missing_file_errors() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(AgentHistoryList::load_from_file(
-            "/nonexistent/history/path.json",
-        ));
+    #[tokio::test]
+    async fn test_agent_history_list_load_from_missing_file_errors() {
+        let result = AgentHistoryList::load_from_file("/nonexistent/history/path.json").await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_agent_history_list_save_creates_parent_directories() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+    #[tokio::test]
+    async fn test_agent_history_list_save_creates_parent_directories() {
         let temp_dir = tempfile::tempdir().unwrap();
         let nested = temp_dir.path().join("a/b/history.json");
 
@@ -434,24 +430,21 @@ mod tests {
             }],
         };
 
-        rt.block_on(list.save_to_file(&nested)).unwrap();
+        list.save_to_file(&nested).await.unwrap();
         assert!(nested.exists());
 
-        let loaded = rt
-            .block_on(AgentHistoryList::load_from_file(&nested))
-            .unwrap();
+        let loaded = AgentHistoryList::load_from_file(&nested).await.unwrap();
         assert_eq!(loaded.len(), list.len());
         assert_eq!(loaded.is_done(), list.is_done());
         assert_eq!(loaded.is_successful(), list.is_successful());
         assert_eq!(loaded.final_result(), list.final_result());
     }
 
-    #[test]
-    fn test_agent_history_list_load_from_invalid_json_errors() {
+    #[tokio::test]
+    async fn test_agent_history_list_load_from_invalid_json_errors() {
         let temp_file = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(temp_file.path(), "{not valid json").unwrap();
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(AgentHistoryList::load_from_file(temp_file.path()));
+        let result = AgentHistoryList::load_from_file(temp_file.path()).await;
         assert!(result.is_err());
     }
 
@@ -492,14 +485,13 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_save_to_file_with_bare_filename() {
+    #[tokio::test]
+    async fn test_save_to_file_with_bare_filename() {
         // A path without a parent directory component should still work.
-        let rt = tokio::runtime::Runtime::new().unwrap();
         let history = AgentHistoryList::default();
         // Use a path in the current directory that has no parent dir.
         let filename = "web_assistant_test_history_no_parent.json";
-        rt.block_on(history.save_to_file(filename)).unwrap();
-        let _ = std::fs::remove_file(PathBuf::from(filename));
+        history.save_to_file(filename).await.unwrap();
+        let _ = tokio::fs::remove_file(PathBuf::from(filename)).await;
     }
 }

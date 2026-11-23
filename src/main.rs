@@ -37,18 +37,6 @@ fn print_error(error: &anyhow::Error) {
     logger.reset();
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_print_error_does_not_panic() {
-        let err = anyhow::anyhow!("test error message");
-        // Should not panic even without a TTY
-        print_error(&err);
-    }
-}
-
 async fn run_tui(config_path: Option<&PathBuf>) -> Result<()> {
     dotenvy::dotenv().ok();
 
@@ -61,5 +49,17 @@ async fn run_tui(config_path: Option<&PathBuf>) -> Result<()> {
         tui::render_tui(config).await
     } else {
         anyhow::bail!("Config path is required")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_print_error_does_not_panic() {
+        let err = anyhow::anyhow!("test error message");
+        // Should not panic even without a TTY
+        print_error(&err);
     }
 }

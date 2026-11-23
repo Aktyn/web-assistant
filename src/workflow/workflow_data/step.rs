@@ -49,7 +49,7 @@ mod tests {
     #[test]
     fn test_navigate_step_serde_roundtrip() {
         let step = page_action::NavigateAction {
-            url: WorkflowString::new("https://example.com"),
+            url: "https://example.com".into(),
         };
         let json = serde_json::to_string(&step).unwrap();
         let parsed: page_action::NavigateAction = serde_json::from_str(&json).unwrap();
@@ -88,7 +88,7 @@ mod tests {
         let step = WorkflowStepType::PageAction(page_action::PageActionStep {
             page_index: 0,
             action: PageAction::Navigate(page_action::NavigateAction {
-                url: WorkflowString::new("https://example.com"),
+                url: "https://example.com".into(),
             }),
         });
         let json = serde_json::to_string(&step).unwrap();

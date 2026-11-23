@@ -215,29 +215,23 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_steps_empty_returns_ok() {
-        // Test that running a workflow with empty steps doesn't panic
-        // (browser may fail in CI, which is acceptable)
-        let tmp = tempfile::tempdir().unwrap();
-        let wf_path = tmp.path().join("empty.json");
-        std::fs::write(&wf_path, r#"{"name":"Empty","steps":[]}"#).unwrap();
-        let config = Box::new(crate::cli::cli_runner::test_headless_config());
-        let mut workflow = crate::workflow::load_from_file(&wf_path).await.unwrap();
-        let result = workflow.run(config).await;
-        // Acceptable failures are browser-related
-        if let Err(e) = result {
-            let err_str = e.to_string();
-            assert!(
-                err_str.contains("Chrome")
-                    || err_str.contains("chromium")
-                    || err_str.contains("DevTools")
-                    || err_str.contains("browser"),
-                "Unexpected error: {err_str}"
-            );
-        }
+        let runner = RunningWorkflow::new(
+            WorkflowData {
+                name: "Test".to_string(),
+                description: None,
+                procedures: vec![],
+                steps: vec![],
+            },
+            Box::new(default_config()),
+        );
+        let result = runner
+            .run_steps(&Vec::new(), Path::new("/tmp/test.json"))
+            .await;
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
-    async fn test_run_steps_with_navigate_uses_browser() {
+    async fn test_run_steps_with_navigate_attempts_browser_interaction() {
         // Test that workflow.run() with a navigate step attempts browser interaction
         let tmp = tempfile::tempdir().unwrap();
         let wf_path = tmp.path().join("navigate.json");

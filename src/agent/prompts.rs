@@ -34,13 +34,18 @@ impl SystemPrompt {
     pub fn new(mode: PromptMode) -> Self {
         Self {
             mode,
-            ..Self::default()
+            max_actions_per_step: 3,
+            override_system_message: None,
+            extend_system_message: None,
         }
     }
 
     #[must_use]
     pub fn builder() -> SystemPromptBuilder {
-        SystemPromptBuilder::default()
+        SystemPromptBuilder {
+            max_actions_per_step: 3,
+            ..Default::default()
+        }
     }
 
     #[must_use]
@@ -166,8 +171,8 @@ Respond ONLY with JSON:
 
 #[derive(Default)]
 pub struct SystemPromptBuilder {
-    mode: Option<PromptMode>,
-    max_actions_per_step: Option<usize>,
+    mode: PromptMode,
+    max_actions_per_step: usize,
     override_system_message: Option<String>,
     extend_system_message: Option<String>,
 }
@@ -175,13 +180,13 @@ pub struct SystemPromptBuilder {
 impl SystemPromptBuilder {
     #[must_use]
     pub fn mode(mut self, mode: PromptMode) -> Self {
-        self.mode = Some(mode);
+        self.mode = mode;
         self
     }
 
     #[must_use]
-    pub fn max_actions_per_step(mut self, n: usize) -> Self {
-        self.max_actions_per_step = Some(n);
+    pub fn max_actions_per_step(mut self, max: usize) -> Self {
+        self.max_actions_per_step = max;
         self
     }
 
@@ -199,20 +204,16 @@ impl SystemPromptBuilder {
 
     #[must_use]
     pub fn build(self) -> SystemPrompt {
-        let mut prompt = SystemPrompt::default();
-        if let Some(mode) = self.mode {
-            prompt.mode = mode;
+        SystemPrompt {
+            mode: self.mode,
+            max_actions_per_step: if self.max_actions_per_step == 0 {
+                3
+            } else {
+                self.max_actions_per_step
+            },
+            override_system_message: self.override_system_message,
+            extend_system_message: self.extend_system_message,
         }
-        if let Some(n) = self.max_actions_per_step {
-            prompt.max_actions_per_step = n;
-        }
-        if let Some(msg) = self.override_system_message {
-            prompt.override_system_message = Some(msg);
-        }
-        if let Some(msg) = self.extend_system_message {
-            prompt.extend_system_message = Some(msg);
-        }
-        prompt
     }
 }
 

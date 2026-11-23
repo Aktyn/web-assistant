@@ -126,7 +126,7 @@ mod tests {
         let step = PageActionStep {
             page_index: 1,
             action: PageAction::Navigate(NavigateAction {
-                url: WorkflowString::new("https://example.com"),
+                url: "https://example.com".into(),
             }),
         };
         let json = serde_json::to_value(&step).unwrap();
@@ -138,7 +138,7 @@ mod tests {
     #[test]
     fn test_navigate_action_roundtrip() {
         let action = NavigateAction {
-            url: WorkflowString::new("https://github.com"),
+            url: "https://github.com".into(),
         };
         let json = serde_json::to_string(&action).unwrap();
         let parsed: NavigateAction = serde_json::from_str(&json).unwrap();
@@ -157,7 +157,7 @@ mod tests {
         let step = PageActionStep {
             page_index: 3,
             action: PageAction::Navigate(NavigateAction {
-                url: WorkflowString::new("https://example.com"),
+                url: "https://example.com".into(),
             }),
         };
         let cloned = step.clone();

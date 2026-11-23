@@ -116,7 +116,6 @@ mod tests {
                 assert_eq!(data.name, "Test Workflow");
                 assert_eq!(data.description.as_deref(), Some("A test"));
             }
-            WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
             _ => panic!("Expected Valid variant"),
         }
     }
@@ -144,7 +143,6 @@ mod tests {
         assert_eq!(workflows.len(), 1);
         match &workflows[0].state {
             WorkflowState::Invalid(_) => {} // expected
-            WorkflowState::Valid(_) => panic!("Expected Error variant"),
             _ => panic!("Expected Error variant"),
         }
     }
@@ -182,7 +180,6 @@ mod tests {
         assert_eq!(workflows.len(), 1);
         match &workflows[0].state {
             WorkflowState::Valid(data) => assert_eq!(data.name, "Top"),
-            WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
             _ => panic!("Expected Valid variant"),
         }
     }
@@ -214,7 +211,6 @@ mod tests {
                 assert_eq!(data.name, "FromFile");
                 assert_eq!(data.description.as_deref(), Some("desc"));
             }
-            WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
             _ => panic!("Expected Valid variant"),
         }
     }

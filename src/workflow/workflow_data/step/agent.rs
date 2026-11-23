@@ -66,7 +66,7 @@ mod tests {
     #[test]
     fn test_agent_step_serializes_with_camel_case() {
         let step = AgentStep {
-            task: WorkflowString::new("task"),
+            task: "task".into(),
             max_steps: 8,
             history_output: Some(PathBuf::from("./h.json")),
             prompt_mode: agent::PromptMode::Standard,
@@ -80,7 +80,7 @@ mod tests {
     #[test]
     fn test_agent_step_clone_and_debug() {
         let step = AgentStep {
-            task: WorkflowString::new("clone me"),
+            task: "clone me".into(),
             max_steps: 32,
             history_output: None,
             prompt_mode: agent::PromptMode::Standard,

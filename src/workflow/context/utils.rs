@@ -11,21 +11,6 @@
 pub(crate) type PropertyPath<'a> = Vec<&'a str>;
 
 /// Forcefully upserts nested property in the given json value
-///
-/// # Examples
-///
-/// ```rust
-/// let data = serde_json::Value::Object(serde_json::Map::default());
-/// set_nested_property(&data, vec!["user", "name"], "John");
-/// // result will represent the following json:
-/// ```
-/// ```json
-/// {
-///     "user": {
-///         "name": "John"
-///     }
-/// }
-/// ```
 pub(crate) fn set_nested_property(
     data: &serde_json::Value,
     path: &[&str],

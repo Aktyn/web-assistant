@@ -308,20 +308,18 @@ mod tests {
     #[test]
     fn test_default_args_contains_required_flags() {
         let args = default_args();
-        let args_str: Vec<String> = args.iter().map(ToString::to_string).collect();
-        let combined = args_str.join(" ");
-        assert!(combined.contains("--no-first-run"));
-        assert!(combined.contains("--no-default-browser-check"));
-        assert!(combined.contains("--disable-background-networking"));
+        assert!(args.iter().any(|a| a == "--no-sandbox"));
+        assert!(args.iter().any(|a| a == "--disable-extensions"));
+        assert!(args.iter().any(|a| a == "--no-first-run"));
+        assert!(args.iter().any(|a| a == "--no-default-browser-check"));
+        assert!(args.iter().any(|a| a == "--disable-background-networking"));
     }
 
     #[test]
-    fn test_default_args_non_headless() {
-        // default_args() doesn't take parameters anymore
+    fn test_default_args_includes_disable_features() {
         let args = default_args();
-        let args_str: Vec<String> = args.iter().map(ToString::to_string).collect();
-        let combined = args_str.join(" ");
-        assert!(combined.contains("--disable-extensions"));
+        assert!(args.iter().any(|a| a.contains("--disable-features")));
+        assert!(args.iter().any(|a| a.contains("--disable-sync")));
     }
 
     #[test]
@@ -336,16 +334,6 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let locked = is_user_data_dir_locked(tmp.path());
         assert!(!locked);
-    }
-
-    #[test]
-    fn test_default_args_includes_disable_features() {
-        let args = default_args();
-        let args_str: Vec<String> = args.iter().map(ToString::to_string).collect();
-        let combined = args_str.join(" ");
-        assert!(combined.contains("--disable-extensions"));
-        assert!(combined.contains("--disable-sync"));
-        assert!(combined.contains("--no-first-run"));
     }
 
     #[test]

@@ -220,20 +220,14 @@ mod tests {
     fn test_explain_workflow_no_example_does_not_panic() {
         // explain_workflow uses print_struct_docs! which may fail in non-TTY environments
         let result = std::panic::catch_unwind(|| explain_workflow(false));
-        match result {
-            Ok(Ok(())) | Ok(Err(_)) => {}
-            Err(_) => {}
-        }
+        if let Ok(Ok(()) | Err(_)) = result {}
     }
 
     #[test]
     fn test_explain_workflow_with_example_does_not_panic() {
         // explain_workflow uses print_struct_docs! which may fail in non-TTY environments
         let result = std::panic::catch_unwind(|| explain_workflow(true));
-        match result {
-            Ok(Ok(())) | Ok(Err(_)) => {}
-            Err(_) => {}
-        }
+        if let Ok(Ok(()) | Err(_)) = result {}
     }
 
     #[test]

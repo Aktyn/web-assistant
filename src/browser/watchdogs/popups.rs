@@ -239,7 +239,7 @@ mod tests {
             .page_enabled
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .unwrap();
-        assert_eq!(prev, false);
+        assert!(!prev);
         assert!(wd.page_enabled.load(Ordering::SeqCst));
 
         // Second exchange should fail since it's already true

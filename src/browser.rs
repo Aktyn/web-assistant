@@ -11,7 +11,9 @@ use playwright_rs::{
     Playwright, WaitUntil,
 };
 use serde_json::Value;
+#[cfg(test)]
 use std::collections::HashMap;
+#[cfg(test)]
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::sleep;
@@ -465,17 +467,20 @@ impl Default for Browser {
 }
 
 #[cfg(test)]
+pub(crate) use tests::MockCdp;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     impl CdpClient {
         #[cfg(test)]
         pub(crate) fn new_test_client() -> Self {
             Self {
                 page: None,
-                mock_responses: Arc::new(Mutex::new(HashMap::new())),
+                mock_responses: Arc::new(std::sync::Mutex::new(HashMap::new())),
             }
         }
     }
