@@ -229,9 +229,9 @@ fn smart_event_poll(terminal: &mut DefaultTerminal) -> Result<bool> {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::workflow::{workflow_loader, Workflow};
-    use workflow_loader::JsonFile;
+    use crate::workflow::{Workflow, workflow_loader};
     use std::path::PathBuf;
+    use workflow_loader::JsonFile;
 
     fn empty_config() -> Config {
         Config::default()

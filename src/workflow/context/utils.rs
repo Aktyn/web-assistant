@@ -16,7 +16,6 @@ pub(crate) type PropertyPath<'a> = Vec<&'a str>;
 ///
 /// ```
 /// let data = serde_json::Value::Object(serde_json::Map::default());
-/// // Note: set_nested_property is pub(crate), so external crates cannot call it directly.
 /// // result will represent the following json:
 /// ```
 /// ```json

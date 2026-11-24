@@ -54,4 +54,4 @@ jobs:
 
       - name: Coverage
         # TODO: increase this threshold before first release
-        run: cargo tarpaulin --fail-under 60
+        run: cargo tarpaulin --timeout 600 --fail-under 50

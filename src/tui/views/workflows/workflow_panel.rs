@@ -325,8 +325,8 @@ fn render_no_selection_info(area: Rect, buf: &mut Buffer) {
 mod tests {
     use super::*;
     use crate::tui::common::panel::Panel;
-    use crate::workflow::workflow_loader::JsonFile;
     use crate::workflow::Workflow;
+    use crate::workflow::workflow_loader::JsonFile;
     use crossterm::event::KeyCode;
     use std::path::PathBuf;
 

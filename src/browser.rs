@@ -7,8 +7,8 @@ use anyhow::{Context, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose};
 use dom::{BrowserState, ElementRect, EnhancedElement};
 use playwright_rs::{
-    BrowserContext, BrowserContextOptions, ClickOptions, GotoOptions, LaunchOptions, Locator, Page,
-    Playwright, WaitUntil,
+    BrowserContext, BrowserContextOptions, ClickOptions, LaunchOptions, Locator, Page, Playwright,
+    WaitUntil,
 };
 use serde_json::Value;
 use std::time::Duration;
@@ -176,6 +176,7 @@ impl Browser {
         self.watchdogs.as_mut()
     }
 
+    //TODO: investigate why this sometimes fails
     pub async fn navigate(&mut self, url: &str) -> Result<()> {
         self.start().await?;
 
@@ -199,9 +200,9 @@ impl Browser {
             .ok_or_else(|| anyhow!("No page available for navigation"))?;
         page.goto(
             &formatted_url,
-            GotoOptions::new()
-                .timeout(Duration::from_secs(20))
-                .wait_until(WaitUntil::NetworkIdle),
+            None, // GotoOptions::new()
+                  //     .timeout(Duration::from_secs(20))
+                  //     .wait_until(WaitUntil::NetworkIdle),
         )
         .await
         .with_context(|| format!("Failed to goto {formatted_url}"))?;
@@ -267,7 +268,11 @@ impl Browser {
         self.refresh_state().await?;
         Ok(())
     }
-    pub async fn click_selector(&self, selector: &str, wait_for_navigation: bool) -> Result<()> {
+    pub async fn click_selector(
+        &mut self,
+        selector: &str,
+        wait_for_navigation: bool,
+    ) -> Result<()> {
         let element = self.get_selector(selector)?;
         element
             .click(
@@ -276,6 +281,7 @@ impl Browser {
                     .build(),
             )
             .await?;
+        self.wait(1).await?;
 
         Ok(())
     }
