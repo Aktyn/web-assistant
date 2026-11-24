@@ -1,5 +1,5 @@
 mod cli_logger;
-mod cli_runner;
+pub(crate) mod cli_runner;
 use clap::{Parser, Subcommand, ValueHint::FilePath};
 use std::path::PathBuf;
 

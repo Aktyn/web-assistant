@@ -1,9 +1,9 @@
 use std::collections::HashMap;
+use web_assistant::agent::substitute_variables_in_history;
 use web_assistant::agent::views::{
     Action, AgentHistoryItem, AgentHistoryList, AgentOutput, AgentStepState,
     InteractedElementMetadata,
 };
-use web_assistant::agent::{detect_variables_in_history, substitute_variables_in_history};
 
 #[test]
 fn test_all_input_types_detection() {
@@ -40,7 +40,7 @@ fn test_all_input_types_detection() {
             }],
         };
 
-        let vars = detect_variables_in_history(&history);
+        let vars = history.detect_variables();
         assert!(
             vars.contains_key(expected_name),
             "Expected variable {expected_name} for type {input_type}"
@@ -88,7 +88,7 @@ fn test_semantic_attributes_detection() {
             }],
         };
 
-        let vars = detect_variables_in_history(&history);
+        let vars = history.detect_variables();
         assert!(
             vars.contains_key(expected_name),
             "Expected {expected_name} for attr {id_attr}"
@@ -145,7 +145,7 @@ fn test_duplicate_variable_naming() {
         ],
     };
 
-    let vars = detect_variables_in_history(&history);
+    let vars = history.detect_variables();
     assert_eq!(vars.len(), 2);
     assert!(vars.contains_key("first_name"));
     assert!(vars.contains_key("first_name_2"));

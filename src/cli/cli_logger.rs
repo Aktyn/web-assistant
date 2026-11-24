@@ -85,3 +85,44 @@ fn print_line(stream: &mut StandardStream, message: &str, color: &ColorSpec) {
         .expect("Failed to write to stdout");
     utils::print_lines(1);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cli_logger_success_does_not_panic() {
+        let mut logger = CliLogger::default();
+        logger.success("test message");
+    }
+
+    #[test]
+    fn test_cli_logger_error_does_not_panic() {
+        let mut logger = CliLogger::default();
+        logger.error("test error message");
+    }
+
+    #[test]
+    fn test_cli_logger_warning_does_not_panic() {
+        let mut logger = CliLogger::default();
+        logger.warning("test warning message");
+    }
+
+    #[test]
+    fn test_cli_logger_info_does_not_panic() {
+        let mut logger = CliLogger::default();
+        logger.info("test info message");
+    }
+
+    #[test]
+    fn test_cli_logger_reset_does_not_panic() {
+        let mut logger = CliLogger::default();
+        logger.reset();
+    }
+
+    #[test]
+    fn test_cli_logger_default_has_valid_colors() {
+        let _logger = CliLogger::default();
+        // Logger creation succeeds with valid color specs
+    }
+}

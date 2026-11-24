@@ -43,6 +43,7 @@ pub enum WorkflowStepType {
 
 #[cfg(test)]
 mod tests {
+    use super::super::workflow_string::WorkflowString;
     use super::*;
 
     #[test]
@@ -101,7 +102,7 @@ mod tests {
         let step: WorkflowStepType = serde_json::from_str(json).unwrap();
         match step {
             WorkflowStepType::Agent(agent_step) => {
-                assert_eq!(agent_step.task, "do something");
+                assert_eq!(agent_step.task, WorkflowString::new("do something"));
                 assert_eq!(agent_step.max_steps, 8);
             }
             _ => panic!("Expected Agent variant"),

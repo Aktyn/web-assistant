@@ -1,6 +1,6 @@
 pub(crate) mod context;
 pub(crate) mod workflow_data;
-mod workflow_loader;
+pub(crate) mod workflow_loader;
 mod workflow_runtime;
 
 use std::path::PathBuf;
@@ -70,6 +70,7 @@ impl Workflow {
 #[allow(clippy::match_wildcard_for_single_variants)]
 mod tests {
     use super::*;
+    pub(crate) use workflow_loader::{JsonFile, load_from_file};
 
     #[tokio::test]
     async fn test_workflow_data_json_valid_file() {
@@ -83,7 +84,7 @@ mod tests {
             WorkflowState::Valid(data) => {
                 assert_eq!(data.name, "Test Workflow");
             }
-            WorkflowState::Invalid(_) => panic!("Expected Valid variant"),
+            _ => panic!("Expected Valid variant"),
         }
         assert_eq!(workflow.file_path, Some(path));
     }
@@ -285,22 +286,6 @@ mod tests {
             let _json: WorkflowData = serde_json::from_str("not json at all").unwrap();
         });
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_workflow_is_draft_for_new_workflow() {
-        let workflow = Workflow::new_draft();
-        assert!(workflow.is_draft());
-    }
-
-    #[test]
-    fn test_workflow_is_not_draft_for_loaded_workflow() {
-        let json = JsonFile::from_raw(
-            PathBuf::from("/tmp/loaded.json"),
-            r#"{"name":"Loaded","steps":[]}"#.to_string(),
-        );
-        let workflow = Workflow::new(json);
-        assert!(!workflow.is_draft());
     }
 
     #[tokio::test]

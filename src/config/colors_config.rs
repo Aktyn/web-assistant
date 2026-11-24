@@ -104,3 +104,56 @@ mod tests {
         assert_eq!(cloned.accent, config.accent);
     }
 }
+
+#[cfg(test)]
+mod agent_config_tests {
+    use super::super::agent_config::*;
+
+    #[test]
+    fn test_agent_config_default() {
+        let config = AgentConfig::default();
+        assert_eq!(config.model, "");
+        assert_eq!(config.api_key, "");
+        assert_eq!(config.base_url, "");
+    }
+
+    #[test]
+    fn test_agent_config_serialization() {
+        let config = AgentConfig {
+            model: "gpt-4".into(),
+            api_key: "key123".into(),
+            base_url: "https://api.openai.com/v1".into(),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("\"model\""));
+        assert!(json.contains("\"apiKey\""));
+        assert!(json.contains("\"baseUrl\""));
+    }
+
+    #[test]
+    fn test_agent_config_deserialization() {
+        let json = "{\"model\":\"claude\",\"apiKey\":\"sk-test\",\"baseUrl\":\"https://api.anthropic.com\"}";
+        let config: AgentConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.model, "claude");
+        assert_eq!(config.api_key, "sk-test");
+        assert_eq!(config.base_url, "https://api.anthropic.com");
+    }
+
+    #[test]
+    fn test_agent_config_clone() {
+        let config = AgentConfig {
+            model: "test".into(),
+            api_key: "key".into(),
+            base_url: "http://localhost".into(),
+        };
+        let cloned = config.clone();
+        assert_eq!(cloned.model, config.model);
+    }
+
+    #[test]
+    fn test_agent_config_debug_display() {
+        let config = AgentConfig::default();
+        let debug_str = format!("{config:?}");
+        assert!(debug_str.contains("AgentConfig"));
+    }
+}

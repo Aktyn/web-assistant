@@ -19,7 +19,7 @@ static INNER_GROUP_VALUE_REGEX: LazyLock<Regex> =
 /// ---
 /// TODO: add to explain-workflow cli command output
 /// `WorkflowString`
-#[derive(Debug, Serialize, Clone, DocumentedFields, Documented)]
+#[derive(Debug, Serialize, Clone, DocumentedFields, Documented, PartialEq)]
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct WorkflowString {
     raw_value: String,

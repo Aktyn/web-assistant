@@ -311,6 +311,15 @@ mod tests {
         assert!(args.iter().any(|a| a == "--no-sandbox"));
         assert!(args.iter().any(|a| a == "--disable-extensions"));
         assert!(args.iter().any(|a| a == "--no-first-run"));
+        assert!(args.iter().any(|a| a == "--no-default-browser-check"));
+        assert!(args.iter().any(|a| a == "--disable-background-networking"));
+    }
+
+    #[test]
+    fn test_default_args_includes_disable_features() {
+        let args = default_args();
+        assert!(args.iter().any(|a| a.contains("--disable-features")));
+        assert!(args.iter().any(|a| a.contains("--disable-sync")));
     }
 
     #[test]

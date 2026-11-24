@@ -198,4 +198,32 @@ mod tests {
         wd.handle_cdp_event(&event2);
         assert_eq!(wd.crash_count(), 2);
     }
+
+    #[tokio::test]
+    async fn test_check_responsive_returns_false_with_test_client() {
+        let wd = CrashWatchdog::new_test();
+        // Test client rejects all commands, so check_responsive times out → false
+        let responsive = wd.check_responsive(Duration::from_millis(100)).await;
+        assert!(!responsive);
+    }
+
+    #[tokio::test]
+    async fn test_recover_returns_ok_even_when_reload_fails() {
+        let wd = CrashWatchdog::new_test();
+        wd.crashed.store(true, Ordering::SeqCst);
+        let result = wd.recover().await;
+        // Recover always returns Ok (even if reload fails via test client)
+        assert!(result.is_ok());
+        // With a failing reload, the crashed flag stays true
+        assert!(wd.is_crashed());
+    }
+
+    #[test]
+    fn test_handle_cdp_event_no_method_field() {
+        let wd = CrashWatchdog::new_test();
+        let event = serde_json::json!({"params": {"foo": "bar"}});
+        let handled = wd.handle_cdp_event(&event);
+        assert!(!handled);
+        assert!(!wd.is_crashed());
+    }
 }

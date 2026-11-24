@@ -310,8 +310,14 @@ mod tests {
     }
 
     #[test]
-    fn test_open_file_with_nonexistent_path_fails() {
-        let _ = run_open_command("/tmp/does_not_exist_for_testing_xyz");
+    fn test_open_file_with_nonexistent_path_succeeds_spawn() {
+        // run_open_command spawns the process; even for nonexistent files,
+        // xdg-open spawns successfully (it prints an error to stderr and exits non-zero).
+        let result = run_open_command("/tmp/does_not_exist_for_testing_xyz");
+        assert!(
+            result.is_ok(),
+            "spawn should succeed even if target doesn't exist"
+        );
     }
 
     /// `print_lines` writes `\r\n` repeated `count` times to stdout. It must

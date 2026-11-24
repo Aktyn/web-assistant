@@ -24,8 +24,6 @@ use crate::utils as crate_utils;
 #[derive(Clone)]
 pub struct CdpClient {
     page: Option<Page>,
-    #[cfg(test)]
-    mock_responses: Arc<Mutex<HashMap<String, Value>>>,
 }
 
 impl CdpClient {
@@ -34,25 +32,12 @@ impl CdpClient {
         let browser = pw.chromium().connect_over_cdp(ws_url, None).await?;
         let context = browser.new_context().await?;
         let page = context.new_page().await?;
-        Ok(Self {
-            page: Some(page),
-            #[cfg(test)]
-            mock_responses: Arc::new(Mutex::new(HashMap::new())),
-        })
+        Ok(Self { page: Some(page) })
     }
 
     #[allow(clippy::unused_async_trait_impl)]
     #[allow(clippy::unused_async)]
     pub async fn send_command(&self, _method: &str, _params: Value) -> Result<Value> {
-        // In production this path is unreachable — CDP commands require a live connection.
-        // Test mocks intercept here.
-        #[cfg(test)]
-        {
-            let guard = self.mock_responses.lock().unwrap();
-            if let Some(resp) = guard.get(_method) {
-                return Ok(resp.clone());
-            }
-        }
         Err(anyhow!(
             "CDP command not available without a live connection"
         ))
@@ -451,98 +436,54 @@ impl Default for Browser {
 }
 
 #[cfg(test)]
-pub(crate) use tests::MockCdp;
-
-#[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
-    use std::sync::Arc;
 
     impl CdpClient {
         #[cfg(test)]
         pub(crate) fn new_test_client() -> Self {
-            Self {
-                page: None,
-                mock_responses: Arc::new(std::sync::Mutex::new(HashMap::new())),
-            }
+            Self { page: None }
         }
     }
 
-    impl Browser {
-        #[cfg(test)]
-        pub(crate) fn new_with_cached_state(state: BrowserState) -> Self {
-            Self {
-                config: BrowserConfig::default(),
-                client: None,
-                watchdogs: None,
-                cached_state: Some(state),
-                playwright_page: None,
-                context: None,
-                playwright: None,
-            }
-        }
-
-        #[cfg(test)]
-        pub(crate) fn new_with_mock_state(state: BrowserState) -> Self {
-            Self {
-                config: BrowserConfig::default(),
-                client: None,
-                watchdogs: None,
-                cached_state: Some(state),
-                playwright_page: None,
-                context: None,
-                playwright: None,
-            }
-        }
-
-        #[cfg(test)]
-        pub(crate) fn new_with_client(client: CdpClient) -> Self {
-            Self {
-                config: BrowserConfig::default(),
-                client: Some(client),
-                watchdogs: None,
-                cached_state: None,
-                playwright_page: None,
-                context: None,
-                playwright: None,
-            }
-        }
-    }
-
-    /// Test-only mock CDP server that responds to commands with canned JSON.
-    #[allow(dead_code)]
-    pub(crate) struct MockCdp {
-        pub client: CdpClient,
-        overrides: Arc<std::sync::Mutex<HashMap<String, Value>>>,
-        fails: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
-    }
-
-    #[cfg(test)]
-    impl MockCdp {
-        pub(crate) fn new() -> Self {
-            let overrides = Arc::new(std::sync::Mutex::new(HashMap::<String, Value>::new()));
-            let fails = Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
-            Self {
-                client: CdpClient {
-                    page: None,
-                    mock_responses: overrides.clone(),
-                },
-                overrides,
-                fails,
-            }
-        }
-
-        pub(crate) fn set(&self, method: &str, value: Value) {
-            self.overrides
-                .lock()
-                .unwrap()
-                .insert(method.to_string(), value);
-        }
-
-        /// Make a specific CDP method always fail (simulates browser errors).
-        pub(crate) fn set_fail(&self, method: &str) {
-            self.fails.lock().unwrap().insert(method.to_string());
-        }
-    }
+    // impl Browser {
+    //     #[cfg(test)]
+    //     pub(crate) fn new_with_cached_state(state: BrowserState) -> Self {
+    //         Self {
+    //             config: BrowserConfig::default(),
+    //             client: None,
+    //             watchdogs: None,
+    //             cached_state: Some(state),
+    //             playwright_page: None,
+    //             context: None,
+    //             playwright: None,
+    //         }
+    //     }
+    //
+    //     #[cfg(test)]
+    //     pub(crate) fn new_with_mock_state(state: BrowserState) -> Self {
+    //         Self {
+    //             config: BrowserConfig::default(),
+    //             client: None,
+    //             watchdogs: None,
+    //             cached_state: Some(state),
+    //             playwright_page: None,
+    //             context: None,
+    //             playwright: None,
+    //         }
+    //     }
+    //
+    //     #[cfg(test)]
+    //     pub(crate) fn new_with_client(client: CdpClient) -> Self {
+    //         Self {
+    //             config: BrowserConfig::default(),
+    //             client: Some(client),
+    //             watchdogs: None,
+    //             cached_state: None,
+    //             playwright_page: None,
+    //             context: None,
+    //             playwright: None,
+    //         }
+    //     }
+    // }
 }

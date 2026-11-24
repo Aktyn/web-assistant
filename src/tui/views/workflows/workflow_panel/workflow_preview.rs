@@ -281,4 +281,57 @@ mod tests {
         let slot = SLOT.get_or_init(MaybeUninit::uninit);
         slot.as_ptr().cast_mut()
     }
+
+    #[test]
+    fn test_handle_navigation_down_changes_selection() {
+        let mut preview = WorkflowPreview::new();
+        let selection = valid_selection();
+        preview.list_state.select(Some(0));
+        // Simulate down arrow
+        let event = Event::Key(crossterm::event::KeyCode::Down.into());
+        let _action = unsafe { preview.handle_event(&event, &mut *no_read_term(), &selection) };
+        // ListState should have moved to index 1
+        assert_eq!(preview.list_state.selected(), Some(1));
+    }
+
+    #[test]
+    fn test_handle_navigation_up_changes_selection() {
+        let mut preview = WorkflowPreview::new();
+        let selection = valid_selection();
+        preview.list_state.select(Some(2));
+        let event = Event::Key(crossterm::event::KeyCode::Up.into());
+        let _action = unsafe { preview.handle_event(&event, &mut *no_read_term(), &selection) };
+        assert_eq!(preview.list_state.selected(), Some(1));
+    }
+
+    #[test]
+    fn test_render_with_valid_selection_no_panic() {
+        let preview = WorkflowPreview::new();
+        let selection = valid_selection();
+        let area = Rect::new(0, 0, 80, 10);
+        let mut buf = Buffer::empty(area);
+        preview.render(&selection, area, &mut buf);
+    }
+
+    #[test]
+    fn test_open_file_button_action() {
+        let preview = WorkflowPreview::new();
+        let selection = valid_selection();
+        let action = preview.get_button_action(0, &selection);
+        assert_eq!(action, Some(WorkflowAction::OpenFile));
+    }
+
+    #[test]
+    fn test_execution_disabled_on_invalid_selection() {
+        let preview = WorkflowPreview::new();
+        let selection = error_selection();
+        assert!(preview.get_button_action(3, &selection).is_none());
+    }
+
+    #[test]
+    fn test_edit_disabled_on_invalid_selection() {
+        let preview = WorkflowPreview::new();
+        let selection = error_selection();
+        assert!(preview.get_button_action(1, &selection).is_none());
+    }
 }

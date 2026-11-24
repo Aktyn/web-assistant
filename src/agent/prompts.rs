@@ -230,7 +230,10 @@ mod tests {
         ];
 
         for mode in modes {
-            let prompt = SystemPrompt::new(mode);
+            let prompt = SystemPrompt {
+                mode,
+                ..Default::default()
+            };
             let msg = prompt.get_system_message();
             assert!(!msg.is_empty(), "Mode {mode:?} produced empty message");
             assert!(msg.contains("JSON"), "Mode {mode:?} should mention JSON");
