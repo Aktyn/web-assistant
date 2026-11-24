@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
 use documented::{Documented, DocumentedFields};
 use regex::{Match, Regex};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::sync::LazyLock;
 
 use super::super::context::{PropertyPath, WorkflowContextItem};
@@ -19,7 +19,7 @@ static INNER_GROUP_VALUE_REGEX: LazyLock<Regex> =
 /// ---
 /// TODO: add to explain-workflow cli command output
 /// `WorkflowString`
-#[derive(Debug, Serialize, Clone, DocumentedFields, Documented, PartialEq)]
+#[derive(Debug, Clone, DocumentedFields, Documented, PartialEq)]
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct WorkflowString {
     raw_value: String,
@@ -120,6 +120,15 @@ fn get_context_item_value(context_item: &dyn WorkflowContextItem, path: &Propert
         }
     } else {
         String::new()
+    }
+}
+
+impl Serialize for WorkflowString {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.raw_value)
     }
 }
 
