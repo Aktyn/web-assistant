@@ -1,16 +1,12 @@
 pub(crate) mod context;
 pub(crate) mod workflow_data;
-mod workflow_loader;
+pub(crate) mod workflow_loader;
 mod workflow_runtime;
 
 use std::path::PathBuf;
 
 use jsonc_parser::{ParseOptions, errors::ParseError, parse_to_serde_value};
 pub(crate) use workflow_data::{WorkflowData, WorkflowProcedure};
-#[cfg(test)]
-pub(crate) use workflow_loader::JsonFile;
-#[cfg(test)]
-pub(crate) use workflow_loader::load_from_file;
 pub use workflow_loader::{load_by_name_or_path, load_from_directory};
 
 #[derive(Debug)]
@@ -74,6 +70,7 @@ impl Workflow {
 #[allow(clippy::match_wildcard_for_single_variants)]
 mod tests {
     use super::*;
+    pub(crate) use workflow_loader::{JsonFile, load_from_file};
 
     #[tokio::test]
     async fn test_workflow_data_json_valid_file() {

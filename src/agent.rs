@@ -374,7 +374,6 @@ fn extract_json_str(raw: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::openai::{ChatOpenAI, ChatOpenAIConfig};
 
     #[test]
     fn test_parse_agent_output_standard() {
@@ -553,34 +552,6 @@ mod tests {
         let msg = ChatMessage::assistant("Hi there");
         assert_eq!(msg.role, "assistant");
         assert_eq!(msg.content, "Hi there");
-    }
-
-    #[test]
-    fn test_chat_openai_new_with_explicit_model() {
-        let config = crate::llm::ChatOpenAIConfig {
-            model: "custom-model".into(),
-            api_key: String::new(),
-            base_url: "http://localhost:8080".into(),
-            temperature: None,
-            max_completion_tokens: None,
-        };
-        let llm = ChatOpenAI::new(config);
-        // Access via the config field
-        assert_eq!(llm.config.model, "custom-model");
-    }
-
-    #[test]
-    fn test_chat_openai_default_config_uses_env_fallback() {
-        unsafe {
-            std::env::remove_var("OPENAI_API_KEY");
-            std::env::remove_var("OPENAI_BASE_URL");
-        }
-        let llm = ChatOpenAI::new(ChatOpenAIConfig::default());
-        assert_eq!(llm.config.model, "auto");
-        assert_eq!(llm.config.api_key, "");
-        assert_eq!(llm.config.base_url, "https://api.openai.com/v1");
-        assert_eq!(llm.config.temperature, Some(0.2));
-        assert_eq!(llm.config.max_completion_tokens, Some(4096));
     }
 
     #[test]

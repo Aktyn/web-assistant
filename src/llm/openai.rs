@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow};
 use reqwest::Client;
 use std::env;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ChatOpenAIConfig {
     pub model: String,
     pub api_key: String,
@@ -13,16 +13,13 @@ pub struct ChatOpenAIConfig {
 
 impl Default for ChatOpenAIConfig {
     fn default() -> Self {
-        let api_key = env::var("OPENAI_API_KEY").unwrap_or_default();
-        let base_url = env::var("OPENAI_BASE_URL")
-            .unwrap_or_else(|_| "https://api.openai.com/v1".to_string())
-            .trim_end_matches('/')
-            .to_string();
-
         Self {
             model: String::from("auto"),
-            api_key,
-            base_url,
+            api_key: env::var("OPENAI_API_KEY").unwrap_or_default(),
+            base_url: env::var("OPENAI_BASE_URL")
+                .unwrap_or_else(|_| "https://api.openai.com/v1".to_string())
+                .trim_end_matches('/')
+                .to_string(),
             temperature: Some(0.2),
             max_completion_tokens: Some(4096),
         }
@@ -31,8 +28,8 @@ impl Default for ChatOpenAIConfig {
 
 #[derive(Debug)]
 pub struct ChatOpenAI {
-    pub config: ChatOpenAIConfig,
-    pub client: Client,
+    config: ChatOpenAIConfig,
+    client: Client,
 }
 
 impl super::LLM for ChatOpenAI {
@@ -229,20 +226,5 @@ mod tests {
         let config = ChatOpenAIConfig::default();
         let _llm = ChatOpenAI::new(config);
         // This just verifies compilation
-    }
-
-    #[test]
-    fn test_chat_openai_config_clone() {
-        let config = ChatOpenAIConfig {
-            model: "test".into(),
-            api_key: "key".into(),
-            base_url: "http://test.com".into(),
-            temperature: Some(0.5),
-            max_completion_tokens: Some(512),
-        };
-        let cloned = config.clone();
-        assert_eq!(cloned.model, config.model);
-        assert_eq!(cloned.api_key, config.api_key);
-        assert_eq!(cloned.base_url, config.base_url);
     }
 }
