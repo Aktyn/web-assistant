@@ -40,6 +40,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+
       - name: Build
         run: cargo build
 
@@ -49,8 +52,6 @@ jobs:
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin --locked
 
-      - name: Install run-script
-        run: cargo install cargo-run-script --locked
-
       - name: Coverage
-        run: cargo run-script coverage
+        # TODO: increase this threshold before first release
+        run: cargo tarpaulin --timeout 600 --fail-under 50

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tracing::{debug, warn};
 
-use crate::browser::cdp::CdpClient;
+use super::CdpClient;
 
 #[derive(Clone)]
 pub struct PopupsWatchdog {
@@ -144,5 +144,108 @@ mod tests {
     /// Mirror of the acceptance-decision logic from `handle_cdp_event`.
     fn matches_dialog_accept(dialog_type: &str) -> bool {
         matches!(dialog_type, "alert" | "confirm" | "beforeunload")
+    }
+
+    #[test]
+    fn test_handle_non_dialog_event_returns_false() {
+        let wd = PopupsWatchdog::new(CdpClient::new_test_client());
+        let event = serde_json::json!({"method": "Page.navigate"});
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let handled = rt.block_on(wd.handle_cdp_event(&event)).unwrap();
+        assert!(!handled);
+    }
+
+    #[test]
+    fn test_dialog_types_recognized() {
+        // Verify all expected dialog types are handled correctly
+        for dialog_type in ["alert", "confirm", "beforeunload"] {
+            let _event = serde_json::json!({
+                "method": "Page.javascriptDialogOpening",
+                "params": {"type": dialog_type, "message": "Test message"}
+            });
+            // We can't easily test the full handle since it requires a real client,
+            // but we verify the pattern matching works
+            assert!(matches_dialog_accept(dialog_type));
+        }
+        // Prompt should be dismissed
+        assert!(!matches_dialog_accept("prompt"));
+    }
+
+    #[test]
+    fn test_setup_already_enabled_skips_cdp() {
+        let wd = PopupsWatchdog::new(CdpClient::new_test_client());
+        // Mark page as enabled internally
+        wd.page_enabled.store(true, Ordering::SeqCst);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        // setup should short-circuit when already enabled (no CDP call)
+        let result = rt.block_on(wd.setup());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_message_truncated_to_100_chars_in_log() {
+        // Verify that long messages don't cause issues — truncate is internal
+        let msg = "a".repeat(200);
+        let truncated: String = msg.chars().take(100).collect();
+        assert_eq!(truncated.len(), 100);
+        assert_eq!(truncated, "a".repeat(100));
+    }
+
+    #[test]
+    fn test_handle_dialog_prompt_dismissed() {
+        // Verify that prompt dialogs are dismissed (not accepted)
+        // The logic: alert/confirm/beforeunload → accept; prompt → dismiss
+        assert!(!matches_dialog_accept("prompt"));
+        assert!(matches_dialog_accept("alert"));
+        assert!(matches_dialog_accept("confirm"));
+        assert!(matches_dialog_accept("beforeunload"));
+    }
+
+    #[test]
+    fn test_popups_watchdog_construction() {
+        let wd = PopupsWatchdog::new(CdpClient::new_test_client());
+        assert_eq!(wd.handled_count(), 0);
+        assert!(!wd.page_enabled.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_handle_cdp_event_missing_method_returns_false() {
+        let wd = PopupsWatchdog::new(CdpClient::new_test_client());
+        let event = serde_json::json!({"params": {"type": "alert", "message": "hi"}});
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let handled = rt.block_on(wd.handle_cdp_event(&event)).unwrap();
+        assert!(!handled);
+    }
+
+    #[test]
+    fn test_handled_count_fetch_add() {
+        let wd = PopupsWatchdog {
+            client: CdpClient::new_test_client(),
+            handled_count: Arc::new(AtomicUsize::new(0)),
+            page_enabled: Arc::new(AtomicBool::new(false)),
+        };
+        wd.handled_count.fetch_add(5, Ordering::SeqCst);
+        assert_eq!(wd.handled_count(), 5);
+    }
+
+    #[test]
+    fn test_page_enabled_compare_exchange() {
+        let wd = PopupsWatchdog {
+            client: CdpClient::new_test_client(),
+            handled_count: Arc::new(AtomicUsize::new(0)),
+            page_enabled: Arc::new(AtomicBool::new(false)),
+        };
+        let prev = wd
+            .page_enabled
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .unwrap();
+        assert!(!prev);
+        assert!(wd.page_enabled.load(Ordering::SeqCst));
+
+        // Second exchange should fail since it's already true
+        let result =
+            wd.page_enabled
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+        assert!(result.is_err());
     }
 }

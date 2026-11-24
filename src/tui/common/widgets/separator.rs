@@ -36,7 +36,7 @@ impl Widget for Separator {
                         centered_area.x,
                         centered_area.y + i,
                         "│",
-                        palette::SEPARATOR_STYLE,
+                        palette().separator_style,
                     );
                 }
             }
@@ -47,7 +47,7 @@ impl Widget for Separator {
                         centered_area.x + i,
                         centered_area.y,
                         "─",
-                        palette::SEPARATOR_STYLE,
+                        palette().separator_style,
                     );
                 }
             }

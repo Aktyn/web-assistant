@@ -3,9 +3,9 @@ use ratatui::layout::Rect;
 use ratatui::style::Stylize as _;
 use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
-use web_assistant::utils;
 
-use super::super::super::palette;
+use super::super::palette;
+use crate::utils;
 
 #[derive(Debug, Clone)]
 pub(crate) struct TextField {
@@ -14,71 +14,49 @@ pub(crate) struct TextField {
 }
 
 impl TextField {
-    pub fn new(label: String, value: String) -> Self {
+    pub(crate) fn new(label: String, value: String) -> Self {
         Self { label, value }
     }
 
-    pub(crate) fn draw(&self, area: Rect, buf: &mut Buffer) {
-        let value = self.value.clone();
+    /// Return the estimated width for current value
+    pub(crate) fn estimate_width(&self) -> u16 {
+        u16::try_from(self.value.len() + 2).unwrap_or(u16::MAX)
+    }
 
+    #[allow(clippy::unused_self)]
+    pub(crate) fn estimate_height(&self) -> u16 {
+        3
+    }
+
+    pub(crate) fn draw(&self, area: Rect, buf: &mut Buffer) {
         let constrained = Rect::new(
             area.x,
             area.y,
-            area.width
-                .min(u16::try_from(value.len() + 2).unwrap_or(u16::MAX)),
-            area.height.min(3),
+            area.width.min(self.estimate_width()),
+            area.height.min(self.estimate_height()),
         );
 
         Paragraph::new(utils::truncate_text(
-            &value,
+            &self.value,
             constrained.width.saturating_sub(2).into(),
             None,
         ))
-        .style(palette::STYLE)
+        .style(palette().style)
         .bold()
         .block(
             Block::default()
                 .title(
                     Line::from(self.label.clone())
-                        .bg(palette::BACKGROUND)
-                        .fg(palette::MUTED_FOREGROUND),
+                        .bg(palette().background)
+                        .fg(palette().muted_foreground),
                 )
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .border_style(palette::SEPARATOR_STYLE),
+                .border_style(palette().separator_style),
         )
         .render(constrained, buf);
     }
 }
-
-// impl Widget for TextField {
-//     fn render(self, area: Rect, buf: &mut Buffer) {
-//         // let color = self.color();
-//         // Paragraph::new(self.label)
-//         //     .bg(palette::BACKGROUND)
-//         //     .fg(color)
-//         //     .bold()
-//         //     .centered()
-//         //     .block(
-//         //         Block::default()
-//         //             .borders(Borders::ALL)
-//         //             .border_type(BorderType::Rounded)
-//         //             .border_style(palette::color())
-//         //     )
-//         //     .render(area, buf);
-//     }
-// }
-
-// impl TextField {
-// pub(crate) const HEIGHT: u16 = 3;
-
-// const fn color(&self) -> Color {
-//     match self.state {
-//         State::Normal => palette::FOREGROUND,
-//         State::Selected => palette::ACCENT,
-//     }
-// }
-// }
 
 #[cfg(test)]
 mod tests {
@@ -132,5 +110,46 @@ mod tests {
         let area = Rect::new(0, 0, 5, 3);
         let mut buf = Buffer::empty(area);
         field.draw(area, &mut buf);
+    }
+
+    #[test]
+    fn test_text_field_estimate_width() {
+        let field = TextField::new("L".to_string(), "hello".to_string());
+        assert_eq!(field.estimate_width(), 7); // len("hello") + 2
+    }
+
+    #[test]
+    fn test_text_field_estimate_height_is_three() {
+        let field = TextField::new("L".to_string(), "v".to_string());
+        assert_eq!(field.estimate_height(), 3);
+    }
+
+    #[test]
+    fn test_text_field_clone() {
+        let field = TextField::new("Name".into(), "Alice".into());
+        let cloned = field.clone();
+        assert_eq!(cloned.label, "Name");
+        assert_eq!(cloned.value, "Alice");
+    }
+
+    #[test]
+    fn test_text_field_debug_display() {
+        let field = TextField::new("L".into(), "v".into());
+        let debug_str = format!("{field:?}");
+        assert!(debug_str.contains("TextField"));
+    }
+
+    #[test]
+    fn test_text_field_draw_with_small_area() {
+        let field = TextField::new("L".to_string(), "val".to_string());
+        let area = Rect::new(0, 0, 2, 1);
+        let mut buf = Buffer::empty(area);
+        field.draw(area, &mut buf);
+    }
+
+    #[test]
+    fn test_text_field_label_and_value_different() {
+        let field = TextField::new("Password".to_string(), "secret".to_string());
+        assert_ne!(field.label, field.value);
     }
 }

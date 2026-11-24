@@ -13,12 +13,12 @@ use std::sync::{Arc, RwLock};
 use super::common::widgets::{Button, ButtonData, ErrorAlert};
 use super::common::{palette, utils};
 use super::{View, ViewAction};
-use crate::core::Core;
+use crate::config::Config;
 
 type ThisButtonData = ButtonData<ViewAction>;
 
 pub(crate) struct NoWorkflowsView {
-    core: Arc<RwLock<Core>>,
+    config: Arc<RwLock<Config>>,
     /// Used for navigating over option buttons
     list_state: ListState,
     buttons: [ThisButtonData; 2],
@@ -26,12 +26,12 @@ pub(crate) struct NoWorkflowsView {
 }
 
 impl NoWorkflowsView {
-    pub(crate) fn new(core: Arc<RwLock<Core>>) -> Self {
+    pub(crate) fn new(config: Arc<RwLock<Config>>) -> Self {
         Self {
-            core,
+            config,
             list_state: ListState::default(),
             buttons: [
-                ThisButtonData::new("Create new workflow", ViewAction::OpenWorkflowCreator),
+                ThisButtonData::new("Create new workflow", ViewAction::CreateWorkflow),
                 ThisButtonData::new("Quit app", ViewAction::QuitApp),
             ],
             pending_action: None,
@@ -49,12 +49,15 @@ impl NoWorkflowsView {
         let text = Text::from(vec![
             Line::from(vec![
                 "Update ".into(),
-                "workflowsDirectory".to_span().style(palette::ACCENT).bold(),
+                "workflowsDirectory"
+                    .to_span()
+                    .style(palette().accent)
+                    .bold(),
                 " in your config file or create a new workflow".into(),
             ]),
             Line::from(vec![
                 "No workflow files were found in the given directory: \"".into(),
-                Span::from(directory_path).style(palette::ACCENT),
+                Span::from(directory_path).style(palette().accent),
                 "\"".into(),
             ]),
         ])
@@ -82,17 +85,18 @@ impl NoWorkflowsView {
             selected < self.buttons.len(),
             "selected >= self.buttons.len()"
         );
-
         self.pending_action = Some(self.buttons[selected].action);
     }
 }
 
 impl View for NoWorkflowsView {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
+        buf.set_style(area, palette().style);
+
         let workflows_directory = self
-            .core
+            .config
             .read()
-            .map(|core| core.config.workflowsDirectory.display().to_string());
+            .map(|config| config.workflows_directory.display().to_string());
 
         match workflows_directory {
             Ok(directory_path) => {
@@ -108,7 +112,7 @@ impl View for NoWorkflowsView {
         &mut self,
         event: &crossterm::event::Event,
         _terminal: &mut ratatui::DefaultTerminal,
-    ) -> anyhow::Result<()> {
+    ) -> bool {
         if let Some(key) = event.as_key_event() {
             let navigation =
                 utils::handle_navigation_event(key, &mut self.list_state, self.buttons.len() - 1);
@@ -119,7 +123,7 @@ impl View for NoWorkflowsView {
             }
         }
 
-        Ok(())
+        false
     }
 
     fn get_action(&self) -> Option<super::ViewAction> {
@@ -135,49 +139,26 @@ impl View for NoWorkflowsView {
 mod tests {
     use super::*;
     use crate::tui::views::View;
+    use crossterm::event::{Event, KeyCode};
 
-    #[test]
-    fn test_view_action_variants() {
-        assert_eq!(format!("{:?}", ViewAction::QuitApp), "QuitApp");
-        assert_eq!(
-            format!("{:?}", ViewAction::OpenWorkflowCreator),
-            "OpenWorkflowCreator"
-        );
-        assert_eq!(
-            format!("{:?}", ViewAction::ExitWorkflowCreator),
-            "ExitWorkflowCreator"
-        );
-        assert_ne!(ViewAction::QuitApp, ViewAction::OpenWorkflowCreator);
-    }
-
-    #[test]
-    fn test_view_action_clone_copy() {
-        let original = ViewAction::OpenWorkflowCreator;
-        let copied = original;
-        assert_eq!(original, copied);
-    }
-
-    fn empty_core() -> Core {
-        Core {
-            config: crate::core::config::Config::default(),
-            workflows: Vec::new(),
-        }
+    fn empty_config() -> Config {
+        Config::default()
     }
 
     #[test]
     fn test_no_workflows_view_new_pending_action() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let view = NoWorkflowsView::new(core);
+        let config = Arc::new(RwLock::new(empty_config()));
+        let view = NoWorkflowsView::new(config);
         assert_eq!(view.pending_action, None);
         assert!(view.list_state.selected().is_none());
     }
 
     #[test]
     fn test_run_button_action_sets_correct_choice() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut view = NoWorkflowsView::new(core);
+        let config = Arc::new(RwLock::new(empty_config()));
+        let mut view = NoWorkflowsView::new(config);
         view.run_button_action(0);
-        assert_eq!(view.pending_action, Some(ViewAction::OpenWorkflowCreator));
+        assert_eq!(view.pending_action, Some(ViewAction::CreateWorkflow));
         view.run_button_action(1);
         assert_eq!(view.pending_action, Some(ViewAction::QuitApp));
     }
@@ -185,8 +166,8 @@ mod tests {
     #[test]
     #[should_panic(expected = "selected >= self.buttons.len()")]
     fn test_run_button_action_out_of_bounds_panics() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut view = NoWorkflowsView::new(core);
+        let config = Arc::new(RwLock::new(empty_config()));
+        let mut view = NoWorkflowsView::new(config);
         view.run_button_action(5); // invalid index
     }
 
@@ -200,9 +181,9 @@ mod tests {
 
     /// Render test with valid area - checks no panics during draw
     #[test]
-    fn test_no_workflows_view_draw_with_valid_core() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut view = NoWorkflowsView::new(core);
+    fn test_no_workflows_view_draw_with_valid_config() {
+        let config = Arc::new(RwLock::new(Config::default()));
+        let mut view = NoWorkflowsView::new(config);
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
         view.draw(area, &mut buf);
@@ -211,8 +192,52 @@ mod tests {
 
     #[test]
     fn test_no_workflows_view_as_any() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let view = NoWorkflowsView::new(core);
+        let config = Arc::new(RwLock::new(Config::default()));
+        let view = NoWorkflowsView::new(config);
         assert!(view.as_any().is::<NoWorkflowsView>());
+    }
+
+    #[test]
+    fn test_handle_event_key_down_selects_first_button() {
+        let config = Arc::new(RwLock::new(empty_config()));
+        let mut view = NoWorkflowsView::new(config);
+        let event = Event::Key(KeyCode::Down.into());
+        let handled = view.handle_event(&event, unsafe { &mut *no_read_term() });
+        assert!(!handled);
+        assert_eq!(view.list_state.selected(), Some(0));
+    }
+
+    #[test]
+    fn test_handle_event_enter_triggers_action() {
+        let config = Arc::new(RwLock::new(empty_config()));
+        let mut view = NoWorkflowsView::new(config);
+        view.list_state.select(Some(0));
+        let event = Event::Key(KeyCode::Enter.into());
+        let handled = view.handle_event(&event, unsafe { &mut *no_read_term() });
+        assert!(!handled);
+        assert_eq!(view.get_action(), Some(ViewAction::CreateWorkflow));
+    }
+
+    #[test]
+    fn test_handle_event_mouse_ignored() {
+        let config = Arc::new(RwLock::new(empty_config()));
+        let mut view = NoWorkflowsView::new(config);
+        let event = Event::Mouse(crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        });
+        let handled = view.handle_event(&event, unsafe { &mut *no_read_term() });
+        assert!(!handled);
+    }
+
+    /// Helper to build a `&mut DefaultTerminal` that is never dereferenced.
+    fn no_read_term() -> *mut ratatui::DefaultTerminal {
+        use std::mem::MaybeUninit;
+        static SLOT: std::sync::OnceLock<MaybeUninit<ratatui::DefaultTerminal>> =
+            std::sync::OnceLock::new();
+        let slot = SLOT.get_or_init(MaybeUninit::uninit);
+        slot.as_ptr().cast_mut()
     }
 }

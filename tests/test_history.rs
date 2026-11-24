@@ -1,15 +1,15 @@
 use web_assistant::agent::views::{
-    Action, ActionResult, AgentHistory, AgentHistoryList, AgentOutput, AgentStepState,
+    Action, ActionResult, AgentHistoryItem, AgentHistoryList, AgentOutput, AgentStepState,
 };
 
-#[test]
-fn test_history_file_roundtrip() {
+#[tokio::test]
+async fn test_history_file_roundtrip() {
     let temp_file = tempfile::NamedTempFile::new().unwrap();
     let path = temp_file.path();
 
     let history = AgentHistoryList {
-        history: vec![
-            AgentHistory {
+        items: vec![
+            AgentHistoryItem {
                 model_output: Some(AgentOutput {
                     thought: Some("Navigating to repo".into()),
                     memory: None,
@@ -25,7 +25,7 @@ fn test_history_file_roundtrip() {
                     interacted_element: None,
                 }),
             },
-            AgentHistory {
+            AgentHistoryItem {
                 model_output: Some(AgentOutput {
                     thought: Some("Stars found".into()),
                     memory: None,
@@ -49,9 +49,9 @@ fn test_history_file_roundtrip() {
     assert_eq!(history.is_successful(), Some(true));
     assert_eq!(history.final_result().as_deref(), Some("55.4k stars"));
 
-    history.save_to_file(path).unwrap();
+    history.save_to_file(path).await.unwrap();
 
-    let loaded = AgentHistoryList::load_from_file(path).unwrap();
+    let loaded = AgentHistoryList::load_from_file(path).await.unwrap();
     assert_eq!(loaded.len(), 2);
     assert!(loaded.is_done());
     assert_eq!(loaded.is_successful(), Some(true));

@@ -15,11 +15,13 @@ use std::{
 };
 
 use super::super::common::{macros, palette, panel, widgets::Button};
-use crate::core::{self, Core};
-use crate::utils;
+use crate::{
+    utils,
+    workflow::{Workflow, WorkflowState},
+};
 
 pub(crate) struct WorkflowsSidebar {
-    core: Arc<RwLock<Core>>,
+    workflows: Arc<RwLock<Vec<Workflow>>>,
     pub(super) workflows_list_state: ListState,
     pub(super) create_workflow_button_pressed: bool,
 }
@@ -27,9 +29,9 @@ pub(crate) struct WorkflowsSidebar {
 impl WorkflowsSidebar {
     pub(super) const WIDTH: u16 = 30;
 
-    pub(super) fn new(core: Arc<RwLock<Core>>) -> Self {
+    pub(super) fn new(workflows: Arc<RwLock<Vec<Workflow>>>) -> Self {
         Self {
-            core,
+            workflows,
             workflows_list_state: ListState::default().with_selected(Some(0)),
             create_workflow_button_pressed: false,
         }
@@ -42,45 +44,69 @@ impl WorkflowsSidebar {
 
 impl panel::Panel for WorkflowsSidebar {
     fn draw(&mut self, area: Rect, buf: &mut Buffer, focused: bool) {
-        buf.set_style(area, palette::BACKGROUND_STYLE);
+        buf.set_style(area, palette().background_style);
 
         let items = self
-            .core
+            .workflows
             .read()
-            .map(|core| {
-                core.workflows
+            .map(|workflows| {
+                workflows
                     .iter()
                     .map(|w| match &w.state {
-                        core::workflow::WorkflowState::Data(data) => {
+                        WorkflowState::Running(running_workflow, ..) => {
+                            let label = utils::truncate_text(
+                                &running_workflow.data.name,
+                                WorkflowsSidebar::WIDTH.into(),
+                                None,
+                            );
+                            ListItem::new(label).fg(palette().accent).bold()
+                        }
+                        WorkflowState::SuccessfulRun(succesfull_workflow) => {
+                            let label = utils::truncate_text(
+                                &succesfull_workflow.data.name,
+                                WorkflowsSidebar::WIDTH.into(),
+                                None,
+                            );
+                            ListItem::new(label).fg(palette().success_foreground).bold()
+                        }
+                        WorkflowState::FailedRun(failed_workflow) => {
+                            let label = utils::truncate_text(
+                                &failed_workflow.data.name,
+                                WorkflowsSidebar::WIDTH.into(),
+                                None,
+                            );
+                            ListItem::new(label).fg(palette().error_foreground).bold()
+                        }
+                        WorkflowState::Valid(data) => {
                             let label = utils::truncate_text(
                                 &data.name,
-                                WorkflowsSidebar::WIDTH as usize,
+                                WorkflowsSidebar::WIDTH.into(),
                                 None,
                             );
                             ListItem::new(label).bold()
                         }
-                        core::workflow::WorkflowState::Error(_) => {
+                        WorkflowState::Invalid(_) => {
+                            let file_path = w
+                                .file_path
+                                .as_ref()
+                                .expect("Workflow that failed to load must have a file path");
+                            let file_name_str =
+                                file_path.file_name().and_then(OsStr::to_str).unwrap_or("");
                             let text = vec![
                                 utils::truncate_text(
                                     "Invalid workflow file found",
-                                    WorkflowsSidebar::WIDTH as usize,
+                                    WorkflowsSidebar::WIDTH.into(),
                                     None,
                                 )
                                 .into(),
                                 utils::truncate_text(
-                                    &format!(
-                                        "{}",
-                                        w.file_path
-                                            .file_name()
-                                            .unwrap_or(OsStr::new(&w.file_path))
-                                            .display()
-                                    ),
-                                    WorkflowsSidebar::WIDTH as usize,
+                                    file_name_str,
+                                    WorkflowsSidebar::WIDTH.into(),
                                     None,
                                 )
                                 .into(),
                             ];
-                            ListItem::new(text).style(palette::ERROR_FOREGROUND)
+                            ListItem::new(text).style(palette().error_foreground)
                         }
                     })
                     .collect::<Vec<ListItem>>()
@@ -93,9 +119,8 @@ impl panel::Panel for WorkflowsSidebar {
         panel::Header::new(format!("Workflows: {}", items.len()), focused).render(header_area, buf);
 
         let list = List::new(items)
-            .style(palette::STYLE)
+            .style(palette().style)
             .highlight_style(Modifier::REVERSED);
-        // .highlight_symbol("");
 
         StatefulWidget::render(list, list_area, buf, &mut self.workflows_list_state);
 
@@ -104,22 +129,20 @@ impl panel::Panel for WorkflowsSidebar {
             .render(buttons_area, buf);
     }
 
-    fn handle_event(
-        &mut self,
-        event: &Event,
-        _terminal: &mut DefaultTerminal,
-    ) -> anyhow::Result<()> {
+    fn handle_event(&mut self, event: &Event, _terminal: &mut DefaultTerminal) -> bool {
         if let Some(key) = event.as_key_event() {
             match key.code {
                 KeyCode::Up | KeyCode::Char('k') => {
                     macros::move_selection!(self.workflows_list_state, Previous);
+                    return true;
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    let workflows_count = macros::workflows_count!(self.core);
+                    let workflows_count = macros::workflows_count!(self.workflows);
                     macros::move_selection!(self.workflows_list_state, Next, workflows_count);
                     if self.workflows_list_state.selected() == Some(workflows_count) {
                         self.workflows_list_state.select(None);
                     }
+                    return true;
                 }
                 KeyCode::Enter | KeyCode::Char(' ') => {
                     self.create_workflow_button_pressed = self.is_create_workflow_button_selected();
@@ -127,31 +150,19 @@ impl panel::Panel for WorkflowsSidebar {
                 _ => {}
             }
         }
-        Ok(())
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
+        false
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::config::Config;
     use crate::tui::common::panel::Panel;
     use crossterm::event::{Event, KeyCode};
     use std::mem::MaybeUninit;
 
-    fn empty_core() -> Core {
-        Core {
-            config: Config::default(),
-            workflows: Vec::new(),
-        }
+    fn empty_workflows() -> Arc<RwLock<Vec<Workflow>>> {
+        Arc::new(RwLock::new(Vec::new()))
     }
 
     /// `handle_event` never reads `_terminal` for the events we exercise. We
@@ -170,15 +181,15 @@ mod tests {
 
     #[test]
     fn test_workflows_sidebar_new_initial_state() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let sidebar = WorkflowsSidebar::new(workflows);
         assert_eq!(sidebar.workflows_list_state.selected(), Some(0));
     }
 
     #[test]
     fn test_workflows_sidebar_draw_no_panic_empty() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         let area = Rect::new(0, 0, 30, 20);
         let mut buf = Buffer::empty(area);
         sidebar.draw(area, &mut buf, false);
@@ -186,8 +197,8 @@ mod tests {
 
     #[test]
     fn test_workflows_sidebar_draw_no_panic_focused() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         let area = Rect::new(0, 0, 30, 20);
         let mut buf = Buffer::empty(area);
         sidebar.draw(area, &mut buf, true);
@@ -195,56 +206,52 @@ mod tests {
 
     #[test]
     fn test_workflows_sidebar_handle_up_event() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(1));
         let key_event = Event::Key(KeyCode::Up.into());
-        sidebar
-            .handle_event(&key_event, unsafe { &mut *no_read_term() })
-            .unwrap();
+        let handled = sidebar.handle_event(&key_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
         assert_eq!(sidebar.workflows_list_state.selected(), Some(0));
     }
 
     #[test]
     fn test_workflows_sidebar_handle_down_event_wraps_to_none() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Down.into());
-        sidebar
-            .handle_event(&key_event, unsafe { &mut *no_read_term() })
-            .unwrap();
+        let handled = sidebar.handle_event(&key_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
         assert_eq!(sidebar.workflows_list_state.selected(), None);
     }
 
     #[test]
     fn test_workflows_sidebar_handle_j_key() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Char('j').into());
-        sidebar
-            .handle_event(&key_event, unsafe { &mut *no_read_term() })
-            .unwrap();
+        let handled = sidebar.handle_event(&key_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
         assert_eq!(sidebar.workflows_list_state.selected(), None);
     }
 
     #[test]
     fn test_workflows_sidebar_handle_k_key_moves_up() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         sidebar.workflows_list_state.select(Some(0));
         let key_event = Event::Key(KeyCode::Char('k').into());
-        sidebar
-            .handle_event(&key_event, unsafe { &mut *no_read_term() })
-            .unwrap();
+        let handled = sidebar.handle_event(&key_event, unsafe { &mut *no_read_term() });
+        assert!(handled);
         assert_eq!(sidebar.workflows_list_state.selected(), Some(0));
     }
 
     #[test]
     fn test_workflows_sidebar_non_key_event_ignored() {
-        let core = Arc::new(RwLock::new(empty_core()));
-        let mut sidebar = WorkflowsSidebar::new(core);
+        let workflows = empty_workflows();
+        let mut sidebar = WorkflowsSidebar::new(workflows);
         let mouse_event = Event::Mouse(crossterm::event::MouseEvent {
             kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
             column: 0,
@@ -252,6 +259,6 @@ mod tests {
             modifiers: crossterm::event::KeyModifiers::NONE,
         });
         let result = sidebar.handle_event(&mouse_event, unsafe { &mut *no_read_term() });
-        assert!(result.is_ok());
+        assert!(!result);
     }
 }

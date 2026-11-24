@@ -1,5 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
-
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -11,7 +9,7 @@ use tracing::debug;
 /// Cookie fingerprint key: (name, domain, path).
 type CookieFingerprint = std::collections::HashSet<(String, String, String)>;
 
-use crate::browser::cdp::CdpClient;
+use super::CdpClient;
 
 /// Storage item representing a single origin's local or session storage data
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

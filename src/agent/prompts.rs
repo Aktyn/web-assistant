@@ -1,7 +1,11 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum PromptMode {
     #[default]
     Standard,
+    #[serde(alias = "no-thinking", rename = "no-thinking")]
     NoThinking,
     Flash,
 }
@@ -38,7 +42,10 @@ impl SystemPrompt {
 
     #[must_use]
     pub fn builder() -> SystemPromptBuilder {
-        SystemPromptBuilder::default()
+        SystemPromptBuilder {
+            max_actions_per_step: 3,
+            ..Default::default()
+        }
     }
 
     #[must_use]
@@ -165,7 +172,7 @@ Respond ONLY with JSON:
 #[derive(Default)]
 pub struct SystemPromptBuilder {
     mode: PromptMode,
-    max_actions_per_step: Option<usize>,
+    max_actions_per_step: usize,
     override_system_message: Option<String>,
     extend_system_message: Option<String>,
 }
@@ -179,7 +186,7 @@ impl SystemPromptBuilder {
 
     #[must_use]
     pub fn max_actions_per_step(mut self, max: usize) -> Self {
-        self.max_actions_per_step = Some(max);
+        self.max_actions_per_step = max;
         self
     }
 
@@ -199,16 +206,15 @@ impl SystemPromptBuilder {
     pub fn build(self) -> SystemPrompt {
         SystemPrompt {
             mode: self.mode,
-            max_actions_per_step: self.max_actions_per_step.unwrap_or(3),
+            max_actions_per_step: if self.max_actions_per_step == 0 {
+                3
+            } else {
+                self.max_actions_per_step
+            },
             override_system_message: self.override_system_message,
             extend_system_message: self.extend_system_message,
         }
     }
-}
-
-#[must_use]
-pub fn get_system_prompt() -> String {
-    SystemPrompt::default().get_system_message()
 }
 
 #[cfg(test)]
@@ -224,7 +230,10 @@ mod tests {
         ];
 
         for mode in modes {
-            let prompt = SystemPrompt::new(mode);
+            let prompt = SystemPrompt {
+                mode,
+                ..Default::default()
+            };
             let msg = prompt.get_system_message();
             assert!(!msg.is_empty(), "Mode {mode:?} produced empty message");
             assert!(msg.contains("JSON"), "Mode {mode:?} should mention JSON");

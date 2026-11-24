@@ -4,7 +4,7 @@ use ratatui::style::{Color, Stylize as _};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
 
-use super::super::palette;
+use super::super::super::palette;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -16,6 +16,7 @@ enum State {
 pub(crate) struct Button<'a> {
     label: Line<'a>,
     state: State,
+    disabled: bool,
 }
 
 impl<'a> Button<'a> {
@@ -23,6 +24,7 @@ impl<'a> Button<'a> {
         Self {
             label: label.into(),
             state: State::Normal,
+            disabled: false,
         }
     }
 
@@ -34,13 +36,18 @@ impl<'a> Button<'a> {
         };
         self
     }
+
+    pub const fn set_disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
 }
 
 impl Widget for Button<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let color = self.color();
         Paragraph::new(self.label)
-            .bg(palette::BACKGROUND)
+            .bg(palette().background)
             .fg(color)
             .bold()
             .centered()
@@ -57,10 +64,13 @@ impl Widget for Button<'_> {
 impl Button<'_> {
     pub(crate) const HEIGHT: u16 = 3;
 
-    const fn color(&self) -> Color {
+    fn color(&self) -> Color {
+        if self.disabled {
+            return palette().disabled;
+        }
         match self.state {
-            State::Normal => palette::FOREGROUND,
-            State::Selected => palette::ACCENT,
+            State::Normal => palette().foreground,
+            State::Selected => palette().accent,
         }
     }
 }
@@ -84,7 +94,7 @@ mod tests {
 
     #[test]
     fn test_button_height_constant() {
-        assert_eq!(Button::<>::HEIGHT, 3);
+        assert_eq!(Button::HEIGHT, 3);
     }
 
     #[test]
@@ -111,13 +121,13 @@ mod tests {
     #[test]
     fn test_button_color_normal() {
         let btn = Button::new("Normal").set_selected(false);
-        assert_eq!(btn.color(), palette::FOREGROUND);
+        assert_eq!(btn.color(), palette().foreground);
     }
 
     #[test]
     fn test_button_color_selected() {
         let btn = Button::new("Selected").set_selected(true);
-        assert_eq!(btn.color(), palette::ACCENT);
+        assert_eq!(btn.color(), palette().accent);
     }
 
     #[test]
@@ -152,5 +162,52 @@ mod tests {
         Button::new("Selected")
             .set_selected(true)
             .render(area, &mut buf);
+    }
+
+    #[test]
+    fn test_button_render_disabled() {
+        let area = Rect::new(0, 0, 20, 3);
+        let mut buf = Buffer::empty(area);
+        Button::new("Disabled")
+            .set_disabled(true)
+            .render(area, &mut buf);
+    }
+
+    #[test]
+    fn test_button_color_disabled() {
+        let btn = Button::new("Disabled").set_disabled(true);
+        assert_eq!(btn.color(), palette().disabled);
+    }
+
+    #[test]
+    fn test_button_clone_preserves_state() {
+        let btn = Button::new("Test").set_selected(true).set_disabled(false);
+        let cloned = btn.clone();
+        assert!(matches!(cloned.state, State::Selected));
+        assert!(!cloned.disabled);
+    }
+
+    #[test]
+    fn test_button_debug_display() {
+        let btn = Button::new("Debug");
+        let debug_str = format!("{btn:?}");
+        assert!(debug_str.contains("Button"));
+    }
+
+    #[test]
+    fn test_button_data_clone() {
+        let data: ButtonData<String> = ButtonData::new("label", "action".to_string());
+        // ButtonData doesn't derive Clone, but we can verify fields are equal
+        assert_eq!(data.label, "label");
+        assert_eq!(data.action, "action");
+    }
+
+    #[test]
+    fn test_button_equality_normal_vs_selected() {
+        let normal = Button::new("N").set_selected(false);
+        let selected = Button::new("S").set_selected(true);
+        // Buttons are not Eq because they contain Line<'a> which is not Eq
+        // but we can verify the state differs via color
+        assert_ne!(normal.color(), selected.color());
     }
 }

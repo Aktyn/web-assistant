@@ -5,7 +5,7 @@ AGENTS.md
 .env
 /workflows
 agent_history.json
-config.json
+config.json*
 
 # Temp
 browser-use-main/

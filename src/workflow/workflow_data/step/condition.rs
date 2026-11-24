@@ -1,0 +1,74 @@
+use documented::{Documented, DocumentedFields};
+use serde::{Deserialize, Serialize};
+
+use super::WorkflowString;
+
+/// `ConditionStep` - controls the workflow flow based on given condition
+#[derive(Debug, Serialize, Deserialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
+pub struct ConditionStep {
+    /// Object describing the logic of the condition
+    /// Contains "type" property (enum)
+    /// See specific fields for each type:
+    /// "match-regex" --> `MatchRegexCondition`
+    /// "truthy" --> `TruthyCondition`
+    /// "equal" --> `EqualCondition`
+    /// "has-element" --> `HasElementCondition`
+    pub condition: Condition,
+
+    /// Steps to run if the condition is met
+    pub then: Vec<super::WorkflowStepType>,
+
+    /// Steps to run if the condition is not met
+    #[serde(default = "Vec::new", alias = "else", rename = "else")]
+    pub else_: Vec<super::WorkflowStepType>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum Condition {
+    #[serde(rename = "match-regex")]
+    MatchRegex(MatchRegexCondition),
+    Truthy(TruthyCondition),
+    Equal(EqualCondition),
+    #[serde(rename = "has-element")]
+    HasElement(HasElementCondition),
+}
+
+/// `MatchRegexCondition`
+#[derive(Debug, Deserialize, Serialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
+pub struct MatchRegexCondition {
+    /// Value to match against a regex
+    pub value: WorkflowString,
+
+    /// String containing regex pattern
+    pub pattern: String,
+}
+
+/// `TruthyCondition`
+#[derive(Debug, Deserialize, Serialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
+pub struct TruthyCondition {
+    /// Value to check if it is truthy
+    pub value: WorkflowString,
+}
+
+/// `EqualCondition` - compares two values equality
+#[derive(Debug, Deserialize, Serialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
+pub struct EqualCondition {
+    /// Left value to compare
+    pub left: WorkflowString,
+
+    /// Right value to compare
+    pub right: WorkflowString,
+}
+
+/// `HasElementCondition` - checks if the element is present in the page
+#[derive(Debug, Deserialize, Serialize, Clone, DocumentedFields, Documented)]
+#[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
+pub struct HasElementCondition {
+    /// Selector to check if the element is present
+    pub selector: WorkflowString,
+}

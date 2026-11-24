@@ -4,8 +4,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
+use super::llm;
 use super::views::AgentHistoryList;
-use crate::llm::openai::{ChatMessage, ChatOpenAI};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct JudgementResult {
@@ -17,26 +17,27 @@ pub struct JudgementResult {
 }
 
 pub struct Judge {
-    pub llm: ChatOpenAI,
+    // pub llm: ChatOpenAI,
 }
 
-impl Judge {
-    #[must_use]
-    pub fn new(llm: ChatOpenAI) -> Self {
-        Self { llm }
-    }
+impl super::Agent {
+    // pub fn new(llm: ChatOpenAI) -> Self {
+    //     Self { llm }
+    // }
 
-    pub async fn judge(
+    #[allow(unused)] //TODO:
+    async fn judge<LlmType: llm::LLM>(
         &self,
         task: &str,
         final_result: &str,
         history: &AgentHistoryList,
         ground_truth: Option<&str>,
+        llm: &LlmType,
     ) -> Result<JudgementResult> {
         info!("Running AI trace judgement for task: {}", task);
 
         let mut step_descriptions = Vec::new();
-        for (i, item) in history.history.iter().enumerate() {
+        for (i, item) in history.items.iter().enumerate() {
             let step_num = i + 1;
             let thought = item
                 .model_output
@@ -67,8 +68,7 @@ impl Judge {
 
         let messages =
             construct_judge_messages(task, final_result, &step_descriptions, ground_truth);
-        let resp = self
-            .llm
+        let resp = llm
             .invoke(&messages)
             .await
             .context("Failed to get judgement from LLM")?;
@@ -83,7 +83,7 @@ pub fn construct_judge_messages(
     final_result: &str,
     steps: &[String],
     ground_truth: Option<&str>,
-) -> Vec<ChatMessage> {
+) -> Vec<llm::ChatMessage> {
     let ground_truth_section = if ground_truth.is_some() {
         "\n**GROUND TRUTH VALIDATION (HIGHEST PRIORITY):**\n\
             The <ground_truth> section contains verified criteria for this task.\n\
@@ -160,8 +160,8 @@ Evaluate this agent execution given the criteria and respond with the exact JSON
     );
 
     vec![
-        ChatMessage::system(system_prompt),
-        ChatMessage::user(user_prompt),
+        llm::ChatMessage::system(system_prompt),
+        llm::ChatMessage::user(user_prompt),
     ]
 }
 
@@ -233,5 +233,75 @@ mod tests {
             result.failure_reason,
             "Authentication required but missing credentials."
         );
+    }
+
+    #[test]
+    fn test_parse_judgement_with_plain_backtick_block() {
+        let raw = r#"```
+        {
+            "reasoning": "Plain backtick block",
+            "verdict": true,
+            "failure_reason": "",
+            "impossible_task": false,
+            "reached_captcha": false
+        }
+        ```"#;
+
+        let result = parse_judgement_response(raw).unwrap();
+        assert!(result.verdict);
+        assert_eq!(result.reasoning, "Plain backtick block");
+    }
+
+    #[test]
+    fn test_parse_judgement_with_plain_braces() {
+        let raw = r#"{
+            "reasoning": "Direct JSON without codeblock",
+            "verdict": false,
+            "failure_reason": "Task incomplete",
+            "impossible_task": false,
+            "reached_captcha": false
+        }"#;
+
+        let result = parse_judgement_response(raw).unwrap();
+        assert!(!result.verdict);
+        assert_eq!(result.failure_reason, "Task incomplete");
+    }
+
+    #[test]
+    fn test_construct_judge_messages_without_ground_truth() {
+        let messages = construct_judge_messages(
+            "Find Rust docs",
+            "Rust is a systems language",
+            &["Step 1: Opened browser".to_string()],
+            None,
+        );
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, "system");
+        assert!(messages[0].content.contains("evaluation_framework"));
+        assert!(!messages[0].content.contains("<ground_truth>"));
+        assert_eq!(messages[1].role, "user");
+        assert!(messages[1].content.contains("Find Rust docs"));
+        assert!(messages[1].content.contains("Step 1: Opened browser"));
+    }
+
+    #[test]
+    fn test_construct_judge_messages_with_ground_truth() {
+        let messages = construct_judge_messages(
+            "Find Rust docs",
+            "Rust is a systems language",
+            &[
+                "Step 1: Opened browser".to_string(),
+                "Step 2: Found documentation".to_string(),
+            ],
+            Some("Rust is a compiled systems programming language"),
+        );
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, "system");
+        assert!(messages[0].content.contains("GROUND TRUTH"));
+        assert!(messages[0].content.contains("ABSOLUTE precedence"));
+        assert_eq!(messages[1].role, "user");
+        assert!(messages[1].content.contains("<ground_truth>"));
+        assert!(messages[1].content.contains("compiled systems programming"));
+        assert!(messages[1].content.contains("Step 2: Found documentation"));
     }
 }
