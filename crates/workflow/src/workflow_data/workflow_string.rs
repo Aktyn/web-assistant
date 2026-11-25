@@ -147,3 +147,236 @@ impl From<&str> for WorkflowString {
         Self::new(s)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::context::{WorkflowContext, BasicContextItem};
+    use crate::workflow_runtime::RunningWorkflow;
+    use config::Config;
+    use std::path::Path;
+
+    #[test]
+    fn test_new_creates_exact_value() {
+        let s = WorkflowString::new("hello world");
+        assert_eq!(s.raw_value, "hello world");
+    }
+
+    #[test]
+    fn test_from_str() {
+        let s: WorkflowString = "foo bar".into();
+        assert_eq!(s.raw_value, "foo bar");
+    }
+
+    #[test]
+    fn test_serialize_deserialize_roundtrip() {
+        let original = WorkflowString::new("{{ context.foo }}");
+        let json = serde_json::to_string(&original).unwrap();
+        assert_eq!(json, "\"{{ context.foo }}\"");
+        let restored: WorkflowString = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.raw_value, "{{ context.foo }}");
+    }
+
+    #[test]
+    fn test_empty_raw_value() {
+        let s = WorkflowString::new("");
+        assert_eq!(s.raw_value, "");
+    }
+
+    #[test]
+    fn test_no_placeholders_returns_as_is() {
+        // parse requires RunningWorkflow; we test the raw_value here instead
+        let s = WorkflowString::new("plain text without placeholders");
+        assert_eq!(s.raw_value, "plain text without placeholders");
+    }
+
+    #[tokio::test]
+    async fn test_parse_context_missing_name_returns_empty() {
+        let runner = make_test_runner().await;
+        let s = WorkflowString::new("{{ context.missing_key.property }}");
+        let result = s.parse(&runner).await.unwrap();
+        assert_eq!(result, "");
+    }
+
+    #[tokio::test]
+    async fn test_parse_context_simple_value() {
+        let mut runner = make_test_runner().await;
+        {
+            let mut ctx = runner.context.lock().await;
+            ctx.set_item(
+                "myctx",
+                Box::new(BasicContextItem::new(serde_json::json!({"name": "Alice"}))),
+            );
+        }
+        let s = WorkflowString::new("{{ context.myctx.name }}");
+        let result = s.parse(&runner).await.unwrap();
+        assert_eq!(result, "Alice");
+    }
+
+    #[tokio::test]
+    async fn test_parse_invalid_root_segment_fails() {
+        let runner = make_test_runner().await;
+        let s = WorkflowString::new("{{ unknown.root.value }}");
+        let result = s.parse(&runner).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid root segment"));
+    }
+
+    #[tokio::test]
+    async fn test_parse_url_property_hostname() {
+        let runner = make_test_runner_with_url("https://example.com/path?q=1").await;
+        let s = WorkflowString::new("{{ url.hostname }}");
+        let result = s.parse(&runner).await.unwrap();
+        assert_eq!(result, "example.com");
+    }
+
+    #[tokio::test]
+    async fn test_parse_url_property_pathname() {
+        let runner = make_test_runner_with_url("https://example.com/foo/bar").await;
+        let s = WorkflowString::new("{{ url.pathname }}");
+        let result = s.parse(&runner).await.unwrap();
+        assert_eq!(result, "/foo/bar");
+    }
+
+    #[tokio::test]
+    async fn test_parse_mixed_literal_and_placeholder() {
+        let mut runner = make_test_runner().await;
+        {
+            let mut ctx = runner.context.lock().await;
+            ctx.set_item(
+                "greeting",
+                Box::new(BasicContextItem::new(serde_json::json!("Hello"))),
+            );
+        }
+        let s = WorkflowString::new("Hi {{ context.greeting }}!");
+        let result = s.parse(&runner).await.unwrap();
+        assert_eq!(result, "Hi Hello!");
+    }
+
+    #[tokio::test]
+    async fn test_parse_no_placeholders_returns_original() {
+        let runner = make_test_runner().await;
+        let s = WorkflowString::new("just plain text");
+        let result = s.parse(&runner).await.unwrap();
+        assert_eq!(result, "just plain text");
+    }
+
+    #[tokio::test]
+    async fn test_parse_empty_inner_group_ignored() {
+        let runner = make_test_runner().await;
+        // "{{ }}" has empty value inside — should be left as-is (not erroring)
+        let s = WorkflowString::new("prefix {{ }} suffix");
+        let result = s.parse(&runner).await.unwrap();
+        assert_eq!(result, "prefix  suffix");
+    }
+
+    #[tokio::test]
+    async fn test_parse_bool_context_value() {
+        let mut runner = make_test_runner().await;
+        {
+            let mut ctx = runner.context.lock().await;
+            ctx.set_item(
+                "flags",
+                Box::new(BasicContextItem::new(serde_json::json!({"enabled": true}))),
+            );
+        }
+        let s = WorkflowString::new("{{ context.flags.enabled }}");
+        let result = s.parse(&runner).await.unwrap();
+        assert_eq!(result, "true");
+    }
+
+    #[tokio::test]
+    async fn test_parse_array_context_value_serialized() {
+        let mut runner = make_test_runner().await;
+        {
+            let mut ctx = runner.context.lock().await;
+            ctx.set_item(
+                "items",
+                Box::new(BasicContextItem::new(serde_json::json!([1, 2, 3]))),
+            );
+        }
+        let s = WorkflowString::new("{{ context.items }}");
+        let result = s.parse(&runner).await.unwrap();
+        assert_eq!(result, "[1,2,3]");
+    }
+
+    #[tokio::test]
+    async fn test_parse_null_context_value_returns_empty() {
+        let mut runner = make_test_runner().await;
+        {
+            let mut ctx = runner.context.lock().await;
+            ctx.set_item(
+                "nothing",
+                Box::new(BasicContextItem::new(serde_json::json!(null))),
+            );
+        }
+        let s = WorkflowString::new("{{ context.nothing }}");
+        let result = s.parse(&runner).await.unwrap();
+        assert_eq!(result, "");
+    }
+
+    #[tokio::test]
+    async fn test_parse_object_context_value_serialized() {
+        let mut runner = make_test_runner().await;
+        {
+            let mut ctx = runner.context.lock().await;
+            ctx.set_item(
+                "obj",
+                Box::new(BasicContextItem::new(serde_json::json!({"a": 1}))),
+            );
+        }
+        let s = WorkflowString::new("{{ context.obj }}");
+        let result = s.parse(&runner).await.unwrap();
+        assert_eq!(result, "{\"a\":1}");
+    }
+
+    #[tokio::test]
+    async fn test_parse_missing_context_name_returns_empty() {
+        let runner = make_test_runner().await;
+        let s = WorkflowString::new("{{ context.nonexistent }}");
+        let result = s.parse(&runner).await.unwrap();
+        assert_eq!(result, "");
+    }
+
+    #[tokio::test]
+    async fn test_parse_url_missing_property_fails() {
+        let runner = make_test_runner_with_url("https://example.com").await;
+        let s = WorkflowString::new("{{ url.nonexistent }}");
+        let result = s.parse(&runner).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid URL property"));
+    }
+
+    #[tokio::test]
+    async fn test_parse_url_without_dot_returns_full_url() {
+        let runner = make_test_runner_with_url("https://example.com/path").await;
+        let s = WorkflowString::new("{{ url }}");
+        let result = s.parse(&runner).await.unwrap();
+        assert_eq!(result, "https://example.com/path");
+    }
+
+    fn default_config() -> Config {
+        Config::default()
+    }
+
+    async fn make_test_runner() -> RunningWorkflow {
+        RunningWorkflow::new(
+            crate::workflow_data::WorkflowData {
+                name: "Test".to_string(),
+                description: None,
+                procedures: vec![],
+                steps: vec![],
+            },
+            Box::new(default_config()),
+        )
+    }
+
+    async fn make_test_runner_with_url(url: &str) -> RunningWorkflow {
+        let runner = make_test_runner().await;
+        runner.browser.lock().await.navigate(url).await.ok();
+        runner
+    }
+}

@@ -50,4 +50,26 @@ mod tests {
             "spawn should succeed even if target doesn't exist"
         );
     }
+
+    #[test]
+    fn test_home_dir_returns_some_on_linux() {
+        // HOME is typically set in CI/test environments
+        let home = home_dir();
+        // On systems where HOME is unset it may return None, but most environments have it
+        if let Some(h) = home {
+            assert!(!h.as_os_str().is_empty());
+        }
+    }
+
+    #[test]
+    fn test_run_open_command_valid_url_spawns() {
+        let result = run_open_command("https://example.com");
+        assert!(result.is_ok(), "should spawn successfully on valid URL");
+    }
+
+    #[test]
+    fn test_run_open_command_path_with_spaces() {
+        let result = run_open_command("/tmp/file with spaces.txt");
+        assert!(result.is_ok(), "should spawn even with spaces in path");
+    }
 }

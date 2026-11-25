@@ -164,4 +164,53 @@ mod tests {
         assert_eq!(cloned.page_index, step.page_index);
         assert!(format!("{step:?}").contains("PageActionStep"));
     }
+
+    #[tokio::test]
+    async fn test_get_script_content_inline_code_returns_as_is() {
+        let root = PathBuf::from("/tmp");
+        let content = get_script_content("alert('hi');", &root).await.unwrap();
+        assert_eq!(content, "alert('hi');");
+    }
+
+    #[tokio::test]
+    async fn test_get_script_content_from_file_reads_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let script_path = tmp.path().join("script.js");
+        std::fs::write(&script_path, "console.log('loaded');").unwrap();
+
+        let content = get_script_content("script.js", tmp.path()).await.unwrap();
+        assert_eq!(content, "console.log('loaded');");
+    }
+
+    #[test]
+    fn test_get_script_content_relative_vs_absolute_resolve_same() {
+        // Both relative and absolute paths should resolve to same file
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let tmp = rt.block_on(async {
+            let d = tempfile::tempdir().unwrap();
+            let p = d.path().join("s.js");
+            std::fs::write(&p, "x").unwrap();
+            (d, p)
+        });
+
+        let abs_result = rt.block_on(async {
+            get_script_content(tmp.1.to_str().unwrap(), Path::new("/nonexistent")).await
+        });
+        let rel_result = rt.block_on(async {
+            get_script_content("s.js", tmp.0.path()).await
+        });
+
+        let abs_content = abs_result.unwrap();
+        let rel_content = rel_result.unwrap();
+        assert_eq!(abs_content, rel_content);
+        assert_eq!(rel_content, "x");
+    }
+
+    #[tokio::test]
+    async fn test_get_script_content_nonexistent_file_falls_back_to_inline() {
+        let root = PathBuf::from("/tmp");
+        // Non-existent file path — should be treated as inline code
+        let content = get_script_content("/no/such/file.js", &root).await.unwrap();
+        assert_eq!(content, "/no/such/file.js");
+    }
 }

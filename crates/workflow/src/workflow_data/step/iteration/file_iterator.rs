@@ -110,3 +110,155 @@ pub(super) async fn get_file_iterator_items(
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::workflow_data::step::iteration::FileIterator;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn test_get_file_iterator_items_valid_file() {
+        let tmp = TempDir::new().unwrap();
+        let wf_path = tmp.path().join("workflow.json");
+        std::fs::write(
+            &wf_path,
+            r#"{"name":"test","steps":[]}"#,
+        )
+        .unwrap();
+
+        let data_path = tmp.path().join("data.json");
+        std::fs::write(&data_path, r#"[{"name":"Alice"},{"name":"Bob"}]"#).unwrap();
+
+        let iterator = FileIterator {
+            source_file: data_path.clone().into(),
+        };
+        let items = get_file_iterator_items(&iterator, &wf_path).await.unwrap();
+        assert_eq!(items.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_get_file_iterator_items_nonexistent_file() {
+        let tmp = TempDir::new().unwrap();
+        let wf_path = tmp.path().join("workflow.json");
+        std::fs::write(&wf_path, r#"{}"#).unwrap();
+
+        let iterator = FileIterator {
+            source_file: PathBuf::from("nonexistent.json"),
+        };
+        let result = get_file_iterator_items(&iterator, &wf_path).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("does not exist or is not a file"));
+    }
+
+    #[tokio::test]
+    async fn test_get_file_iterator_items_non_array_json() {
+        let tmp = TempDir::new().unwrap();
+        let wf_path = tmp.path().join("workflow.json");
+        std::fs::write(&wf_path, r#"{}"#).unwrap();
+
+        let data_path = tmp.path().join("data.json");
+        std::fs::write(&data_path, r#"{"key":"value"}"#).unwrap();
+
+        let iterator = FileIterator {
+            source_file: data_path.clone().into(),
+        };
+        let result = get_file_iterator_items(&iterator, &wf_path).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must be a json/jsonc file containing an array"));
+    }
+
+    #[tokio::test]
+    async fn test_get_file_iterator_items_relative_path_resolves_correctly() {
+        let tmp = TempDir::new().unwrap();
+        let wf_subdir = tmp.path().join("workflows");
+        std::fs::create_dir_all(&wf_subdir).unwrap();
+        let wf_path = wf_subdir.join("workflow.json");
+        std::fs::write(&wf_path, r#"{}"#).unwrap();
+
+        let data_path = wf_subdir.join("data.json");
+        std::fs::write(&data_path, r#"[1, 2, 3]"#).unwrap();
+
+        let iterator = FileIterator {
+            source_file: PathBuf::from("data.json"),
+        };
+        let items = get_file_iterator_items(&iterator, &wf_path).await.unwrap();
+        assert_eq!(items.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_get_file_iterator_items_absolute_path() {
+        let tmp = TempDir::new().unwrap();
+        let data_path = tmp.path().join("data.json");
+        std::fs::write(&data_path, r#"[{"x":1}]"#).unwrap();
+
+        let wf_path = tmp.path().join("workflow.json");
+        std::fs::write(&wf_path, r#"{}"#).unwrap();
+
+        let iterator = FileIterator {
+            source_file: data_path.clone().into(),
+        };
+        let items = get_file_iterator_items(&iterator, &wf_path).await.unwrap();
+        assert_eq!(items.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_file_context_item_can_update_and_write_back() {
+        let tmp = TempDir::new().unwrap();
+        let wf_path = tmp.path().join("workflow.json");
+        std::fs::write(&wf_path, r#"{}"#).unwrap();
+
+        let data_path = tmp.path().join("data.json");
+        std::fs::write(&data_path, r#"[{"count":0}]"#).unwrap();
+
+        let iterator = FileIterator {
+            source_file: data_path.clone().into(),
+        };
+        let mut items = get_file_iterator_items(&iterator, &wf_path).await.unwrap();
+        assert_eq!(items.len(), 1);
+
+        // Update the item via context API
+        let path: context::PropertyPath = vec!["count"];
+        let updated = items[0]
+            .update(&path, &serde_json::json!(42))
+            .unwrap();
+        assert_eq!(updated.as_u64().unwrap(), 42);
+
+        // Verify file was written back
+        let content = std::fs::read_to_string(&data_path).unwrap();
+        assert!(content.contains("42"));
+    }
+
+    #[tokio::test]
+    async fn test_file_context_item_shared_array_visibility() {
+        let tmp = TempDir::new().unwrap();
+        let wf_path = tmp.path().join("workflow.json");
+        std::fs::write(&wf_path, r#"{}"#).unwrap();
+
+        let data_path = tmp.path().join("data.json");
+        std::fs::write(&data_path, r#"[{"val":"a"},{"val":"b"}]"#).unwrap();
+
+        let iterator = FileIterator {
+            source_file: data_path.clone().into(),
+        };
+        let mut items = get_file_iterator_items(&iterator, &wf_path).await.unwrap();
+        assert_eq!(items.len(), 2);
+
+        // Mutate first item
+        let path: context::PropertyPath = vec!["val"];
+        items[0].update(&path, &serde_json::json!("mutated")).unwrap();
+
+        // Second item should see the file contents still reflect its own original value
+        // (only item 0 was mutated)
+        assert_eq!(
+            items[1].get_data().get("val").unwrap().as_str().unwrap(),
+            "b"
+        );
+    }
+}

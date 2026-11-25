@@ -3792,6 +3792,7 @@ dependencies = [
  "log",
  "scopeguard",
  "serde_json",
+ "tempfile",
  "termcolor",
  "tokio",
 ]
