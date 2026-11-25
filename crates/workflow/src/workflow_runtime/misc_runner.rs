@@ -79,7 +79,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_abort_workflow_with_parsed_message() {
-        let mut runner = make_runner().await;
+        let runner = make_runner().await;
         {
             let mut ctx = runner.context.lock().await;
             ctx.set_item(

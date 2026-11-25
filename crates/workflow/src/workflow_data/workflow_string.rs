@@ -48,6 +48,9 @@ impl WorkflowString {
                 if !value.is_empty() {
                     let parsed_value = parse_special_value(value, workflow).await?;
                     parsed = parsed.replace(group, &parsed_value);
+                } else {
+                    // Empty placeholder like {{ }} — replace with empty string
+                    parsed = parsed.replace(group, "");
                 }
             }
         }
@@ -61,18 +64,21 @@ async fn parse_special_value(special_value: &str, workflow: &RunningWorkflow) ->
 
     let root_segment = segments
         .next()
-        .with_context(|| format!("No root segment found in the special value: {special_value}"))?;
+        .with_context(|| format!("No root segment found in the special value: {special_value}"))?
+        .trim();
 
     match root_segment {
         "context" => {
             let context = workflow.context.lock().await;
 
+
             let context_name = segments.next().with_context(|| {
                 format!("No context name found in the special value: {special_value}")
-            })?;
+            })?.trim();
             let item = context.get_item(context_name);
             if let Some(item) = item {
-                let value = get_context_item_value(item, &segments.collect::<PropertyPath>());
+                let props: Vec<&str> = segments.map(|s| s.trim()).collect();
+                let value = get_context_item_value(item, &props);
                 Ok(value)
             } else {
                 log::warn!("No context with given name found: {context_name}");
@@ -84,7 +90,7 @@ async fn parse_special_value(special_value: &str, workflow: &RunningWorkflow) ->
             let url = browser.get_url().unwrap_or_default();
 
             if !url.is_empty()
-                && let Some(url_property) = segments.next()
+                && let Some(url_property) = segments.next().map(|s| s.trim())
                 && let Ok(url_object) = url::Url::parse(&url)
             {
                 let property_value = match url_property {
@@ -156,7 +162,6 @@ mod tests {
     use crate::context::{BasicContextItem, WorkflowContext};
     use crate::workflow_runtime::RunningWorkflow;
     use config::Config;
-    use std::path::Path;
 
     #[test]
     fn test_new_creates_exact_value() {
@@ -202,7 +207,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_context_simple_value() {
-        let mut runner = make_test_runner().await;
+        let runner = make_test_runner().await;
         {
             let mut ctx = runner.context.lock().await;
             ctx.set_item(
@@ -247,7 +252,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_mixed_literal_and_placeholder() {
-        let mut runner = make_test_runner().await;
+        let runner = make_test_runner().await;
         {
             let mut ctx = runner.context.lock().await;
             ctx.set_item(
@@ -279,7 +284,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_bool_context_value() {
-        let mut runner = make_test_runner().await;
+        let runner = make_test_runner().await;
         {
             let mut ctx = runner.context.lock().await;
             ctx.set_item(
@@ -294,7 +299,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_array_context_value_serialized() {
-        let mut runner = make_test_runner().await;
+        let runner = make_test_runner().await;
         {
             let mut ctx = runner.context.lock().await;
             ctx.set_item(
@@ -309,7 +314,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_null_context_value_returns_empty() {
-        let mut runner = make_test_runner().await;
+        let runner = make_test_runner().await;
         {
             let mut ctx = runner.context.lock().await;
             ctx.set_item(
@@ -324,7 +329,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_object_context_value_serialized() {
-        let mut runner = make_test_runner().await;
+        let runner = make_test_runner().await;
         {
             let mut ctx = runner.context.lock().await;
             ctx.set_item(
@@ -385,7 +390,7 @@ mod tests {
 
     async fn make_test_runner_with_url(url: &str) -> RunningWorkflow {
         let runner = make_test_runner().await;
-        runner.browser.lock().await.navigate(url).await.ok();
+        runner.browser.lock().await.set_test_url(url);
         runner
     }
 }
