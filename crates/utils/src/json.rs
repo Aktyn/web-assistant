@@ -50,10 +50,70 @@ pub fn json_parse(json_string: &str) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
     #[tokio::test]
     async fn test_read_json_files_nonexistent_directory_returns_empty() {
         let nonexistent = PathBuf::from("/tmp/does_not_exist_xyz_12345");
         let result = read_json_files(&nonexistent).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_read_json_files_empty_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let result = read_json_files(tmp.path()).await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_read_json_files_finds_json_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("a.json"), "{}").unwrap();
+        std::fs::write(tmp.path().join("b.jsonc"), "{}").unwrap();
+        std::fs::write(tmp.path().join("c.txt"), "hello").unwrap();
+
+        let result = read_json_files(tmp.path()).await.unwrap();
+        // Only .json files should be returned (not .txt or directories)
+        let names: Vec<_> = result.iter().map(|e| e.file_name()).collect();
+        assert!(names.iter().any(|n| n.to_string_lossy().as_bytes() == b"a.json"));
+        assert!(names.iter().any(|n| n.to_string_lossy().as_bytes() == b"b.jsonc"));
+        assert!(!names.iter().any(|n| n.to_string_lossy().as_bytes() == b"c.txt"));
+    }
+
+    #[test]
+    fn test_json_parse_valid_json_object() {
+        let v = json_parse(r#"{"key":"value"}"#);
+        assert!(v.is_object());
+        assert_eq!(v.get("key").unwrap().as_str().unwrap(), "value");
+    }
+
+    #[test]
+    fn test_json_parse_valid_json_array() {
+        let v = json_parse("[1, 2, 3]");
+        assert!(v.is_array());
+        assert_eq!(v[0].as_u64().unwrap(), 1);
+    }
+
+    #[test]
+    fn test_json_parse_string_fallback_for_invalid_json() {
+        let v = json_parse("not valid json at all");
+        assert!(v.is_string());
+        assert_eq!(v.as_str().unwrap(), "not valid json at all");
+    }
+
+    #[test]
+    fn test_json_parse_numeric_string() {
+        let v = json_parse("42");
+        assert!(v.is_number());
+        assert_eq!(v.as_i64().unwrap(), 42);
+    }
+
+    #[test]
+    fn test_json_parse_bool_string() {
+        let v = json_parse("true");
+        assert!(v.is_boolean());
+        assert_eq!(v.as_bool().unwrap(), true);
     }
 }

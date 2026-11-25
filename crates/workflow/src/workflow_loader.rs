@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::workflow::{Workflow, WorkflowState};
 
-pub(crate) struct JsonFile {
+pub struct JsonFile {
     pub path: PathBuf,
     pub content: String,
 }
@@ -30,8 +30,7 @@ impl JsonFile {
         Err(anyhow!("Wrong file extension: \"{}\"", path.display()))
     }
 
-    #[cfg(test)]
-    pub(crate) fn from_raw(path: PathBuf, content: String) -> Self {
+    pub fn from_raw(path: PathBuf, content: String) -> Self {
         Self { path, content }
     }
 }

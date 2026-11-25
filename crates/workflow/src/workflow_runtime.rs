@@ -170,8 +170,9 @@ impl Workflow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::workflow::{Workflow, WorkflowState, workflow_loader};
-    use workflow_loader::JsonFile;
+    use crate::workflow::{Workflow, WorkflowState};
+    use crate::JsonFile;
+    use crate::load_from_file;
 
     fn default_config() -> Config {
         Config::default()
@@ -240,8 +241,14 @@ mod tests {
         )
         .unwrap();
 
-        let config = Box::new(crate::cli::cli_runner::test_headless_config());
-        let mut workflow = workflow_loader::load_from_file(&wf_path).await.unwrap();
+        let config = Box::new(config::Config {
+            browser: config::BrowserConfig {
+                headless: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let mut workflow = load_from_file(&wf_path).await.unwrap();
         let result = workflow.run(config).await;
         // The only acceptable failure is browser-related (no Chrome in CI)
         if let Err(e) = result {

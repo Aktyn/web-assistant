@@ -138,7 +138,7 @@ impl View for NoWorkflowsView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::views::View;
+    use super::View;
     use crossterm::event::{Event, KeyCode};
 
     fn empty_config() -> Config {

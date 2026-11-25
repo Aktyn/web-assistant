@@ -225,10 +225,9 @@ fn smart_event_poll(terminal: &mut DefaultTerminal) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
-    use crate::workflow::{Workflow, workflow_loader};
+    use config::Config;
+    use workflow::{Workflow, load_from_directory, JsonFile};
     use std::path::PathBuf;
-    use workflow_loader::JsonFile;
 
     fn empty_config() -> Config {
         Config::default()
@@ -362,8 +361,8 @@ mod tests {
         let config = Config {
             workflows_directory: tmp.path().to_path_buf(),
             tui_colors: None,
-            browser: crate::config::BrowserConfig::default(),
-            agent: crate::config::AgentConfig::default(),
+            browser: config::BrowserConfig::default(),
+            agent: config::AgentConfig::default(),
         };
         let app = TuiApp::new(config).await;
         // Should not panic during construction.

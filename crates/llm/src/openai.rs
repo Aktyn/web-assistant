@@ -174,7 +174,7 @@ impl ChatOpenAI {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::ChatMessage;
+    use crate::ChatMessage;
 
     #[test]
     fn test_chat_message_serde_structure() {

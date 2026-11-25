@@ -154,7 +154,7 @@ impl panel::Panel for WorkflowsSidebar {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::common::panel::Panel;
+    use super::super::panel::Panel;
     use crossterm::event::{Event, KeyCode};
     use std::mem::MaybeUninit;
 
