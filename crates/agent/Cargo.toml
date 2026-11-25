@@ -1,0 +1,15 @@
+[package]
+name = "agent"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+browser.workspace = true
+llm.workspace = true
+
+anyhow.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+tracing.workspace = true

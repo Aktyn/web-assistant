@@ -1,0 +1,17 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+utils.workspace = true
+workflow.workspace = true
+config.workspace = true
+agent.workspace = true
+tui = { path = "../tui" }
+
+anyhow.workspace = true
+env_logger.workspace = true
+serde_json.workspace = true
+documented.workspace = true
+clap = { version = "4.6.8", features = ["derive"] }

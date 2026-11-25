@@ -1,0 +1,18 @@
+[package]
+name = "browser"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+utils.workspace = true
+config.workspace = true
+
+anyhow.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+log.workspace = true
+serde.workspace = true
+url.workspace = true
+serde_json.workspace = true
+playwright-rs = "0.21"
+base64 = "0.23"

@@ -1,18 +1,24 @@
-[package]
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+default-members = ["crates/app"]
+
+[workspace.package]
 name = "web-assistant"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
-# Requires: cargo install cargo-run-script
-[package.metadata.scripts]
-coverage = "cargo tarpaulin"
+[workspace.dependencies]
+utils = { path = "crates/utils" }
+config = { path = "crates/config" }
+workflow = { path = "crates/workflow" }
+browser = { path = "crates/browser" }
+agent = { path = "crates/agent" }
+llm = { path = "crates/llm" }
 
-[dependencies]
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.13", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-dotenvy = "0.15"
 anyhow = "1"
 thiserror = "2"
 tracing = "0.1"
@@ -20,21 +26,14 @@ regex = "1"
 tokio-tungstenite = { version = "0.30", features = ["connect"] }
 futures-util = "0.3"
 url = "2"
-ratatui = { version = "0.30.2", features = ["unstable-rendered-line-info"] }
-crossterm = "0.29.0"
-clap = { version = "4.6.8", features = ["derive"] }
 tui-logger = "0.18.3"
 log = "0.4.35"
 documented = "0.10.0"
 env_logger = "0.11.11"
 jsonc-parser = { version = "0.34", features = ["serde"] }
-termcolor = "1.4.1"
 scopeguard = "1.2.0"
-base64 = "0.23"
-playwright-rs = "0.21"
-notifica = "3.0.2"
 
-[dev-dependencies]
+# dev-dependencies
 tempfile = "3"
 
 [profile.release]
@@ -48,7 +47,7 @@ opt-level = 0
 lto = false
 strip = false
 
-[lints.clippy]
+[workspace.lints.clippy]
 print_stdout = "deny"
 print_stderr = "deny"
 unused_self = "warn"
