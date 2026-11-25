@@ -47,11 +47,11 @@ jobs:
         run: cargo build
 
       - name: Test
-        run: cargo test
+        run: cargo test --workspace
 
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin --locked
 
       - name: Coverage
         # TODO: increase this threshold before first release
-        run: cargo tarpaulin --timeout 600 --fail-under 50
+        run: cargo tarpaulin --workspace --timeout 600 --fail-under 50
