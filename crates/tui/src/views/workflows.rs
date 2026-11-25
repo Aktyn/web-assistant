@@ -187,9 +187,9 @@ impl View for WorkflowView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::views::View;
-    use crate::workflow::Workflow;
-    use crate::workflow::workflow_loader::JsonFile;
+    use super::View;
+    use workflow::Workflow;
+    use workflow::JsonFile;
     use crossterm::event::{Event, KeyCode};
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;

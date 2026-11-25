@@ -38,6 +38,8 @@ pub fn run_open_command(target: &str) -> Result<std::process::Child> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_open_file_with_nonexistent_path_succeeds_spawn() {
         // run_open_command spawns the process; even for nonexistent files,

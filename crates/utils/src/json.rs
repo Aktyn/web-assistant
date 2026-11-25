@@ -50,6 +50,9 @@ pub fn json_parse(json_string: &str) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
     #[tokio::test]
     async fn test_read_json_files_nonexistent_directory_returns_empty() {
         let nonexistent = PathBuf::from("/tmp/does_not_exist_xyz_12345");

@@ -21,3 +21,6 @@ documented.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 notifica = "3.0.2"
+
+[dev-dependencies]
+tempfile.workspace = true

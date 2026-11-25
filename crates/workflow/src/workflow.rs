@@ -35,7 +35,7 @@ pub struct Workflow {
 
 impl Workflow {
     #[must_use]
-    pub(crate) fn new(json: workflow_loader::JsonFile) -> Self {
+    pub fn new(json: workflow_loader::JsonFile) -> Self {
         match parse_to_serde_value(&json.content, &ParseOptions::default()) {
             Ok(data) => Workflow {
                 state: WorkflowState::Valid(data),
@@ -67,6 +67,7 @@ impl Workflow {
 mod tests {
     use super::*;
     pub(crate) use workflow_loader::{JsonFile, load_from_file};
+    use super::workflow_loader::load_from_directory;
 
     #[tokio::test]
     async fn test_workflow_data_json_valid_file() {

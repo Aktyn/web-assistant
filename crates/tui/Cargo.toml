@@ -13,3 +13,7 @@ anyhow.workspace = true
 tui-logger.workspace = true
 ratatui = { version = "0.30.2", features = ["unstable-rendered-line-info"] }
 crossterm = "0.29.0"
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio.workspace = true
