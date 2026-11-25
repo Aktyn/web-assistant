@@ -84,7 +84,9 @@ mod tests {
             let mut ctx = runner.context.lock().await;
             ctx.set_item(
                 "msg",
-                Box::new(crate::context::BasicContextItem::new(serde_json::json!("custom"))),
+                Box::new(crate::context::BasicContextItem::new(serde_json::json!(
+                    "custom"
+                ))),
             );
         }
         let step = step::AbortStep {

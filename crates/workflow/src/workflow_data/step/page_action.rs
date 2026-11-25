@@ -196,9 +196,7 @@ mod tests {
         let abs_result = rt.block_on(async {
             get_script_content(tmp.1.to_str().unwrap(), Path::new("/nonexistent")).await
         });
-        let rel_result = rt.block_on(async {
-            get_script_content("s.js", tmp.0.path()).await
-        });
+        let rel_result = rt.block_on(async { get_script_content("s.js", tmp.0.path()).await });
 
         let abs_content = abs_result.unwrap();
         let rel_content = rel_result.unwrap();

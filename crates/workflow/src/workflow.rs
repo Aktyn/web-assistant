@@ -65,9 +65,9 @@ impl Workflow {
 #[cfg(test)]
 #[allow(clippy::match_wildcard_for_single_variants)]
 mod tests {
+    use super::workflow_loader::load_from_directory;
     use super::*;
     pub(crate) use workflow_loader::{JsonFile, load_from_file};
-    use super::workflow_loader::load_from_directory;
 
     #[tokio::test]
     async fn test_workflow_data_json_valid_file() {

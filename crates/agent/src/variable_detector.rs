@@ -346,8 +346,8 @@ fn substitute_in_json(val: &mut serde_json::Value, replacements: &HashMap<String
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::views::{AgentHistoryItem, AgentOutput, AgentStepState};
+    use super::*;
 
     #[test]
     fn test_variable_detection_by_element_attribute() {

@@ -153,8 +153,8 @@ impl panel::Panel for WorkflowsSidebar {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::panel::Panel;
+    use super::*;
     use crossterm::event::{Event, KeyCode};
     use std::mem::MaybeUninit;
 

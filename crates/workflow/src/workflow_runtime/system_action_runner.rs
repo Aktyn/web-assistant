@@ -96,7 +96,9 @@ mod tests {
             let mut ctx = runner.context.lock().await;
             ctx.set_item(
                 "url_ctx",
-                Box::new(crate::context::BasicContextItem::new(serde_json::json!("https://rust-lang.org"))),
+                Box::new(crate::context::BasicContextItem::new(serde_json::json!(
+                    "https://rust-lang.org"
+                ))),
             );
         }
         let step = step::SystemActionStep {

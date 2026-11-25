@@ -186,15 +186,15 @@ impl View for WorkflowView {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::View;
-    use workflow::Workflow;
-    use workflow::JsonFile;
+    use super::*;
     use crossterm::event::{Event, KeyCode};
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
     use std::mem::MaybeUninit;
     use std::path::PathBuf;
+    use workflow::JsonFile;
+    use workflow::Workflow;
 
     fn empty_workflows() -> Arc<RwLock<Vec<Workflow>>> {
         Arc::new(RwLock::new(Vec::new()))

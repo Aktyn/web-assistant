@@ -444,7 +444,9 @@ mod tests {
     #[tokio::test]
     async fn test_load_storage_state_nonexistent_file_fails() {
         let wd = StorageStateWatchdog::new_test();
-        let result = wd.load_storage_state("/tmp/nonexistent_storage_state_xyz.json").await;
+        let result = wd
+            .load_storage_state("/tmp/nonexistent_storage_state_xyz.json")
+            .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Failed to read"));
     }

@@ -322,12 +322,12 @@ fn render_no_selection_info(area: Rect, buf: &mut Buffer) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::panel::Panel;
-    use workflow::Workflow;
-    use workflow::JsonFile;
+    use super::*;
     use crossterm::event::KeyCode;
     use std::path::PathBuf;
+    use workflow::JsonFile;
+    use workflow::Workflow;
 
     fn empty_workflows() -> Arc<RwLock<Vec<Workflow>>> {
         Arc::new(RwLock::new(Vec::new()))

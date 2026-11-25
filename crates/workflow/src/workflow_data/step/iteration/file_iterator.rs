@@ -121,11 +121,7 @@ mod tests {
     async fn test_get_file_iterator_items_valid_file() {
         let tmp = TempDir::new().unwrap();
         let wf_path = tmp.path().join("workflow.json");
-        std::fs::write(
-            &wf_path,
-            r#"{"name":"test","steps":[]}"#,
-        )
-        .unwrap();
+        std::fs::write(&wf_path, r#"{"name":"test","steps":[]}"#).unwrap();
 
         let data_path = tmp.path().join("data.json");
         std::fs::write(&data_path, r#"[{"name":"Alice"},{"name":"Bob"}]"#).unwrap();
@@ -148,10 +144,12 @@ mod tests {
         };
         let result = get_file_iterator_items(&iterator, &wf_path).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("does not exist or is not a file"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("does not exist or is not a file")
+        );
     }
 
     #[tokio::test]
@@ -168,10 +166,12 @@ mod tests {
         };
         let result = get_file_iterator_items(&iterator, &wf_path).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("must be a json/jsonc file containing an array"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("must be a json/jsonc file containing an array")
+        );
     }
 
     #[tokio::test]
@@ -225,9 +225,7 @@ mod tests {
 
         // Update the item via context API
         let path: context::PropertyPath = vec!["count"];
-        let updated = items[0]
-            .update(&path, &serde_json::json!(42))
-            .unwrap();
+        let updated = items[0].update(&path, &serde_json::json!(42)).unwrap();
         assert_eq!(updated.as_u64().unwrap(), 42);
 
         // Verify file was written back
@@ -252,7 +250,9 @@ mod tests {
 
         // Mutate first item
         let path: context::PropertyPath = vec!["val"];
-        items[0].update(&path, &serde_json::json!("mutated")).unwrap();
+        items[0]
+            .update(&path, &serde_json::json!("mutated"))
+            .unwrap();
 
         // Second item should see the file contents still reflect its own original value
         // (only item 0 was mutated)

@@ -151,7 +151,7 @@ impl From<&str> for WorkflowString {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::{WorkflowContext, BasicContextItem};
+    use crate::context::{BasicContextItem, WorkflowContext};
     use crate::workflow_runtime::RunningWorkflow;
     use config::Config;
     use std::path::Path;
@@ -219,10 +219,12 @@ mod tests {
         let s = WorkflowString::new("{{ unknown.root.value }}");
         let result = s.parse(&runner).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Invalid root segment"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid root segment")
+        );
     }
 
     #[tokio::test]
@@ -347,7 +349,12 @@ mod tests {
         let s = WorkflowString::new("{{ url.nonexistent }}");
         let result = s.parse(&runner).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid URL property"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid URL property")
+        );
     }
 
     #[tokio::test]

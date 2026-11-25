@@ -29,7 +29,7 @@ url = "2"
 tui-logger = "0.18.3"
 log = "0.4.35"
 documented = "0.10.0"
-env_logger = "0.11.11"
+env_logger = "0.11.12"
 jsonc-parser = { version = "0.34", features = ["serde"] }
 scopeguard = "1.2.0"
 

@@ -170,9 +170,9 @@ impl Workflow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::workflow::{Workflow, WorkflowState};
     use crate::JsonFile;
     use crate::load_from_file;
+    use crate::workflow::{Workflow, WorkflowState};
 
     fn default_config() -> Config {
         Config::default()

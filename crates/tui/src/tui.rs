@@ -226,8 +226,8 @@ fn smart_event_poll(terminal: &mut DefaultTerminal) -> Result<bool> {
 mod tests {
     use super::*;
     use config::Config;
-    use workflow::{Workflow, load_from_directory, JsonFile};
     use std::path::PathBuf;
+    use workflow::{JsonFile, Workflow, load_from_directory};
 
     fn empty_config() -> Config {
         Config::default()

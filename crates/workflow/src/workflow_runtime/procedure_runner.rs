@@ -75,7 +75,12 @@ mod tests {
             .run_procedure(&step, Path::new("/tmp/test.json"))
             .await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Procedure not found"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Procedure not found")
+        );
     }
 
     #[tokio::test]

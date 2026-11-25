@@ -137,8 +137,8 @@ impl View for NoWorkflowsView {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::View;
+    use super::*;
     use crossterm::event::{Event, KeyCode};
 
     fn empty_config() -> Config {
