@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand, ValueHint::FilePath};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(version, about = "If no command is provided, the TUI will be launched", long_about = None)]
+#[command(name = "Web Assistant", version, about = "If no command is provided, the TUI will be launched", long_about = None)]
 pub struct Cli {
     /// Relative or absolute path to config file
     #[arg(short, long, value_name = "json file", default_value = config::DEFAULT_CONFIG_FILE, value_hint=FilePath)]

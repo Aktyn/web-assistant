@@ -196,6 +196,7 @@ fn is_user_data_dir_locked(user_data_dir: &Path) -> bool {
 
 /// List available profiles inside user data directory
 #[must_use]
+#[allow(unused)] //TODO: use or discard
 pub fn list_profiles(user_data_dir: &Path) -> Vec<ChromeProfileInfo> {
     let mut profiles = Vec::new();
     if !user_data_dir.is_dir() {

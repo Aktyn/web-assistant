@@ -90,19 +90,25 @@ pub(super) async fn get_file_iterator_items(
     if let serde_json::Value::Array(array) = source_json {
         let shared_array: Arc<Mutex<Vec<serde_json::Value>>> = Arc::new(Mutex::new(array));
 
-        let items = shared_array
-            .lock()
-            .unwrap()
-            .iter()
-            .enumerate()
-            .map(|(index, item)| {
-                let context_item =
-                    FileContextItem::new(item.clone(), shared_array.clone(), index, source_path);
-                Box::new(context_item) as Box<dyn context::WorkflowContextItem>
-            })
-            .collect();
-
-        Ok(items)
+        match shared_array.lock() {
+            Ok(arr) => {
+                let items = arr
+                    .iter()
+                    .enumerate()
+                    .map(|(index, item)| {
+                        let context_item = FileContextItem::new(
+                            item.clone(),
+                            shared_array.clone(),
+                            index,
+                            source_path,
+                        );
+                        Box::new(context_item) as Box<dyn context::WorkflowContextItem>
+                    })
+                    .collect();
+                Ok(items)
+            }
+            Err(error) => Err(anyhow!("Failed to lock shared array: {error}")),
+        }
     } else {
         Err(anyhow!(
             "Source file must be a json/jsonc file containing an array: {}",

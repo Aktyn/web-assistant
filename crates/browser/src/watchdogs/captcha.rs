@@ -75,20 +75,21 @@ impl<'de> Deserialize<'de> for CaptchaInfo {
     }
 }
 
-impl CaptchaInfo {
-    #[must_use]
-    pub fn now() -> Self {
-        let started_at_epoch = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_or(0.0, |d| d.as_secs_f64());
-        Self {
-            vendor: String::new(),
-            url: String::new(),
-            target_id: String::new(),
-            started_at_epoch,
-        }
-    }
-}
+//TODO: use or discard
+// impl CaptchaInfo {
+//     #[must_use]
+//     pub fn now() -> Self {
+//         let started_at_epoch = SystemTime::now()
+//             .duration_since(SystemTime::UNIX_EPOCH)
+//             .map_or(0.0, |d| d.as_secs_f64());
+//         Self {
+//             vendor: String::new(),
+//             url: String::new(),
+//             target_id: String::new(),
+//             started_at_epoch,
+//         }
+//     }
+// }
 
 #[derive(Clone)]
 pub struct CaptchaWatchdog {

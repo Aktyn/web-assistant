@@ -30,6 +30,7 @@ impl JsonFile {
         Err(anyhow!("Wrong file extension: \"{}\"", path.display()))
     }
 
+    #[must_use]
     pub fn from_raw(path: PathBuf, content: String) -> Self {
         Self { path, content }
     }

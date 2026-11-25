@@ -19,3 +19,6 @@ clap = { version = "4.6.8", features = ["derive"] }
 [dev-dependencies]
 tempfile.workspace = true
 tokio.workspace = true
+
+[lints]
+workspace = true

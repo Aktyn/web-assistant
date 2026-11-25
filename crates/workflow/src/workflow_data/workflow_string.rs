@@ -7,8 +7,10 @@ use std::sync::LazyLock;
 use super::super::context::{PropertyPath, WorkflowContextItem};
 use super::super::workflow_runtime::RunningWorkflow;
 
+#[allow(clippy::expect_used)]
 static SPECIAL_VALUE_GROUP_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\{\{[^}]*\}\}").expect("valid regex"));
+#[allow(clippy::expect_used)]
 static INNER_GROUP_VALUE_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\{\{\s*(?P<value>[^}]*)\s*\}\}").expect("valid regex"));
 
@@ -26,6 +28,7 @@ pub struct WorkflowString {
 }
 
 impl WorkflowString {
+    #[must_use]
     pub fn new(raw_value: &str) -> Self {
         Self {
             raw_value: raw_value.to_string(),

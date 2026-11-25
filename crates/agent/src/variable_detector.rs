@@ -2,21 +2,25 @@ use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
+#[allow(clippy::expect_used)]
 static EMAIL_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[\w\.-]+@[\w\.-]+\.\w+$").expect("valid email regex"));
+#[allow(clippy::expect_used)]
 static PHONE_CHARS_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[\d\s\-\(\)\+]+$").expect("valid phone regex"));
+#[allow(clippy::expect_used)]
 static DATE_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2}$").expect("valid date regex"));
 
 use super::views::{Action, AgentHistoryList, DetectedVariable, InteractedElementMetadata};
 
-#[must_use]
-pub fn detect_variables_in_history(
-    history: &AgentHistoryList,
-) -> HashMap<String, DetectedVariable> {
-    history.detect_variables()
-}
+//TODO: use or discard
+// #[must_use]
+// pub fn detect_variables_in_history(
+//     history: &AgentHistoryList,
+// ) -> HashMap<String, DetectedVariable> {
+//     history.detect_variables()
+// }
 
 impl AgentHistoryList {
     #[must_use]

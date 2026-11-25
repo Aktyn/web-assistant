@@ -29,7 +29,7 @@ async fn run_tui(config_path: Option<&PathBuf>) -> Result<()> {
     tui_logger::set_default_level(tui_logger::LevelFilter::Trace);
 
     if let Some(config_path) = config_path {
-        let config = config::load_config(config_path).await;
+        let config = config::load_config(config_path).await?;
         tui::render_tui(config).await
     } else {
         anyhow::bail!("Config path is required")

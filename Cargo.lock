@@ -104,19 +104,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
-name = "app"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "cli",
- "config",
- "tokio",
- "tui",
- "tui-logger",
- "utils",
-]
-
-[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3922,6 +3909,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b1f9c3798725016c6ee5f2f57869ec0831e8bbc0ab0310a86e787e97f41389e"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "web-assistant"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "cli",
+ "config",
+ "tokio",
+ "tui",
+ "tui-logger",
+ "utils",
 ]
 
 [[package]]

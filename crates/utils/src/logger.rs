@@ -83,7 +83,9 @@ fn print_line(stream: &mut StandardStream, message: &str, color: &ColorSpec) {
         print_lines(1);
     }
 
+    #[allow(clippy::expect_used)]
     stream.set_color(color).expect("Failed to set color");
+    #[allow(clippy::expect_used)]
     stream
         .write_all(message_bytes)
         .expect("Failed to write to stdout");

@@ -144,13 +144,11 @@ impl AgentHistoryList {
     }
 
     #[must_use]
-    #[allow(unused)] //TODO:
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
 
     #[must_use]
-    #[allow(unused)] //TODO:
     pub fn len(&self) -> usize {
         self.items.len()
     }
@@ -167,7 +165,6 @@ impl AgentHistoryList {
     }
 
     #[must_use]
-    #[allow(unused)] //TODO:
     pub fn is_done(&self) -> bool {
         if let Some(last_step) = self.items.last()
             && let Some(last_res) = last_step.result.last()
@@ -178,7 +175,6 @@ impl AgentHistoryList {
     }
 
     #[must_use]
-    #[allow(unused)] //TODO:
     pub fn is_successful(&self) -> Option<bool> {
         if let Some(last_step) = self.items.last()
             && let Some(last_res) = last_step.result.last()

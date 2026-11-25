@@ -46,13 +46,13 @@ pub struct Config {
 impl Config {
     /// # Panics
     /// This function will panic if the config path does not point to a file.
-    pub async fn new(config_path: &Path) -> Self {
+    async fn new(config_path: &Path) -> Result<Self> {
         if !config_path.exists() {
             log::info!(
                 "Config file not found (\"{}\"), using defaults",
                 config_path.display()
             );
-            return Self::default();
+            return Ok(Self::default());
         }
 
         //TODO: test and possible improve these errors handling for larger scope
@@ -64,9 +64,11 @@ impl Config {
 
         let config_content = tokio::fs::read_to_string(config_path)
             .await
-            .expect("Cannot read config file");
+            .context("Cannot read config file")?;
 
-        parse_to_serde_value(config_content.as_str(), &ParseOptions::default()).unwrap()
+        let parsed = parse_to_serde_value(config_content.as_str(), &ParseOptions::default())
+            .with_context(|| format!("Cannot parse config file: \"{}\"", config_path.display()))?;
+        Ok(parsed)
     }
 }
 
@@ -85,14 +87,14 @@ impl Default for Config {
     }
 }
 
-pub async fn load_config(config_path: &Path) -> Config {
+pub async fn load_config(config_path: &Path) -> Result<Config> {
     let done_loading = Arc::new(AtomicBool::new(false));
     let done_loading_thread = Arc::clone(&done_loading);
     let loading_thread_handle = thread::spawn(move || {
         run_loading_animation(&done_loading_thread);
     });
 
-    let config = Config::new(config_path).await;
+    let config = Config::new(config_path).await?;
 
     done_loading.store(true, Ordering::SeqCst);
     loading_thread_handle.join().ok();
@@ -100,7 +102,7 @@ pub async fn load_config(config_path: &Path) -> Config {
     stdout().write_all(b"\n").ok();
     stdout().flush().ok();
 
-    config
+    Ok(config)
 }
 
 fn run_loading_animation(done: &Arc<AtomicBool>) {

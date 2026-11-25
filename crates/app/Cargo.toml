@@ -1,5 +1,5 @@
 [package]
-name = "app"
+name = "web-assistant"
 version.workspace = true
 edition.workspace = true
 
@@ -16,3 +16,6 @@ config.workspace = true
 tokio.workspace = true
 anyhow.workspace = true
 tui-logger.workspace = true
+
+[lints]
+workspace = true

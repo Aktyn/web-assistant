@@ -85,6 +85,7 @@ impl super::LLM for ChatOpenAI {
 }
 
 impl ChatOpenAI {
+    #[must_use]
     pub fn new(config: ChatOpenAIConfig) -> Self {
         // let api_key = env::var("OPENAI_API_KEY").unwrap_or_default();
         // let base_url = env::var("OPENAI_BASE_URL")

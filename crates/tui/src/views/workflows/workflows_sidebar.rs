@@ -83,12 +83,12 @@ impl panel::Panel for WorkflowsSidebar {
                             ListItem::new(label).bold()
                         }
                         WorkflowState::Invalid(_) => {
-                            let file_path = w
-                                .file_path
-                                .as_ref()
-                                .expect("Workflow that failed to load must have a file path");
-                            let file_name_str =
-                                file_path.file_name().and_then(OsStr::to_str).unwrap_or("");
+                            let file_name_str = if let Some(file_path) = &w.file_path {
+                                file_path.file_name().and_then(OsStr::to_str).unwrap_or("")
+                            } else {
+                                log::warn!("Workflow that failed to load must have a file path");
+                                ""
+                            };
                             let text = vec![
                                 utils::text::truncate_text(
                                     "Invalid workflow file found",

@@ -12,7 +12,7 @@ impl super::RunningWorkflow {
     ) -> Result<()> {
         let is_met: bool = match &step.condition {
             step::Condition::MatchRegex(match_regex_condition) => {
-                let regex = Regex::new(&match_regex_condition.pattern).unwrap();
+                let regex = Regex::new(&match_regex_condition.pattern)?;
                 let value = match_regex_condition.value.parse(self).await?;
                 let result = regex.is_match(&value);
                 log::info!(

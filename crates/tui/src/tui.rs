@@ -37,8 +37,10 @@ struct TuiApp {
 
 impl TuiApp {
     async fn new(config: Config) -> Self {
-        if let Some(colors) = &config.tui_colors {
-            init_palette(colors);
+        if let Some(colors) = &config.tui_colors
+            && let Err(error) = init_palette(colors)
+        {
+            log::warn!("Failed to initialize palette: {error}");
         }
 
         let workflows = match workflow::load_from_directory(&config.workflows_directory).await {

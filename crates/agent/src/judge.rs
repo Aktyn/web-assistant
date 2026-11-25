@@ -15,9 +15,10 @@ pub struct JudgementResult {
     pub reached_captcha: bool,
 }
 
-pub struct Judge {
-    // pub llm: ChatOpenAI,
-}
+//TODO: use or discard
+// pub struct Judge {
+//     // pub llm: ChatOpenAI,
+// }
 
 impl crate::agent::Agent {
     // pub fn new(llm: ChatOpenAI) -> Self {

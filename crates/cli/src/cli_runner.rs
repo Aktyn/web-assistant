@@ -4,8 +4,8 @@ use std::{
     path::PathBuf,
 };
 
-use crate::cli::*;
-use config::*;
+use crate::cli::{Cli, Commands};
+use config::{Config, create_default_config};
 use utils::logger::print_lines;
 use workflow::workflow_data::{
     WorkflowData, WorkflowProcedure, step as workflow_step, workflow_string::WorkflowString,
@@ -37,7 +37,7 @@ impl Cli {
             .config_path
             .as_ref()
             .context("Config path is required")?;
-        let config = config::load_config(config_path).await;
+        let config = config::load_config(config_path).await?;
 
         let mut workflow = workflow::load_by_name_or_path(workflow_path_or_name, &config).await?;
 

@@ -1,3 +1,4 @@
+use anyhow::{Result, anyhow};
 use ratatui::style::Color;
 use ratatui::style::Style;
 use std::sync::OnceLock;
@@ -104,10 +105,11 @@ impl Default for TuiPalette {
 
 static PALETTE: OnceLock<TuiPalette> = OnceLock::new();
 
-pub(crate) fn init(colors: &HexColorsConfig) {
+pub(crate) fn init(colors: &HexColorsConfig) -> Result<()> {
     PALETTE
         .set(TuiPalette::from_config(colors))
-        .expect("palette already set");
+        .map_err(|_| anyhow!("palette was already set"))?;
+    Ok(())
 }
 
 pub fn get() -> &'static TuiPalette {
