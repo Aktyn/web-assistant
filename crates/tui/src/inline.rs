@@ -105,6 +105,7 @@ pub fn print_struct(docs: &StructDocs) -> anyhow::Result<()> {
 
     let cursor_y = terminal.get_cursor_position()?.y;
     terminal.set_cursor_position((0, cursor_y))?;
+    ratatui::restore();
 
     Ok(())
 }

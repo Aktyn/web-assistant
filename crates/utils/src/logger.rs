@@ -1,6 +1,8 @@
 use scopeguard::defer_on_unwind;
+use serde::Serialize;
 use std::io::{Write, stdout};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+use termcolor_json::Theme;
 
 pub fn print_lines(count: u16) {
     std::io::stdout()
@@ -15,6 +17,8 @@ pub struct CliLogger {
     success_color: ColorSpec,
     error_color: ColorSpec,
     warning_color: ColorSpec,
+
+    json_theme: Theme,
 }
 
 impl Default for CliLogger {
@@ -23,7 +27,6 @@ impl Default for CliLogger {
         info_color
             .set_bold(false)
             .set_fg(Some(Color::Rgb(178, 235, 242))); // Cyan 100
-        // .set_fg(Some(Color::Rgb(236, 239, 241)));
 
         let mut success_color = ColorSpec::new();
         success_color
@@ -40,6 +43,25 @@ impl Default for CliLogger {
             .set_bold(false)
             .set_fg(Some(Color::Rgb(255, 183, 77)));
 
+        let mut json_theme = Theme::none();
+        json_theme
+            .null_mut()
+            .set_fg(Some(Color::Rgb(159, 168, 218))) // Indigo 200
+            .set_bold(true);
+        json_theme
+            .bool_mut()
+            .set_fg(Some(Color::Rgb(255, 224, 130))) // Amber 200
+            .set_bold(true);
+        json_theme
+            .number_mut()
+            .set_fg(Some(Color::Rgb(128, 222, 234))); // Cyan 200
+        json_theme
+            .string_mut()
+            .set_fg(Some(Color::Rgb(165, 214, 167))); // Green 200
+        json_theme
+            .object_key_mut()
+            .set_fg(Some(Color::Rgb(176, 190, 197))); // Blue gray 200
+
         Self {
             stdout: StandardStream::stdout(ColorChoice::Auto),
             stderr: StandardStream::stderr(ColorChoice::Auto),
@@ -47,6 +69,7 @@ impl Default for CliLogger {
             success_color,
             error_color,
             warning_color,
+            json_theme,
         }
     }
 }
@@ -66,6 +89,25 @@ impl CliLogger {
 
     pub fn info(&mut self, message: &str) {
         print_line(self.stdout.by_ref(), message, &self.info_color);
+    }
+
+    #[allow(clippy::missing_panics_doc)]
+    pub fn json<T>(&mut self, json: &T)
+    where
+        T: ?Sized + Serialize,
+    {
+        defer_on_unwind! {
+            // Fallback
+            let json_string = &serde_json::to_string_pretty(json).unwrap_or_default();
+            stdout().write_all(json_string.as_bytes()).ok();
+            print_lines(1);
+        }
+
+        #[allow(clippy::expect_used)]
+        termcolor_json::to_writer_with_theme(self.stdout.by_ref(), json, &self.json_theme)
+            .expect("Failed to write JSON to stdout");
+
+        print_lines(1);
     }
 
     pub fn reset(&mut self) {

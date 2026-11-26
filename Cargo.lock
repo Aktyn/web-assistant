@@ -3292,6 +3292,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "termcolor-json"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c42767e000217914d0b6d9d66433678f9da31086ebe1a626cf26ec713459b320"
+dependencies = [
+ "serde",
+ "serde_json",
+ "termcolor",
+]
+
+[[package]]
 name = "termina"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3778,9 +3789,11 @@ dependencies = [
  "anyhow",
  "log",
  "scopeguard",
+ "serde",
  "serde_json",
  "tempfile",
  "termcolor",
+ "termcolor-json",
  "tokio",
 ]
 
