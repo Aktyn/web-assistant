@@ -159,7 +159,7 @@ impl From<&str> for WorkflowString {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::{BasicContextItem, WorkflowContext};
+    use crate::context::BasicContextItem;
     use crate::workflow_runtime::RunningWorkflow;
     use config::Config;
 

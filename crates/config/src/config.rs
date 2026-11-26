@@ -167,7 +167,7 @@ mod tests {
     async fn test_config_new_with_nonexistent_path_returns_default() {
         // Path that does not exist → Config::new returns default config.
         let non_existent = PathBuf::from("/tmp/nonexistent-config-for-testing-12345.json");
-        let config = Config::new(&non_existent).await;
+        let config = Config::new(&non_existent).await.unwrap();
         assert_eq!(config.workflows_directory, PathBuf::from("./workflows"));
     }
 
@@ -178,7 +178,7 @@ mod tests {
         std::fs::write(tmp.path(), serde_json::to_string_pretty(&config).unwrap()).unwrap();
 
         let path = PathBuf::from(tmp.path());
-        let loaded = Config::new(&path).await;
+        let loaded = Config::new(&path).await.unwrap();
         assert_eq!(
             loaded.workflows_directory,
             PathBuf::from("/custom/workflows")
@@ -194,7 +194,7 @@ mod tests {
         let path = PathBuf::from(tmp.path());
         let result = std::panic::catch_unwind(|| {
             let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async { Config::new(&path).await });
+            let _ = rt.block_on(async { Config::new(&path).await });
         });
         assert!(result.is_err(), "Expected panic on empty JSON object");
     }
@@ -208,7 +208,7 @@ mod tests {
             // We cannot easily run async code inside catch_unwind without a runtime,
             // so we use a block_on approach via a fresh runtime.
             let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async { Config::new(&path).await });
+            let _ = rt.block_on(async { Config::new(&path).await });
         });
         assert!(result.is_err(), "Expected panic when path is a directory");
     }
