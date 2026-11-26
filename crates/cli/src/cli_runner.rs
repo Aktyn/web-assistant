@@ -60,6 +60,9 @@ impl Cli {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli_runner::explain_workflow::explain_workflow;
+    use crate::cli_runner::init_config::init_config;
+    use config::Config;
 
     /// Creates a default Config with headless browser enabled for testing.
     #[allow(dead_code)]
@@ -101,6 +104,26 @@ mod tests {
         // explain_workflow uses print_struct_docs! which may fail in non-TTY environments
         let result = std::panic::catch_unwind(|| explain_workflow(true));
         if let Ok(Ok(()) | Err(_)) = result {}
+    }
+
+    #[test]
+    fn test_explain_workflow_example_json_matches_expected() {
+        let actual = &*crate::cli_runner::explain_workflow::EXAMPLE_WORKFLOW_DATA;
+
+        assert_eq!(actual.name, "Complete example");
+        assert!(actual.description.is_some());
+        assert_eq!(actual.procedures.len(), 1);
+        assert_eq!(actual.procedures[0].name, "main-procedure");
+        assert!(actual.procedures[0].steps.len() > 10);
+        assert_eq!(actual.steps.len(), 2);
+
+        let json = serde_json::to_string(actual).unwrap();
+        let deserialized: workflow::workflow_data::WorkflowData =
+            serde_json::from_str(&json).expect("Failed to deserialize example JSON");
+
+        assert_eq!(deserialized.name, actual.name);
+        assert_eq!(deserialized.procedures.len(), actual.procedures.len());
+        assert_eq!(deserialized.steps.len(), actual.steps.len());
     }
 
     #[test]

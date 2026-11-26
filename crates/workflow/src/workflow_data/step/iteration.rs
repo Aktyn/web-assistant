@@ -4,6 +4,7 @@ use anyhow::Result;
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use strum::{EnumDiscriminants, EnumIter};
 
 pub(crate) use super::super::super::context;
 
@@ -42,7 +43,8 @@ pub struct ForEachStep {
     pub on_error: Option<Vec<super::WorkflowStepType>>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum IterationItems {
     File(FileIterator),

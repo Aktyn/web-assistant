@@ -19,7 +19,6 @@ static INNER_GROUP_VALUE_REGEX: LazyLock<Regex> =
 /// - `{{ context.foo.property }}` -- retrieves specific context value
 /// - `{{url.pathname}}` -- returns the pathname of the current URL
 /// ---
-/// TODO: add to explain-workflow cli command output
 /// `WorkflowString`
 #[derive(Debug, Clone, DocumentedFields, Documented, PartialEq)]
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]

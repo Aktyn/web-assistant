@@ -172,7 +172,6 @@ impl Browser {
         self.watchdogs.as_mut()
     }
 
-    //TODO: investigate why this sometimes fails
     pub async fn navigate(&mut self, url: &str) -> Result<()> {
         self.start().await?;
 
@@ -196,9 +195,10 @@ impl Browser {
             .ok_or_else(|| anyhow!("No page available for navigation"))?;
         page.goto(
             &formatted_url,
-            None, // GotoOptions::new()
-                  //     .timeout(Duration::from_secs(20))
-                  //     .wait_until(WaitUntil::NetworkIdle),
+            None,
+            // GotoOptions::new()
+            //     .timeout(Duration::from_secs(20))
+            //     .wait_until(WaitUntil::NetworkIdle),
         )
         .await
         .with_context(|| format!("Failed to goto {formatted_url}"))?;

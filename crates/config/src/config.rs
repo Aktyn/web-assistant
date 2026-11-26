@@ -44,8 +44,6 @@ pub struct Config {
 }
 
 impl Config {
-    /// # Panics
-    /// This function will panic if the config path does not point to a file.
     async fn new(config_path: &Path) -> Result<Self> {
         if !config_path.exists() {
             log::info!(
@@ -55,12 +53,12 @@ impl Config {
             return Ok(Self::default());
         }
 
-        //TODO: test and possible improve these errors handling for larger scope
-        assert!(
-            config_path.is_file(),
-            "Config path must point to a file. Path: \"{}\"",
-            config_path.display()
-        );
+        if !config_path.is_file() {
+            anyhow::bail!(
+                "Config path must point to a file. Path: \"{}\"",
+                config_path.display()
+            );
+        }
 
         let config_content = tokio::fs::read_to_string(config_path)
             .await

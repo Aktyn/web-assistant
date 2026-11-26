@@ -8,6 +8,7 @@ mod procedure;
 pub mod system_action;
 
 use serde::{Deserialize, Serialize};
+use strum::{EnumDiscriminants, EnumIter};
 
 pub(crate) use super::WorkflowString;
 pub use agent::AgentStep;
@@ -19,7 +20,8 @@ pub use page_action::{PageAction, PageActionStep};
 pub use procedure::RunProcedureStep;
 pub use system_action::{SystemAction, SystemActionStep};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum WorkflowStepType {
     #[serde(alias = "page-action", rename = "page-action")]

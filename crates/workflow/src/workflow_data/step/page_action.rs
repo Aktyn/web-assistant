@@ -2,6 +2,7 @@ use anyhow::Result;
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use strum::{EnumDiscriminants, EnumIter};
 use tokio::fs;
 
 use super::WorkflowString;
@@ -25,7 +26,8 @@ pub struct PageActionStep {
     pub action: PageAction,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum PageAction {
     Navigate(NavigateAction),

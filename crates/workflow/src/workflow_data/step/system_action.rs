@@ -1,5 +1,6 @@
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
+use strum::{EnumDiscriminants, EnumIter};
 
 use super::WorkflowString;
 
@@ -15,12 +16,13 @@ pub struct SystemActionStep {
     pub action: SystemAction,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum SystemAction {
-    Notify(NotifyAction),
     #[serde(alias = "open-url", rename = "open-url")]
     OpenUrl(OpenUrlAction),
+    Notify(NotifyAction),
 }
 
 /// `NotifyAction` - sends system notification

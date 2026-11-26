@@ -1,5 +1,6 @@
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
+use strum::{EnumDiscriminants, EnumIter};
 
 use super::WorkflowString;
 
@@ -24,7 +25,8 @@ pub struct ConditionStep {
     pub else_: Vec<super::WorkflowStepType>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum Condition {
     #[serde(rename = "match-regex")]

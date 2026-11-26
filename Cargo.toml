@@ -28,6 +28,7 @@ documented = "0.10.0"
 env_logger = "0.11.12"
 jsonc-parser = { version = "0.34", features = ["serde"] }
 scopeguard = "1.2.0"
+strum = { version = "0.28", features = ["derive"] }
 
 # dev-dependencies
 tempfile = "3"

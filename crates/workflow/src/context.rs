@@ -29,7 +29,6 @@ impl WorkflowContext {
     }
 
     pub fn get_item(&self, context_name: &str) -> Option<&dyn WorkflowContextItem> {
-        //TODO: investigate whether this &**v pattern is not causing unnecessary clones
         self.store.get(context_name).map(|v| &**v)
     }
 
