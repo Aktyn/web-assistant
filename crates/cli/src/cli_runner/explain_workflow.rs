@@ -246,6 +246,7 @@ fn example_foreach_steps() -> Vec<workflow_step::WorkflowStepType> {
                 context_name: String::from("items"),
                 items: example_iteration_items(items),
                 preserve_context: false,
+                order: workflow_step::iteration::IterationOrder::Random,
                 steps: vec![workflow_step::WorkflowStepType::PageAction(
                     workflow_step::PageActionStep {
                         page_index: 0,

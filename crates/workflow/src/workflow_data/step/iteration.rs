@@ -24,6 +24,11 @@ pub struct ForEachStep {
     /// "file" --> `FileIterator`
     pub items: IterationItems,
 
+    /// Order of the iteration
+    /// Possible values are: default, reversed, random
+    #[serde(default = "IterationOrder::default")]
+    pub order: IterationOrder,
+
     /// Whether to preserve or reset context after each iteration completes
     #[serde(
         default = "bool::default",
@@ -57,6 +62,15 @@ pub struct FileIterator {
     /// Path to the file to iterate over
     #[serde(alias = "sourceFile", rename = "sourceFile")]
     pub source_file: PathBuf,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum IterationOrder {
+    #[default]
+    Default,
+    Reversed,
+    Random,
 }
 
 pub(crate) async fn get_iteration_items(

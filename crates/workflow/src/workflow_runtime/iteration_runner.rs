@@ -1,8 +1,9 @@
 use anyhow::{Result, anyhow};
+use rand::seq::SliceRandom;
 use std::path::Path;
 
 use super::step;
-use crate::workflow_data::step::iteration::get_iteration_items;
+use crate::workflow_data::step::iteration::{IterationOrder, get_iteration_items};
 
 impl super::RunningWorkflow {
     pub(super) async fn iterate_over_each(
@@ -10,7 +11,7 @@ impl super::RunningWorkflow {
         for_each_step: &step::ForEachStep,
         workflow_file_path: &Path,
     ) -> Result<()> {
-        let items = get_iteration_items(&for_each_step.items, workflow_file_path).await?;
+        let mut items = get_iteration_items(&for_each_step.items, workflow_file_path).await?;
 
         if items.is_empty() {
             return Err(anyhow!("No items found to iterate over"));
@@ -18,7 +19,17 @@ impl super::RunningWorkflow {
 
         let total_items = items.len();
 
-        //TODO: option for reverse and random order iterations
+        match for_each_step.order {
+            IterationOrder::Default => {}
+            IterationOrder::Reversed => {
+                items.reverse();
+            }
+            IterationOrder::Random => {
+                let mut rng = rand::rng();
+                items.shuffle(&mut rng);
+            }
+        }
+
         for (index, item) in items.into_iter().enumerate() {
             self.logger.lock().await.info(&format!(
                 "Starting iteration {} of {}",
