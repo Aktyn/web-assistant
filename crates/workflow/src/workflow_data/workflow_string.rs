@@ -45,12 +45,12 @@ impl WorkflowString {
             let group = &self.raw_value[result.start()..result.end()];
             if let Some(captures) = INNER_GROUP_VALUE_REGEX.captures(group) {
                 let value = &captures["value"];
-                if !value.is_empty() {
-                    let parsed_value = parse_special_value(value, workflow).await?;
-                    parsed = parsed.replace(group, &parsed_value);
-                } else {
+                if value.is_empty() {
                     // Empty placeholder like {{ }} — replace with empty string
                     parsed = parsed.replace(group, "");
+                } else {
+                    let parsed_value = parse_special_value(value, workflow).await?;
+                    parsed = parsed.replace(group, &parsed_value);
                 }
             }
         }
@@ -79,7 +79,7 @@ async fn parse_special_value(special_value: &str, workflow: &RunningWorkflow) ->
                 .trim();
             let item = context.get_item(context_name);
             if let Some(item) = item {
-                let props: Vec<&str> = segments.map(|s| s.trim()).collect();
+                let props: Vec<&str> = segments.map(str::trim).collect();
                 let value = get_context_item_value(item, &props);
                 Ok(value)
             } else {
@@ -92,7 +92,7 @@ async fn parse_special_value(special_value: &str, workflow: &RunningWorkflow) ->
             let url = browser.get_url().unwrap_or_default();
 
             if !url.is_empty()
-                && let Some(url_property) = segments.next().map(|s| s.trim())
+                && let Some(url_property) = segments.next().map(str::trim)
                 && let Ok(url_object) = url::Url::parse(&url)
             {
                 let property_value = match url_property {
