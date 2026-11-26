@@ -128,6 +128,7 @@ mod tests {
                 source_file: PathBuf::from("/tmp/data.json"),
             }),
             preserve_context: false,
+            order: IterationOrder::default(),
             steps: vec![],
             on_error: None,
         };
@@ -160,6 +161,7 @@ mod tests {
                 source_file: PathBuf::from("data.json"),
             }),
             preserve_context: true,
+            order: IterationOrder::Reversed,
             steps: vec![],
             on_error: Some(vec![]),
         };
@@ -167,5 +169,6 @@ mod tests {
         let parsed: ForEachStep = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.context_name, "item");
         assert!(parsed.preserve_context);
+        assert!(matches!(parsed.order, IterationOrder::Reversed));
     }
 }
