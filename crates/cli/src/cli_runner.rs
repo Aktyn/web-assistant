@@ -1,28 +1,24 @@
+mod explain_config;
+mod explain_workflow;
+mod init_config;
+
 use anyhow::{Context, Result, bail};
-use std::{
-    io::{Write as _, stdout},
-    path::PathBuf,
-};
 
 use crate::cli::{Cli, Commands};
-use config::{Config, create_default_config};
-use utils::logger::print_lines;
-use workflow::workflow_data::{
-    WorkflowData, WorkflowProcedure, step as workflow_step, workflow_string::WorkflowString,
-};
-use workflow::{self, WorkflowState};
-
 use Commands::{ExplainConfig, ExplainWorkflow, InitConfig, Run};
+use workflow::{self, WorkflowState};
 
 impl Cli {
     /// Returns true if any cli command was ran
     pub async fn run(&self) -> Result<bool> {
         match &self.command {
             Some(Run { workflow }) => self.run_workflow(workflow).await?,
-            Some(InitConfig { output_path }) => init_config(output_path.as_ref()).await?,
-            Some(ExplainConfig {}) => explain_config()?,
+            Some(InitConfig { output_path }) => {
+                init_config::init_config(output_path.as_ref()).await?;
+            }
+            Some(ExplainConfig {}) => explain_config::explain_config()?,
             Some(ExplainWorkflow { include_example }) => {
-                explain_workflow(include_example.unwrap_or(false))?;
+                explain_workflow::explain_workflow(include_example.unwrap_or(false))?;
             }
             None => return Ok(false),
         }
@@ -61,171 +57,21 @@ impl Cli {
     }
 }
 
-/// Creates a default Config with headless browser enabled for testing.
-#[allow(dead_code)]
-pub(crate) fn test_headless_config() -> Config {
-    Config {
-        browser: config::BrowserConfig {
-            headless: true,
-            ..Default::default()
-        },
-        ..Config::default()
-    }
-}
-
-async fn init_config(output_path: Option<&PathBuf>) -> Result<()> {
-    let mut logger = utils::logger::CliLogger::default();
-    logger.info("Initializing config...");
-
-    let config_path = create_default_config(output_path.map(PathBuf::as_path)).await?;
-
-    let absolute_path = config_path
-        .canonicalize()
-        .unwrap_or_else(|_| config_path.to_path_buf());
-
-    logger.success(&format!(
-        "The default config was successfully saved to: {}",
-        absolute_path.display()
-    ));
-
-    logger.reset();
-
-    Ok(())
-}
-
-fn explain_config() -> Result<()> {
-    print_struct_docs!(Config)?;
-    print_lines(1);
-    print_struct_docs!(config::HexColorsConfig, 2)?;
-    print_lines(1);
-    print_struct_docs!(config::BrowserConfig, 2)?;
-    print_lines(1);
-    print_struct_docs!(config::AgentConfig, 2)?;
-    print_lines(1);
-
-    Ok(())
-}
-
-fn explain_workflow(include_example: bool) -> Result<()> {
-    print_struct_docs!(WorkflowData)?;
-    print_lines(1);
-    print_struct_docs!(WorkflowProcedure, 2)?;
-    print_lines(1);
-
-    print_struct_docs!(workflow_step::PageActionStep, 2)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::page_action::NavigateAction, 4)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::page_action::InputAction, 4)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::page_action::ClickAction, 4)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::page_action::EvaluateAction, 4)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::AgentStep, 2)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::ConditionStep, 2)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::condition::MatchRegexCondition, 4)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::condition::TruthyCondition, 4)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::condition::EqualCondition, 4)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::condition::HasElementCondition, 4)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::ForEachStep, 2)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::iteration::FileIterator, 4)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::RunProcedureStep, 2)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::UpdateContextStep, 2)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::SystemActionStep, 2)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::system_action::NotifyAction, 4)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::system_action::OpenUrlAction, 4)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::WaitStep, 2)?;
-    print_lines(1);
-    print_struct_docs!(workflow_step::AbortStep, 2)?;
-
-    if include_example {
-        print_lines(2);
-
-        let example: WorkflowData = WorkflowData {
-            name: String::from("Example"),
-            description: Some(String::from("Example workflow description")),
-            procedures: vec![
-                //TODO: Add example procedure
-            ],
-            steps: vec![
-                workflow_step::WorkflowStepType::PageAction(workflow_step::PageActionStep {
-                    page_index: 0,
-                    action: workflow_step::PageAction::Navigate(
-                        workflow_step::page_action::NavigateAction {
-                            url: WorkflowString::from("https://github.com/Aktyn/web-assistant"),
-                        },
-                    ),
-                }),
-                workflow_step::WorkflowStepType::Agent(workflow_step::AgentStep {
-                    task: WorkflowString::from(
-                        "Star this repository and print total number of stars the repository has.",
-                    ),
-                    max_steps: 16,
-                    history_output: Some(PathBuf::from("./repo-stars-agent-run.json")),
-                    prompt_mode: agent::PromptMode::Standard,
-                }),
-            ],
-        };
-        let json = serde_json::to_string_pretty(&example)?.replace('\n', "\r\n");
-        let output = format!("Example workflow json:\r\n{json}");
-        stdout().write_all(output.as_bytes()).ok();
-    } else {
-        print_lines(1);
-        stdout()
-            .write_all(b"\nUse --include-example argument to print an example workflow file\n")
-            .ok();
-    }
-
-    Ok(())
-}
-
-/// Convenience macro that builds a [`StructDocs`] from a documented type's
-/// `DOCS`, `FIELD_NAMES`, and `FIELD_DOCS` associated constants and passes it
-/// to [`print_struct`].
-///
-/// # Examples
-///
-/// ```ignore
-/// print_struct_docs!(Config);
-/// print_struct_docs!(config::HexColorsConfig, 2);
-/// ```
-macro_rules! print_struct_docs {
-    ($struct_type:ty) => {
-        tui::inline::print_struct(&tui::inline::StructDocs {
-            description: <$struct_type as documented::Documented>::DOCS,
-            field_names: <$struct_type as documented::DocumentedFields>::FIELD_NAMES,
-            field_docs: <$struct_type as documented::DocumentedFields>::FIELD_DOCS,
-            ..Default::default()
-        })
-    };
-    ($struct_type:ty, $margin_left:expr) => {
-        tui::inline::print_struct(&tui::inline::StructDocs {
-            description: <$struct_type as documented::Documented>::DOCS,
-            field_names: <$struct_type as documented::DocumentedFields>::FIELD_NAMES,
-            field_docs: <$struct_type as documented::DocumentedFields>::FIELD_DOCS,
-            margin_left: Some($margin_left),
-        })
-    };
-}
-use print_struct_docs;
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Creates a default Config with headless browser enabled for testing.
+    #[allow(dead_code)]
+    pub(crate) fn test_headless_config() -> Config {
+        Config {
+            browser: config::BrowserConfig {
+                headless: true,
+                ..Default::default()
+            },
+            ..Config::default()
+        }
+    }
 
     #[tokio::test]
     async fn test_init_config_creates_file() {
@@ -273,5 +119,63 @@ mod tests {
             config.workflows_directory,
             Config::default().workflows_directory
         );
+    }
+
+    #[test]
+    fn test_explain_workflow_example_json_roundtrip() {
+        // Verify the example JSON produced by explain_workflow(true) can be
+        // deserialized back into WorkflowData
+        let example_json = serde_json::to_string_pretty(&{
+            let data = workflow::workflow_data::WorkflowData {
+                name: String::from("Complete Example"),
+                description: Some(String::from("A comprehensive example workflow demonstrating all step types and their parameters")),
+                procedures: vec![
+                    workflow::workflow_data::WorkflowProcedure {
+                        name: String::from("main"),
+                        steps: vec![
+                            workflow::workflow_data::step::WorkflowStepType::PageAction(
+                                workflow::workflow_data::step::PageActionStep {
+                                    page_index: 0,
+                                    action: workflow::workflow_data::step::PageAction::Navigate(
+                                        workflow::workflow_data::step::page_action::NavigateAction {
+                                            url: "https://example.com".into(),
+                                        },
+                                    ),
+                                },
+                            ),
+                        ],
+                    },
+                ],
+                steps: vec![
+                    workflow::workflow_data::step::WorkflowStepType::PageAction(
+                        workflow::workflow_data::step::PageActionStep {
+                            page_index: 0,
+                            action: workflow::workflow_data::step::PageAction::Navigate(
+                                workflow::workflow_data::step::page_action::NavigateAction {
+                                    url: "https://github.com".into(),
+                                },
+                            ),
+                        },
+                    ),
+                ],
+            };
+            data
+        })
+        .unwrap();
+
+        // This should not panic
+        let deserialized: workflow::workflow_data::WorkflowData =
+            serde_json::from_str(&example_json).expect("Failed to deserialize example JSON");
+
+        assert_eq!(deserialized.name, "Complete Example");
+        assert_eq!(
+            deserialized.description,
+            Some(String::from(
+                "A comprehensive example workflow demonstrating all step types and their parameters"
+            ))
+        );
+        assert_eq!(deserialized.procedures.len(), 1);
+        assert_eq!(deserialized.procedures[0].name, "main");
+        assert_eq!(deserialized.steps.len(), 1);
     }
 }
