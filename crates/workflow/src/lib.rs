@@ -22,7 +22,10 @@ mod tests {
     #[test]
     fn test_workflow_loader_exports() {
         // These functions exist and are accessible
-        fn _check_load_from_file(_: &std::path::Path) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<Workflow>> + Send>> {
+        fn _check_load_from_file(
+            _: &std::path::Path,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<Workflow>> + Send>>
+        {
             Box::pin(async { Ok(Workflow::new_draft()) })
         }
         let _ = _check_load_from_file;

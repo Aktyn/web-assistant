@@ -108,8 +108,7 @@ mod tests {
 
     #[test]
     fn test_for_each_step_preserve_context_true() {
-        let json =
-            r#"{"contextName":"i","items":{"type":"file","sourceFile":"f"},"steps":[],"preserveContext":true}"#;
+        let json = r#"{"contextName":"i","items":{"type":"file","sourceFile":"f"},"steps":[],"preserveContext":true}"#;
         let step: ForEachStep = serde_json::from_str(json).unwrap();
         assert!(step.preserve_context);
     }

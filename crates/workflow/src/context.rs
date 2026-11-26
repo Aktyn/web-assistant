@@ -93,9 +93,9 @@ pub(crate) trait WorkflowContextItem: std::fmt::Debug {
 
 #[cfg(test)]
 mod tests {
+    use super::WorkflowContextItem;
     use super::*;
     use crate::context::basic_context_item::BasicContextItem;
-    use super::WorkflowContextItem;
     use crate::context::utils::PropertyPath;
 
     #[test]
@@ -156,7 +156,12 @@ mod tests {
         let path: PropertyPath = vec!["key"];
         let result = ctx.update_item_value("missing", &path, &serde_json::json!("val"));
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No context is set"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No context is set")
+        );
     }
 
     #[test]
@@ -172,10 +177,7 @@ mod tests {
             "level1": {"level2": {"level3": "deep_value"}}
         }));
         let path: PropertyPath = vec!["level1", "level2", "level3"];
-        assert_eq!(
-            item.get_value(&path),
-            Some(serde_json::json!("deep_value"))
-        );
+        assert_eq!(item.get_value(&path), Some(serde_json::json!("deep_value")));
         let path2: PropertyPath = vec!["level1", "nonexistent"];
         // Missing keys return Some(Null), not None
         assert_eq!(item.get_value(&path2), Some(serde_json::Value::Null));

@@ -77,9 +77,21 @@ mod tests {
         let result = read_json_files(tmp.path()).await.unwrap();
         // Only .json files should be returned (not .txt or directories)
         let names: Vec<_> = result.iter().map(|e| e.file_name()).collect();
-        assert!(names.iter().any(|n| n.to_string_lossy().as_bytes() == b"a.json"));
-        assert!(!names.iter().any(|n| n.to_string_lossy().as_bytes() == b"b.jsonc"));
-        assert!(!names.iter().any(|n| n.to_string_lossy().as_bytes() == b"c.txt"));
+        assert!(
+            names
+                .iter()
+                .any(|n| n.to_string_lossy().as_bytes() == b"a.json")
+        );
+        assert!(
+            !names
+                .iter()
+                .any(|n| n.to_string_lossy().as_bytes() == b"b.jsonc")
+        );
+        assert!(
+            !names
+                .iter()
+                .any(|n| n.to_string_lossy().as_bytes() == b"c.txt")
+        );
     }
 
     #[test]

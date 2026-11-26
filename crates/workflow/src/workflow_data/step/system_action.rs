@@ -74,7 +74,9 @@ mod tests {
         let json = serde_json::to_string(&action).unwrap();
         let parsed: SystemAction = serde_json::from_str(&json).unwrap();
         match &parsed {
-            SystemAction::Notify(n) => assert_eq!(n.message, WorkflowString::new("Test notification")),
+            SystemAction::Notify(n) => {
+                assert_eq!(n.message, WorkflowString::new("Test notification"))
+            }
             _ => panic!("Expected Notify"),
         }
     }

@@ -71,10 +71,12 @@ async fn parse_special_value(special_value: &str, workflow: &RunningWorkflow) ->
         "context" => {
             let context = workflow.context.lock().await;
 
-
-            let context_name = segments.next().with_context(|| {
-                format!("No context name found in the special value: {special_value}")
-            })?.trim();
+            let context_name = segments
+                .next()
+                .with_context(|| {
+                    format!("No context name found in the special value: {special_value}")
+                })?
+                .trim();
             let item = context.get_item(context_name);
             if let Some(item) = item {
                 let props: Vec<&str> = segments.map(|s| s.trim()).collect();

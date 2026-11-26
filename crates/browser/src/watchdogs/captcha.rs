@@ -419,8 +419,6 @@ mod tests {
         assert!(roundtrip.waited);
     }
 
-    
-
     #[test]
     fn test_handle_captcha_solver_finished_sets_result() {
         let wd = CaptchaWatchdog::new_test();

@@ -33,7 +33,6 @@ mod tests {
     use crate::workflow_runtime::RunningWorkflow;
     use config::Config;
 
-
     fn default_config() -> Config {
         Config::default()
     }

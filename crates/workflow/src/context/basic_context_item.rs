@@ -26,8 +26,8 @@ impl BasicContextItem {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::WorkflowContextItem;
+    use super::*;
     use crate::context::utils::PropertyPath;
 
     #[test]
@@ -55,17 +55,17 @@ mod tests {
         let mut item = BasicContextItem::new(serde_json::json!({"user": {"name": "old"}}));
         let path: PropertyPath = vec!["user", "name"];
         let _result = item.update(&path, &serde_json::json!("new")).unwrap();
-        assert_eq!(item.get_data(), &serde_json::json!({"user": {"name": "new"}}));
+        assert_eq!(
+            item.get_data(),
+            &serde_json::json!({"user": {"name": "new"}})
+        );
     }
 
     #[test]
     fn test_basic_context_item_get_value_by_path() {
         let item = BasicContextItem::new(serde_json::json!({"a": {"b": {"c": 42}}}));
         let path: PropertyPath = vec!["a", "b", "c"];
-        assert_eq!(
-            item.get_value(&path),
-            Some(serde_json::json!(42))
-        );
+        assert_eq!(item.get_value(&path), Some(serde_json::json!(42)));
         let path2: PropertyPath = vec!["a", "b", "z"];
         // Missing keys return Some(Null), not None
         assert_eq!(item.get_value(&path2), Some(serde_json::Value::Null));
