@@ -1,3 +1,4 @@
+pub(super) mod config_view;
 pub(super) mod empty;
 pub(super) mod no_workflows;
 pub(super) mod terminal_size_error;
@@ -14,6 +15,8 @@ use super::common;
 pub(super) enum ViewAction {
     QuitApp,
     CreateWorkflow,
+    OpenConfig,
+    GoToWorkflows,
 }
 
 pub(super) trait View {

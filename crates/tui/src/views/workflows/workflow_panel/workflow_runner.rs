@@ -262,39 +262,44 @@ impl WorkflowRunner {
 
     /// Process any pending updates from the background task
     fn process_updates(&mut self) {
+        let mut updates = Vec::new();
         if let Some(rx) = &mut self.rx {
             while let Ok(update) = rx.try_recv() {
-                match update {
-                    StepUpdate::StepStarted { index } => {
-                        if index < self.steps.len() {
-                            self.steps[index].status = StepStatus::Running;
-                            self.steps[index].start_time = Some(Instant::now());
-                            self.current_step = Some(index);
-                        }
+                updates.push(update);
+            }
+        }
+
+        for update in updates {
+            match update {
+                StepUpdate::StepStarted { index } => {
+                    if index < self.steps.len() {
+                        self.steps[index].status = StepStatus::Running;
+                        self.steps[index].start_time = Some(Instant::now());
+                        self.current_step = Some(index);
                     }
-                    StepUpdate::StepCompleted { index } => {
-                        if index < self.steps.len() {
-                            self.steps[index].status = StepStatus::Completed;
-                            self.steps[index].end_time = Some(Instant::now());
-                        }
+                }
+                StepUpdate::StepCompleted { index } => {
+                    if index < self.steps.len() {
+                        self.steps[index].status = StepStatus::Completed;
+                        self.steps[index].end_time = Some(Instant::now());
                     }
-                    StepUpdate::StepFailed { index, error } => {
-                        if index < self.steps.len() {
-                            self.steps[index].status = StepStatus::Failed(error);
-                            self.steps[index].end_time = Some(Instant::now());
-                        }
+                }
+                StepUpdate::StepFailed { index, error } => {
+                    if index < self.steps.len() {
+                        self.steps[index].status = StepStatus::Failed(error);
+                        self.steps[index].end_time = Some(Instant::now());
                     }
-                    StepUpdate::WorkflowCompleted { success, error } => {
-                        self.is_running = false;
-                        self.is_completed = true;
-                        if success {
-                            self.mark_as_successful();
-                        } else {
-                            self.error = error;
-                        }
-                        self.runner_handle = None;
-                        self.rx = None;
+                }
+                StepUpdate::WorkflowCompleted { success, error } => {
+                    self.is_running = false;
+                    self.is_completed = true;
+                    if success {
+                        self.mark_as_successful();
+                    } else {
+                        self.error = error;
                     }
+                    self.runner_handle = None;
+                    self.rx = None;
                 }
             }
         }
