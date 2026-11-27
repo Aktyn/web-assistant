@@ -6,4 +6,4 @@ mod text_field;
 pub(crate) use button::{Button, ButtonData};
 pub(crate) use error_alert::ErrorAlert;
 pub(crate) use separator::Separator;
-pub(crate) use text_field::TextField;
+pub(crate) use text_field::{TextField, EditableTextField};

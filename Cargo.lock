@@ -3623,6 +3623,7 @@ dependencies = [
  "crossterm",
  "log",
  "ratatui",
+ "serde_json",
  "tempfile",
  "tokio",
  "tui-logger",

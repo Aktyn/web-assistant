@@ -13,6 +13,7 @@ use tui_logger::TuiLoggerWidget;
 
 use crate::common::{consts, init_palette, macros, palette};
 use crate::views::empty::EmptyView;
+use crate::views::config_view::ConfigView;
 use crate::views::no_workflows::NoWorkflowsView;
 use crate::views::terminal_size_error::TerminalSizeErrorView;
 use crate::views::workflows::WorkflowView;
@@ -154,6 +155,12 @@ impl TuiApp {
                 let mut workflow_view = WorkflowView::new(self.workflows.clone());
                 workflow_view.create_workflow();
                 self.view = Box::new(workflow_view);
+            }
+            Some(ViewAction::OpenConfig) => {
+                self.view = Box::new(ConfigView::new(self.config.clone()));
+            }
+            Some(ViewAction::GoToWorkflows) => {
+                self.go_to_starting_view();
             }
             None => (),
         }
@@ -329,7 +336,7 @@ mod tests {
         let config = empty_config();
         let mut app = TuiApp::new(config).await;
         app.is_running = true;
-        let no_wf = no_workflows_view_with_action(&app.config, 1); // index 1 → QuitApp
+        let no_wf = no_workflows_view_with_action(&app.config, 2); // index 2 → QuitApp
         app.view = Box::new(no_wf);
         app.post_update();
         assert!(!app.is_running);

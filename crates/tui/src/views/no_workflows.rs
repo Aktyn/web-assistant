@@ -21,7 +21,7 @@ pub(crate) struct NoWorkflowsView {
     config: Arc<RwLock<Config>>,
     /// Used for navigating over option buttons
     list_state: ListState,
-    buttons: [ThisButtonData; 2],
+    buttons: [ThisButtonData; 3],
     pending_action: Option<ViewAction>,
 }
 
@@ -32,6 +32,7 @@ impl NoWorkflowsView {
             list_state: ListState::default(),
             buttons: [
                 ThisButtonData::new("Create new workflow", ViewAction::CreateWorkflow),
+                ThisButtonData::new("Manage config", ViewAction::OpenConfig),
                 ThisButtonData::new("Quit app", ViewAction::QuitApp),
             ],
             pending_action: None,
@@ -64,9 +65,9 @@ impl NoWorkflowsView {
         .centered();
         Paragraph::new(text).centered().render(info_area, buf);
 
-        let button_areas: [Rect; 2] = buttons_area
+        let button_areas: [Rect; 3] = buttons_area
             .centered_horizontally(Constraint::Max(64))
-            .layout(&Layout::horizontal([Ratio(1, 2); 2]));
+            .layout(&Layout::horizontal([Ratio(1, 3); 3]));
 
         assert!(
             button_areas.len() == self.buttons.len(),
@@ -160,6 +161,8 @@ mod tests {
         view.run_button_action(0);
         assert_eq!(view.pending_action, Some(ViewAction::CreateWorkflow));
         view.run_button_action(1);
+        assert_eq!(view.pending_action, Some(ViewAction::OpenConfig));
+        view.run_button_action(2);
         assert_eq!(view.pending_action, Some(ViewAction::QuitApp));
     }
 
