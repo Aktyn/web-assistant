@@ -12,17 +12,17 @@ use ratatui::{
         Constraint::{Fill, Length},
         Layout, Rect,
     },
-    style::{Color, Stylize as _, Style},
+    style::{Color, Style, Stylize as _},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget},
 };
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-use super::{WorkflowAction, WorkflowPanelModeView, WorkflowSelection};
-use super::super::super::common::widgets::{Button, ButtonData, Separator};
 use super::super::super::common::palette;
-use workflow::{Workflow, WorkflowState, SuccessfullWorkflow};
+use super::super::super::common::widgets::{Button, ButtonData, Separator};
+use super::{WorkflowAction, WorkflowPanelModeView, WorkflowSelection};
+use workflow::{SuccessfullWorkflow, Workflow, WorkflowState};
 
 /// The default config file path
 const DEFAULT_CONFIG_FILE: &str = "config.jsonc";
@@ -39,7 +39,7 @@ enum StepStatus {
 /// State for a running workflow step
 #[derive(Debug, Clone)]
 struct RunningStep {
-    index: usize,
+    // index: usize,
     description: String,
     status: StepStatus,
     start_time: Option<Instant>,
@@ -54,6 +54,7 @@ pub(crate) enum WorkflowRunnerAction {
 }
 
 /// The workflow runner handles executing workflows with live progress
+#[allow(clippy::struct_excessive_bools)]
 pub(crate) struct WorkflowRunner {
     workflows: Arc<RwLock<Vec<Workflow>>>,
     workflow_index: usize,
@@ -87,10 +88,20 @@ pub(crate) struct WorkflowRunner {
 /// Updates sent from the background runner task
 #[derive(Debug, Clone)]
 enum StepUpdate {
-    StepStarted { index: usize },
-    StepCompleted { index: usize },
-    StepFailed { index: usize, error: String },
-    WorkflowCompleted { success: bool, error: Option<String> },
+    StepStarted {
+        index: usize,
+    },
+    StepCompleted {
+        index: usize,
+    },
+    StepFailed {
+        index: usize,
+        error: String,
+    },
+    WorkflowCompleted {
+        success: bool,
+        error: Option<String>,
+    },
 }
 
 impl WorkflowRunner {
@@ -108,9 +119,9 @@ impl WorkflowRunner {
 
         let running_steps: Vec<RunningStep> = steps
             .iter()
-            .enumerate()
-            .map(|(i, step)| RunningStep {
-                index: i,
+            // .enumerate()
+            .map(|step| RunningStep {
+                // index: i,
                 description: format_step_description(step),
                 status: StepStatus::Pending,
                 start_time: None,
@@ -158,7 +169,7 @@ impl WorkflowRunner {
         };
 
         let _workflows = self.workflows.clone();
-        let _workflow_index = self.workflow_index;
+        // let _workflow_index = self.workflow_index;
         let _workflow_file = self.workflow_file.clone();
 
         let (tx, rx) = mpsc::unbounded_channel();
@@ -245,9 +256,10 @@ impl WorkflowRunner {
                 file_path: self.workflow_file.clone(),
             };
             if let Ok(mut wfs) = self.workflows.write()
-                && let Some(wf) = wfs.get_mut(self.workflow_index) {
-                    *wf = new_workflow;
-                }
+                && let Some(wf) = wfs.get_mut(self.workflow_index)
+            {
+                *wf = new_workflow;
+            }
         }
     }
 
@@ -323,9 +335,10 @@ impl WorkflowRunner {
                 }
                 (KeyCode::Enter, _) => {
                     if let Some(selected) = self.buttons_list_state.selected()
-                        && let Some(button_data) = self.buttons.get(selected) {
-                            return Some(button_data.action.clone());
-                        }
+                        && let Some(button_data) = self.buttons.get(selected)
+                    {
+                        return Some(button_data.action.clone());
+                    }
                     None
                 }
                 (KeyCode::Esc, _) => Some(WorkflowRunnerAction::BackToPreview),
@@ -349,6 +362,7 @@ impl WorkflowRunner {
 }
 
 impl WorkflowPanelModeView for WorkflowRunner {
+    #[allow(clippy::too_many_lines)]
     fn render(&self, _selection: &WorkflowSelection, area: Rect, buf: &mut Buffer) {
         // Render workflow info header
         let [header_area, separator, list_area, buttons_area] = area.layout(&Layout::vertical([
@@ -374,7 +388,11 @@ impl WorkflowPanelModeView for WorkflowRunner {
         };
 
         let elapsed = if self.is_running || self.is_completed || self.is_stopped {
-            format!(" ({:02}:{:02})", self.elapsed_time.as_secs() / 60, self.elapsed_time.as_secs() % 60)
+            format!(
+                " ({:02}:{:02})",
+                self.elapsed_time.as_secs() / 60,
+                self.elapsed_time.as_secs() % 60
+            )
         } else {
             String::new()
         };
@@ -386,13 +404,14 @@ impl WorkflowPanelModeView for WorkflowRunner {
                 status_text,
                 Span::raw(elapsed),
             ]),
-            Line::from(Span::raw(
-                if let Some(file) = &self.workflow_file {
+            Line::from(
+                Span::raw(if let Some(file) = &self.workflow_file {
                     format!("File: {}", file.display())
                 } else {
                     "Draft workflow".to_string()
-                }
-            ).style(palette().muted_foreground)),
+                })
+                .style(palette().muted_foreground),
+            ),
         ]);
         header.render(header_area, buf);
 
@@ -445,25 +464,28 @@ impl WorkflowPanelModeView for WorkflowRunner {
             })
             .collect();
 
-        let list = List::new(items)
-            .style(palette().style)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(ratatui::widgets::BorderType::Rounded)
-                    .border_style(if self.focus_buttons {
-                        palette().border
-                    } else {
-                        palette().accent
-                    })
-                    .title(if self.is_running { " Steps (running) " } else { " Steps " }),
-            );
+        let list = List::new(items).style(palette().style).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(ratatui::widgets::BorderType::Rounded)
+                .border_style(if self.focus_buttons {
+                    palette().border
+                } else {
+                    palette().accent
+                })
+                .title(if self.is_running {
+                    " Steps (running) "
+                } else {
+                    " Steps "
+                }),
+        );
 
         StatefulWidget::render(list, list_area, buf, &mut self.steps_list_state.clone());
 
         // Error message if any
         if let Some(error) = &self.error {
-            let [_list_area2, error_area] = list_area.layout(&Layout::vertical([Fill(1), Length(3)]));
+            let [_list_area2, error_area] =
+                list_area.layout(&Layout::vertical([Fill(1), Length(3)]));
             let error_para = Paragraph::new(vec![
                 Line::from("Error:".bold().fg(palette().error_foreground)),
                 Line::from(Span::styled(error, palette().error_foreground)),
@@ -602,22 +624,32 @@ fn format_page_action(action: &workflow::workflow_data::step::PageAction) -> Str
         workflow::workflow_data::step::PageAction::Navigate(a) => format!("navigate -> {}", a.url),
         workflow::workflow_data::step::PageAction::Input(a) => format!("input -> {}", a.selector),
         workflow::workflow_data::step::PageAction::Click(a) => format!("click -> {}", a.selector),
-        workflow::workflow_data::step::PageAction::Evaluate(a) => format!("evaluate -> {}", a.script),
+        workflow::workflow_data::step::PageAction::Evaluate(a) => {
+            format!("evaluate -> {}", a.script)
+        }
     }
 }
 
 fn format_system_action(action: &workflow::workflow_data::step::SystemAction) -> String {
     match action {
         workflow::workflow_data::step::SystemAction::OpenUrl(a) => format!("open-url -> {}", a.url),
-        workflow::workflow_data::step::SystemAction::Notify(a) => format!("notify -> {}", a.message),
+        workflow::workflow_data::step::SystemAction::Notify(a) => {
+            format!("notify -> {}", a.message)
+        }
     }
 }
 
 fn format_condition(condition: &workflow::workflow_data::step::Condition) -> String {
     match condition {
-        workflow::workflow_data::step::Condition::MatchRegex(a) => format!("match-regex -> {}", a.pattern),
+        workflow::workflow_data::step::Condition::MatchRegex(a) => {
+            format!("match-regex -> {}", a.pattern)
+        }
         workflow::workflow_data::step::Condition::Truthy(a) => format!("truthy -> {}", a.value),
-        workflow::workflow_data::step::Condition::Equal(a) => format!("equal -> {} == {}", a.left, a.right),
-        workflow::workflow_data::step::Condition::HasElement(a) => format!("has-element -> {}", a.selector),
+        workflow::workflow_data::step::Condition::Equal(a) => {
+            format!("equal -> {} == {}", a.left, a.right)
+        }
+        workflow::workflow_data::step::Condition::HasElement(a) => {
+            format!("has-element -> {}", a.selector)
+        }
     }
 }

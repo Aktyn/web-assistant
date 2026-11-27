@@ -84,10 +84,10 @@ impl EditableTextField {
         &self.value
     }
 
-    pub(crate) fn set_value(&mut self, value: String) {
-        self.value = value;
-        self.cursor_position = self.value.len().min(self.cursor_position);
-    }
+    // pub(crate) fn set_value(&mut self, value: String) {
+    //     self.value = value;
+    //     self.cursor_position = self.value.len().min(self.cursor_position);
+    // }
 
     /// Insert a character at the cursor position
     pub(crate) fn insert_char(&mut self, c: char) {

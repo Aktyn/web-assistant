@@ -36,6 +36,7 @@ enum WorkflowAction {
     ConfirmDelete,
 }
 
+#[allow(clippy::large_enum_variant)] //TODO: optimize this enum
 pub(super) enum WorkflowPanelMode {
     Preview(WorkflowPreview),
     Edit(WorkflowEditor),
@@ -145,13 +146,13 @@ impl WorkflowPanel {
 
                     if is_draft {
                         let editor = WorkflowEditor::new(
-                            self.workflows.clone(),
-                            index,
+                            // self.workflows.clone(),
+                            // index,
                             match &workflow.state {
                                 WorkflowState::Valid(data) => Some(data.clone()),
                                 _ => None,
                             },
-                            workflow.file_path.clone(),
+                            // workflow.file_path.clone(),
                         );
                         self.mode = WorkflowPanelMode::Edit(editor);
                     }
@@ -242,7 +243,7 @@ impl WorkflowPanel {
                             WorkflowState::Running(running, _) => Some(running.data.clone()),
                             WorkflowState::FailedRun(failed) => Some(failed.data.clone()),
                             WorkflowState::SuccessfulRun(success) => Some(success.data.clone()),
-                            _ => None,
+                            WorkflowState::Invalid(..) => None,
                         }
                     } else {
                         None
@@ -250,12 +251,12 @@ impl WorkflowPanel {
                 } else {
                     None
                 };
-                
+
                 let editor = WorkflowEditor::new(
-                    self.workflows.clone(),
-                    selected_workflow.index,
+                    // self.workflows.clone(),
+                    // selected_workflow.index,
                     workflow_data,
-                    selected_workflow.workflow_file.clone(),
+                    // selected_workflow.workflow_file.clone(),
                 );
                 self.mode = WorkflowPanelMode::Edit(editor);
             }
@@ -285,7 +286,7 @@ impl WorkflowPanel {
                 } else {
                     None
                 };
-                
+
                 let runner = WorkflowRunner::new(
                     self.workflows.clone(),
                     selected_workflow.index,
@@ -597,12 +598,7 @@ mod tests {
             // Already in edit or preview, skip
         }
         // The proper way: set mode to Edit and verify Esc returns to Preview.
-        let editor = WorkflowEditor::new(
-            workflows,
-            0,
-            None,
-            None,
-        );
+        let editor = WorkflowEditor::new(workflows, 0, None, None);
         panel.mode = WorkflowPanelMode::Edit(editor);
         let esc_event = Event::Key(KeyCode::Esc.into());
         let handled = panel.handle_event(&esc_event, unsafe { &mut *no_read_term() });
@@ -616,12 +612,7 @@ mod tests {
         let mut panel = WorkflowPanel::new(workflows.clone());
         panel.update(Some(0));
         // Simulate being in Run mode and pressing Esc.
-        let runner = WorkflowRunner::new(
-            workflows,
-            0,
-            None,
-            None,
-        );
+        let runner = WorkflowRunner::new(workflows, 0, None, None);
         panel.mode = WorkflowPanelMode::Run(runner);
         let esc_event = Event::Key(KeyCode::Esc.into());
         let handled = panel.handle_event(&esc_event, unsafe { &mut *no_read_term() });
@@ -634,12 +625,7 @@ mod tests {
         let workflows = workflows_with_one("Test");
         let mut panel = WorkflowPanel::new(workflows.clone());
         panel.update(Some(0));
-        panel.mode = WorkflowPanelMode::Edit(WorkflowEditor::new(
-            workflows,
-            0,
-            None,
-            None,
-        ));
+        panel.mode = WorkflowPanelMode::Edit(WorkflowEditor::new(workflows, 0, None, None));
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
         panel.draw(area, &mut buf, false);
@@ -651,12 +637,7 @@ mod tests {
         let workflows = workflows_with_one("Test");
         let mut panel = WorkflowPanel::new(workflows.clone());
         panel.update(Some(0));
-        let runner = WorkflowRunner::new(
-            workflows,
-            0,
-            None,
-            None,
-        );
+        let runner = WorkflowRunner::new(workflows, 0, None, None);
         panel.mode = WorkflowPanelMode::Run(runner);
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);

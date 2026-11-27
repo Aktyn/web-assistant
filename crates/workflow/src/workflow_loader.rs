@@ -1,4 +1,4 @@
-use anyhow::{Context as _, Result, anyhow};
+use anyhow::{Context as _, Result, anyhow, bail};
 use std::path::{Path, PathBuf};
 
 use crate::workflow::{Workflow, WorkflowState};
@@ -63,9 +63,30 @@ pub async fn load_by_name_or_path(
         )
     });
 
-    matching_workflow.context(format!(
-        "No workflow found matching name \"{workflow_name_or_path}\""
-    ))
+    if let Some(matching) = matching_workflow {
+        Ok(matching)
+    } else {
+        let mut workflow_names = load_from_directory(&config.workflows_directory)
+            .await?
+            .iter()
+            .filter_map(|workflow| {
+                if let WorkflowState::Valid(data) = &workflow.state {
+                    Some(format!("- {}", data.name.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        if workflow_names.is_empty() {
+            workflow_names = String::from("No workflows found");
+        }
+
+        bail!(
+            "No workflow found matching name \"{workflow_name_or_path}\"\nAvailable workflows:\n{workflow_names}"
+        )
+    }
 }
 
 /// # Errors

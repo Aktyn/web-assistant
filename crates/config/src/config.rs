@@ -22,7 +22,8 @@ use crate::colors_config::HexColorsConfig;
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct Config {
     /// Path to directory containing workflow files.
-    /// Can be omitted during inline run if workflow is provided as file path
+    /// Absolute or relative to the config file.
+    /// Can be omitted during inline run if workflow is provided as file path.
     #[serde(
         default = "get_default_workflows_directory",
         alias = "workflowsDirectory",
@@ -64,8 +65,14 @@ impl Config {
             .await
             .context("Cannot read config file")?;
 
-        let parsed = parse_to_serde_value(config_content.as_str(), &ParseOptions::default())
+        let mut parsed: Config = parse_to_serde_value(config_content.as_str(), &ParseOptions::default())
             .with_context(|| format!("Cannot parse config file: \"{}\"", config_path.display()))?;
+
+        // If the workflows directory is relative, make it relative to the config file
+        if parsed.workflows_directory.is_relative() {
+            parsed.workflows_directory = config_path.parent().unwrap_or(Path::new(".")).join(parsed.workflows_directory);
+        }
+
         Ok(parsed)
     }
 }

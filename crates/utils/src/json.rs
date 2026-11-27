@@ -16,7 +16,9 @@ pub async fn read_json_files(directory_path: &Path) -> Result<Vec<DirEntry>> {
     loop {
         match dir.next_entry().await {
             Ok(Some(entry)) => {
-                if filter_entry_by_extension(&entry, "json").await {
+                if filter_entry_by_extension(&entry, "json").await
+                    || filter_entry_by_extension(&entry, "jsonc").await
+                {
                     entries.push(entry);
                 }
             }

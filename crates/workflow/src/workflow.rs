@@ -41,10 +41,12 @@ impl Workflow {
                 state: WorkflowState::Valid(data),
                 file_path: Some(json.path),
             },
-            Err(e) => Workflow {
-                state: WorkflowState::Invalid(e),
-                file_path: Some(json.path),
-            },
+            Err(e) => {
+                Workflow {
+                    state: WorkflowState::Invalid(e),
+                    file_path: Some(json.path),
+                }
+            }
         }
     }
 

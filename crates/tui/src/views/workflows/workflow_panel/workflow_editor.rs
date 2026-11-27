@@ -5,19 +5,17 @@ use ratatui::{
         Constraint::{Fill, Length, Ratio},
         Layout, Rect,
     },
-    style::{Style, Stylize as _},
+    style::Style,
     text::Line,
-    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget},
-};
-use std::{
-    path::PathBuf,
-    sync::{Arc, RwLock},
+    widgets::{
+        Block, BorderType, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget,
+    },
 };
 
-use super::super::super::common::widgets::{Button, ButtonData, EditableTextField, Separator};
 use super::super::super::common::palette;
+use super::super::super::common::widgets::{Button, ButtonData, EditableTextField, Separator};
 use super::{WorkflowAction, WorkflowPanelModeView, WorkflowSelection};
-use workflow::{Workflow, workflow_data::WorkflowData};
+use workflow::workflow_data::WorkflowData;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EditorFocus {
     Name,
@@ -27,7 +25,7 @@ enum EditorFocus {
 }
 
 impl EditorFocus {
-    fn next(&self) -> Self {
+    fn next(self) -> Self {
         match self {
             EditorFocus::Name => EditorFocus::Description,
             EditorFocus::Description => EditorFocus::StepsList,
@@ -36,7 +34,7 @@ impl EditorFocus {
         }
     }
 
-    fn prev(&self) -> Self {
+    fn prev(self) -> Self {
         match self {
             EditorFocus::Name => EditorFocus::Buttons,
             EditorFocus::Description => EditorFocus::Name,
@@ -55,21 +53,20 @@ pub(crate) enum WorkflowEditorAction {
 
 impl PartialEq for WorkflowEditorAction {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (WorkflowEditorAction::Cancel, WorkflowEditorAction::Cancel) => true,
-            // For Save, we just compare if both are Save, since WorkflowData doesn't derive PartialEq
-            (WorkflowEditorAction::Save(_), WorkflowEditorAction::Save(_)) => true,
-            _ => false,
-        }
+        matches!(
+            (self, other),
+            (WorkflowEditorAction::Cancel, WorkflowEditorAction::Cancel)
+                | (WorkflowEditorAction::Save(_), WorkflowEditorAction::Save(_))
+        )
     }
 }
 impl Eq for WorkflowEditorAction {}
 
 /// The main workflow editor
 pub(crate) struct WorkflowEditor {
-    workflows: Arc<RwLock<Vec<Workflow>>>,
-    workflow_index: usize,
-    workflow_file: Option<PathBuf>,
+    // workflows: Arc<RwLock<Vec<Workflow>>>,
+    // workflow_index: usize,
+    // workflow_file: Option<PathBuf>,
     original_data: Option<WorkflowData>,
 
     // Editor fields
@@ -88,13 +85,17 @@ pub(crate) struct WorkflowEditor {
 
 impl WorkflowEditor {
     pub(crate) fn new(
-        workflows: Arc<RwLock<Vec<Workflow>>>,
-        workflow_index: usize,
+        // workflows: Arc<RwLock<Vec<Workflow>>>,
+        // workflow_index: usize,
         workflow_data: Option<WorkflowData>,
-        workflow_file: Option<PathBuf>,
+        // workflow_file: Option<PathBuf>,
     ) -> Self {
         let (name, description, steps) = if let Some(ref data) = workflow_data {
-            (data.name.clone(), data.description.clone().unwrap_or_default(), data.steps.clone())
+            (
+                data.name.clone(),
+                data.description.clone().unwrap_or_default(),
+                data.steps.clone(),
+            )
         } else {
             ("Draft workflow".to_string(), String::new(), vec![])
         };
@@ -105,12 +106,13 @@ impl WorkflowEditor {
         let mut description_field = EditableTextField::new("Description".to_string(), description);
         description_field.set_focused(false);
 
-        let steps_list_state = ListState::default().with_selected(if steps.is_empty() { None } else { Some(0) });
+        let steps_list_state =
+            ListState::default().with_selected(if steps.is_empty() { None } else { Some(0) });
 
         Self {
-            workflows,
-            workflow_index,
-            workflow_file,
+            // workflows,
+            // workflow_index,
+            // workflow_file,
             original_data: workflow_data,
             name_field,
             description_field,
@@ -129,7 +131,9 @@ impl WorkflowEditor {
         let steps = if let Some(editor) = &self.json_editor {
             editor.get_steps()
         } else {
-            self.original_data.as_ref().map_or_default(|d| d.steps.clone())
+            self.original_data
+                .as_ref()
+                .map_or_default(|d| d.steps.clone())
         };
 
         WorkflowData {
@@ -139,7 +143,10 @@ impl WorkflowEditor {
             } else {
                 Some(self.description_field.value().to_string())
             },
-            procedures: self.original_data.as_ref().map_or_default(|d| d.procedures.clone()),
+            procedures: self
+                .original_data
+                .as_ref()
+                .map_or_default(|d| d.procedures.clone()),
             steps,
         }
     }
@@ -164,7 +171,11 @@ impl WorkflowEditor {
                         format!("{}. [agent] {}", i + 1, s.task)
                     }
                     workflow::workflow_data::step::WorkflowStepType::SystemAction(s) => {
-                        format!("{}. [system-action] {}", i + 1, format_system_action(&s.action))
+                        format!(
+                            "{}. [system-action] {}",
+                            i + 1,
+                            format_system_action(&s.action)
+                        )
                     }
                     workflow::workflow_data::step::WorkflowStepType::Condition(s) => {
                         format!("{}. [condition] {}", i + 1, format_condition(&s.condition))
@@ -199,8 +210,10 @@ impl WorkflowEditor {
     fn render_buttons(&self, area: Rect, buf: &mut Buffer) {
         let [save_area, cancel_area] = area.layout(&Layout::horizontal([Ratio(1, 2), Ratio(1, 2)]));
 
-        let save_selected = self.focus == EditorFocus::Buttons && self.buttons_list_state.selected() == Some(0);
-        let cancel_selected = self.focus == EditorFocus::Buttons && self.buttons_list_state.selected() == Some(1);
+        let save_selected =
+            self.focus == EditorFocus::Buttons && self.buttons_list_state.selected() == Some(0);
+        let cancel_selected =
+            self.focus == EditorFocus::Buttons && self.buttons_list_state.selected() == Some(1);
 
         Button::new("Save")
             .set_selected(save_selected)
@@ -214,7 +227,9 @@ impl WorkflowEditor {
         if let Some(editor) = &self.json_editor {
             editor.get_steps()
         } else {
-            self.original_data.as_ref().map_or_default(|d| d.steps.clone())
+            self.original_data
+                .as_ref()
+                .map_or_default(|d| d.steps.clone())
         }
     }
 
@@ -282,40 +297,43 @@ impl WorkflowEditor {
             }
             (KeyCode::Enter, _) if self.focus == EditorFocus::Buttons => {
                 if let Some(selected) = self.buttons_list_state.selected()
-                    && let Some(button_data) = self.buttons.get(selected) {
-                        if button_data.action == WorkflowEditorAction::Cancel {
-                            return Some(WorkflowEditorAction::Cancel);
-                        } else {
-                            let data = self.build_workflow_data();
-                            return Some(WorkflowEditorAction::Save(data));
-                        }
+                    && let Some(button_data) = self.buttons.get(selected)
+                {
+                    if button_data.action == WorkflowEditorAction::Cancel {
+                        return Some(WorkflowEditorAction::Cancel);
                     }
+                    let data = self.build_workflow_data();
+                    return Some(WorkflowEditorAction::Save(data));
+                }
                 None
             }
             (KeyCode::Esc, _) => Some(WorkflowEditorAction::Cancel),
-            _ => {
-                match self.focus {
-                    EditorFocus::Name => {
-                        self.handle_text_input(true, key);
-                        None
-                    }
-                    EditorFocus::Description => {
-                        self.handle_text_input(false, key);
-                        None
-                    }
-                    _ => None,
+            _ => match self.focus {
+                EditorFocus::Name => {
+                    self.handle_text_input(true, key);
+                    None
                 }
-            }
+                EditorFocus::Description => {
+                    self.handle_text_input(false, key);
+                    None
+                }
+                _ => None,
+            },
         }
     }
 
     fn update_focus(&mut self) {
         self.name_field.set_focused(self.focus == EditorFocus::Name);
-        self.description_field.set_focused(self.focus == EditorFocus::Description);
+        self.description_field
+            .set_focused(self.focus == EditorFocus::Description);
     }
 
     fn handle_text_input(&mut self, is_name: bool, key: KeyEvent) {
-        let field = if is_name { &mut self.name_field } else { &mut self.description_field };
+        let field = if is_name {
+            &mut self.name_field
+        } else {
+            &mut self.description_field
+        };
         match key.code {
             KeyCode::Char(c) => field.insert_char(c),
             KeyCode::Backspace => field.backspace(),
@@ -330,7 +348,7 @@ impl WorkflowEditor {
 
     fn move_selection(&mut self, count: usize, delta: isize) {
         let current = self.steps_list_state.selected().unwrap_or(0);
-        let new = (current as isize + delta).clamp(0, count as isize - 1) as usize;
+        let new = (current.cast_signed() + delta).clamp(0, count.cast_signed() - 1).cast_unsigned();
         self.steps_list_state.select(Some(new));
     }
 
@@ -363,7 +381,13 @@ impl WorkflowEditor {
 
 impl WorkflowPanelModeView for WorkflowEditor {
     fn render(&self, _selection: &WorkflowSelection, area: Rect, buf: &mut Buffer) {
-        let [fields_area, separator1, steps_area, separator2, buttons_area] = area.layout(&Layout::vertical([
+        let [
+            fields_area,
+            separator1,
+            steps_area,
+            separator2,
+            buttons_area,
+        ] = area.layout(&Layout::vertical([
             Length(7),
             Length(1),
             Fill(1),
@@ -375,10 +399,16 @@ impl WorkflowPanelModeView for WorkflowEditor {
         Separator::new(Separator::HORIZONTAL).render(separator1, buf);
 
         if let Some(editor) = &self.json_editor {
-            let [steps_list_area, step_editor_area] = steps_area.layout(&Layout::horizontal([Ratio(1, 2), Ratio(1, 2)]));
+            let [steps_list_area, step_editor_area] =
+                steps_area.layout(&Layout::horizontal([Ratio(1, 2), Ratio(1, 2)]));
             self.render_steps_list(steps_list_area, buf);
             Separator::new(Separator::VERTICAL).render(
-                Rect::new(steps_list_area.x + steps_list_area.width, steps_list_area.y, 1, steps_list_area.height),
+                Rect::new(
+                    steps_list_area.x + steps_list_area.width,
+                    steps_list_area.y,
+                    1,
+                    steps_list_area.height,
+                ),
                 buf,
             );
             editor.render(step_editor_area, buf);
@@ -397,16 +427,17 @@ impl WorkflowPanelModeView for WorkflowEditor {
         _selection: &WorkflowSelection,
     ) -> Option<WorkflowAction> {
         if let Some(key) = event.as_key_event()
-            && let Some(action) = self.handle_key_event(key) {
-                match action {
-                    WorkflowEditorAction::Save(_data) => {
-                        return Some(WorkflowAction::BackToPreview);
-                    }
-                    WorkflowEditorAction::Cancel => {
-                        return Some(WorkflowAction::BackToPreview);
-                    }
+            && let Some(action) = self.handle_key_event(key)
+        {
+            match action {
+                WorkflowEditorAction::Save(_data) => {
+                    return Some(WorkflowAction::BackToPreview);
+                }
+                WorkflowEditorAction::Cancel => {
+                    return Some(WorkflowAction::BackToPreview);
                 }
             }
+        }
         None
     }
 }
@@ -416,23 +447,33 @@ fn format_page_action(action: &workflow::workflow_data::step::PageAction) -> Str
         workflow::workflow_data::step::PageAction::Navigate(a) => format!("navigate -> {}", a.url),
         workflow::workflow_data::step::PageAction::Input(a) => format!("input -> {}", a.selector),
         workflow::workflow_data::step::PageAction::Click(a) => format!("click -> {}", a.selector),
-        workflow::workflow_data::step::PageAction::Evaluate(a) => format!("evaluate -> {}", a.script),
+        workflow::workflow_data::step::PageAction::Evaluate(a) => {
+            format!("evaluate -> {}", a.script)
+        }
     }
 }
 
 fn format_system_action(action: &workflow::workflow_data::step::SystemAction) -> String {
     match action {
         workflow::workflow_data::step::SystemAction::OpenUrl(a) => format!("open-url -> {}", a.url),
-        workflow::workflow_data::step::SystemAction::Notify(a) => format!("notify -> {}", a.message),
+        workflow::workflow_data::step::SystemAction::Notify(a) => {
+            format!("notify -> {}", a.message)
+        }
     }
 }
 
 fn format_condition(condition: &workflow::workflow_data::step::Condition) -> String {
     match condition {
-        workflow::workflow_data::step::Condition::MatchRegex(a) => format!("match-regex -> {}", a.pattern),
+        workflow::workflow_data::step::Condition::MatchRegex(a) => {
+            format!("match-regex -> {}", a.pattern)
+        }
         workflow::workflow_data::step::Condition::Truthy(a) => format!("truthy -> {}", a.value),
-        workflow::workflow_data::step::Condition::Equal(a) => format!("equal -> {} == {}", a.left, a.right),
-        workflow::workflow_data::step::Condition::HasElement(a) => format!("has-element -> {}", a.selector),
+        workflow::workflow_data::step::Condition::Equal(a) => {
+            format!("equal -> {} == {}", a.left, a.right)
+        }
+        workflow::workflow_data::step::Condition::HasElement(a) => {
+            format!("has-element -> {}", a.selector)
+        }
     }
 }
 
@@ -457,9 +498,15 @@ impl JsonEditor {
     }
 
     pub(crate) fn get_steps(&self) -> Vec<workflow::workflow_data::step::WorkflowStepType> {
-        if let Ok(steps) = serde_json::from_str::<Vec<workflow::workflow_data::step::WorkflowStepType>>(&self.text_area.content) {
+        if let Ok(steps) = serde_json::from_str::<
+            Vec<workflow::workflow_data::step::WorkflowStepType>,
+        >(&self.text_area.content)
+        {
             steps
-        } else if let Ok(step) = serde_json::from_str::<workflow::workflow_data::step::WorkflowStepType>(&self.text_area.content) {
+        } else if let Ok(step) = serde_json::from_str::<
+            workflow::workflow_data::step::WorkflowStepType,
+        >(&self.text_area.content)
+        {
             vec![step]
         } else {
             vec![]
@@ -485,10 +532,16 @@ impl JsonEditor {
     }
 
     fn validate(&mut self) -> bool {
-        if serde_json::from_str::<Vec<workflow::workflow_data::step::WorkflowStepType>>(&self.text_area.content).is_ok() {
+        if serde_json::from_str::<Vec<workflow::workflow_data::step::WorkflowStepType>>(
+            &self.text_area.content,
+        )
+        .is_ok()
+        {
             self.error = None;
             true
-        } else if let Err(e) = serde_json::from_str::<workflow::workflow_data::step::WorkflowStepType>(&self.text_area.content) {
+        } else if let Err(e) = serde_json::from_str::<workflow::workflow_data::step::WorkflowStepType>(
+            &self.text_area.content,
+        ) {
             self.error = Some(e.to_string());
             false
         } else {
@@ -498,19 +551,19 @@ impl JsonEditor {
     }
 
     fn delete_step(&mut self, index: usize) {
-        if let Ok(mut steps) = serde_json::from_str::<Vec<workflow::workflow_data::step::WorkflowStepType>>(&self.text_area.content)
-            && index < steps.len() {
-                steps.remove(index);
-                self.text_area.content = serde_json::to_string_pretty(&steps).unwrap_or_default();
-            }
+        if let Ok(mut steps) = serde_json::from_str::<
+            Vec<workflow::workflow_data::step::WorkflowStepType>,
+        >(&self.text_area.content)
+            && index < steps.len()
+        {
+            steps.remove(index);
+            self.text_area.content = serde_json::to_string_pretty(&steps).unwrap_or_default();
+        }
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        let [title_area, editor_area, error_area] = area.layout(&Layout::vertical([
-            Length(1),
-            Fill(1),
-            Length(1),
-        ]));
+        let [title_area, editor_area, error_area] =
+            area.layout(&Layout::vertical([Length(1), Fill(1), Length(1)]));
 
         Paragraph::new("Step Editor (JSON) - Ctrl+S to save, Esc to cancel")
             .style(palette().muted_foreground)
@@ -599,14 +652,12 @@ impl TextArea {
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
         let lines: Vec<Line> = self.content.lines().map(Line::from).collect();
-        let paragraph = Paragraph::new(lines)
-            .style(palette().style)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
-                    .border_style(palette().accent),
-            );
+        let paragraph = Paragraph::new(lines).style(palette().style).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(palette().accent),
+        );
         paragraph.render(area, buf);
     }
 }

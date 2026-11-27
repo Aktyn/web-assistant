@@ -57,7 +57,6 @@ pub struct Browser {
     playwright_page: Option<Page>,
     context: Option<BrowserContext>,
     playwright: Option<Playwright>,
-    test_url: Option<String>,
 }
 
 impl Browser {
@@ -71,7 +70,6 @@ impl Browser {
             playwright_page: None,
             context: None,
             playwright: None,
-            test_url: None,
         }
     }
 
@@ -415,14 +413,7 @@ impl Browser {
     }
 
     pub fn get_url(&self) -> Option<String> {
-        if let Some(url) = &self.test_url {
-            return Some(url.clone());
-        }
         self.playwright_page.as_ref().map(playwright_rs::Page::url)
-    }
-
-    pub fn set_test_url(&mut self, url: &str) {
-        self.test_url = Some(url.to_string());
     }
 
     pub async fn close(&mut self) -> Result<()> {
@@ -444,57 +435,4 @@ impl Default for Browser {
     fn default() -> Self {
         Self::new(&BrowserConfig::default())
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    impl CdpClient {
-        #[cfg(test)]
-        pub(crate) fn new_test_client() -> Self {
-            Self { page: None }
-        }
-    }
-
-    // impl Browser {
-    //     #[cfg(test)]
-    //     pub(crate) fn new_with_cached_state(state: BrowserState) -> Self {
-    //         Self {
-    //             config: BrowserConfig::default(),
-    //             client: None,
-    //             watchdogs: None,
-    //             cached_state: Some(state),
-    //             playwright_page: None,
-    //             context: None,
-    //             playwright: None,
-    //         }
-    //     }
-    //
-    //     #[cfg(test)]
-    //     pub(crate) fn new_with_mock_state(state: BrowserState) -> Self {
-    //         Self {
-    //             config: BrowserConfig::default(),
-    //             client: None,
-    //             watchdogs: None,
-    //             cached_state: Some(state),
-    //             playwright_page: None,
-    //             context: None,
-    //             playwright: None,
-    //         }
-    //     }
-    //
-    //     #[cfg(test)]
-    //     pub(crate) fn new_with_client(client: CdpClient) -> Self {
-    //         Self {
-    //             config: BrowserConfig::default(),
-    //             client: Some(client),
-    //             watchdogs: None,
-    //             cached_state: None,
-    //             playwright_page: None,
-    //             context: None,
-    //             playwright: None,
-    //         }
-    //     }
-    // }
 }
