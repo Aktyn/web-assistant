@@ -13,7 +13,6 @@ use ratatui::{
         Constraint::{self, Fill, Length},
         Layout, Rect,
     },
-    style::Stylize as _,
     widgets::{Paragraph, Widget},
 };
 use std::{
@@ -21,8 +20,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use super::super::common::widgets::{Separator, TextField, EditableTextField};
-use crate::common::{palette, panel, utils};
+use super::super::common::widgets::{Separator, TextField};
+use crate::common::{palette, panel};
 use workflow::{Workflow, WorkflowState, workflow_data::WorkflowData};
 use workflow_delete::WorkflowDelete;
 use workflow_preview::WorkflowPreview;
@@ -264,7 +263,7 @@ impl WorkflowPanel {
             WorkflowAction::Execution => {
                 let workflow_data = if let Some(selection) = &self.selected_workflow {
                     match &selection.state {
-                        WorkflowSelectionState::Valid(state) => {
+                        WorkflowSelectionState::Valid(_state) => {
                             // Get the workflow data
                             if let Ok(workflows) = self.workflows.read() {
                                 if let Some(workflow) = workflows.get(selection.index) {

@@ -7,7 +7,7 @@ use ratatui::{
     },
     style::{Style, Stylize as _},
     text::Line,
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget},
+    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget},
 };
 use std::{
     path::PathBuf,
@@ -15,9 +15,9 @@ use std::{
 };
 
 use super::super::super::common::widgets::{Button, ButtonData, EditableTextField, Separator};
-use super::super::super::common::{palette, panel, utils};
+use super::super::super::common::palette;
 use super::{WorkflowAction, WorkflowPanelModeView, WorkflowSelection};
-use workflow::{Workflow, WorkflowState, workflow_data::WorkflowData};
+use workflow::{Workflow, workflow_data::WorkflowData};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EditorFocus {
     Name,
@@ -129,7 +129,7 @@ impl WorkflowEditor {
         let steps = if let Some(editor) = &self.json_editor {
             editor.get_steps()
         } else {
-            self.original_data.as_ref().map(|d| d.steps.clone()).unwrap_or_default()
+            self.original_data.as_ref().map_or_default(|d| d.steps.clone())
         };
 
         WorkflowData {
@@ -139,7 +139,7 @@ impl WorkflowEditor {
             } else {
                 Some(self.description_field.value().to_string())
             },
-            procedures: self.original_data.as_ref().map(|d| d.procedures.clone()).unwrap_or_default(),
+            procedures: self.original_data.as_ref().map_or_default(|d| d.procedures.clone()),
             steps,
         }
     }
@@ -214,7 +214,7 @@ impl WorkflowEditor {
         if let Some(editor) = &self.json_editor {
             editor.get_steps()
         } else {
-            self.original_data.as_ref().map(|d| d.steps.clone()).unwrap_or_default()
+            self.original_data.as_ref().map_or_default(|d| d.steps.clone())
         }
     }
 
@@ -281,8 +281,8 @@ impl WorkflowEditor {
                 None
             }
             (KeyCode::Enter, _) if self.focus == EditorFocus::Buttons => {
-                if let Some(selected) = self.buttons_list_state.selected() {
-                    if let Some(button_data) = self.buttons.get(selected) {
+                if let Some(selected) = self.buttons_list_state.selected()
+                    && let Some(button_data) = self.buttons.get(selected) {
                         if button_data.action == WorkflowEditorAction::Cancel {
                             return Some(WorkflowEditorAction::Cancel);
                         } else {
@@ -290,7 +290,6 @@ impl WorkflowEditor {
                             return Some(WorkflowEditorAction::Save(data));
                         }
                     }
-                }
                 None
             }
             (KeyCode::Esc, _) => Some(WorkflowEditorAction::Cancel),
@@ -397,8 +396,8 @@ impl WorkflowPanelModeView for WorkflowEditor {
         _terminal: &mut ratatui::DefaultTerminal,
         _selection: &WorkflowSelection,
     ) -> Option<WorkflowAction> {
-        if let Some(key) = event.as_key_event() {
-            if let Some(action) = self.handle_key_event(key) {
+        if let Some(key) = event.as_key_event()
+            && let Some(action) = self.handle_key_event(key) {
                 match action {
                     WorkflowEditorAction::Save(_data) => {
                         return Some(WorkflowAction::BackToPreview);
@@ -408,7 +407,6 @@ impl WorkflowPanelModeView for WorkflowEditor {
                     }
                 }
             }
-        }
         None
     }
 }
@@ -500,12 +498,11 @@ impl JsonEditor {
     }
 
     fn delete_step(&mut self, index: usize) {
-        if let Ok(mut steps) = serde_json::from_str::<Vec<workflow::workflow_data::step::WorkflowStepType>>(&self.text_area.content) {
-            if index < steps.len() {
+        if let Ok(mut steps) = serde_json::from_str::<Vec<workflow::workflow_data::step::WorkflowStepType>>(&self.text_area.content)
+            && index < steps.len() {
                 steps.remove(index);
                 self.text_area.content = serde_json::to_string_pretty(&steps).unwrap_or_default();
             }
-        }
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
@@ -522,7 +519,7 @@ impl JsonEditor {
         self.text_area.render(editor_area, buf);
 
         if let Some(error) = &self.error {
-            Paragraph::new(format!("Error: {}", error))
+            Paragraph::new(format!("Error: {error}"))
                 .style(palette().error_foreground)
                 .render(error_area, buf);
         }
@@ -601,7 +598,7 @@ impl TextArea {
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        let lines: Vec<Line> = self.content.lines().map(|l| Line::from(l)).collect();
+        let lines: Vec<Line> = self.content.lines().map(Line::from).collect();
         let paragraph = Paragraph::new(lines)
             .style(palette().style)
             .block(

@@ -21,7 +21,7 @@ use tokio::task::JoinHandle;
 
 use super::{WorkflowAction, WorkflowPanelModeView, WorkflowSelection};
 use super::super::super::common::widgets::{Button, ButtonData, Separator};
-use super::super::super::common::{palette, utils};
+use super::super::super::common::palette;
 use workflow::{Workflow, WorkflowState, SuccessfullWorkflow};
 
 /// The default config file path
@@ -152,14 +152,14 @@ impl WorkflowRunner {
             return;
         }
 
-        let Some(workflow_data) = self.workflow_data.clone() else {
+        let Some(_workflow_data) = self.workflow_data.clone() else {
             self.error = Some("No workflow data to run".to_string());
             return;
         };
 
-        let workflows = self.workflows.clone();
-        let workflow_index = self.workflow_index;
-        let workflow_file = self.workflow_file.clone();
+        let _workflows = self.workflows.clone();
+        let _workflow_index = self.workflow_index;
+        let _workflow_file = self.workflow_file.clone();
 
         let (tx, rx) = mpsc::unbounded_channel();
         self.rx = Some(rx);
@@ -192,7 +192,7 @@ impl WorkflowRunner {
                 Err(e) => {
                     let _ = tx.send(StepUpdate::WorkflowCompleted {
                         success: false,
-                        error: Some(format!("Failed to load config: {}", e)),
+                        error: Some(format!("Failed to load config: {e}")),
                     });
                     return;
                 }
@@ -244,10 +244,10 @@ impl WorkflowRunner {
                 }),
                 file_path: self.workflow_file.clone(),
             };
-            let mut wfs = self.workflows.write().unwrap();
-            if let Some(wf) = wfs.get_mut(self.workflow_index) {
-                *wf = new_workflow;
-            }
+            if let Ok(mut wfs) = self.workflows.write()
+                && let Some(wf) = wfs.get_mut(self.workflow_index) {
+                    *wf = new_workflow;
+                }
         }
     }
 
@@ -322,11 +322,10 @@ impl WorkflowRunner {
                     None
                 }
                 (KeyCode::Enter, _) => {
-                    if let Some(selected) = self.buttons_list_state.selected() {
-                        if let Some(button_data) = self.buttons.get(selected) {
+                    if let Some(selected) = self.buttons_list_state.selected()
+                        && let Some(button_data) = self.buttons.get(selected) {
                             return Some(button_data.action.clone());
                         }
-                    }
                     None
                 }
                 (KeyCode::Esc, _) => Some(WorkflowRunnerAction::BackToPreview),
@@ -409,7 +408,7 @@ impl WorkflowPanelModeView for WorkflowRunner {
                     StepStatus::Pending => ("○", palette().muted_foreground),
                     StepStatus::Running => ("●", palette().accent),
                     StepStatus::Completed => ("✓", Color::Green),
-                    StepStatus::Failed(e) => ("✗", palette().error_foreground),
+                    StepStatus::Failed(_e) => ("✗", palette().error_foreground),
                 };
 
                 let status_style = Style::new().fg(status_color);
@@ -435,7 +434,7 @@ impl WorkflowPanelModeView for WorkflowRunner {
                 };
 
                 let line = Line::from(vec![
-                    Span::styled(format!("{} ", status_icon), status_style),
+                    Span::styled(format!("{status_icon} "), status_style),
                     Span::styled(
                         format!("{}. {}{}", i + 1, step.description, duration),
                         style,
@@ -464,7 +463,7 @@ impl WorkflowPanelModeView for WorkflowRunner {
 
         // Error message if any
         if let Some(error) = &self.error {
-            let [list_area2, error_area] = list_area.layout(&Layout::vertical([Fill(1), Length(3)]));
+            let [_list_area2, error_area] = list_area.layout(&Layout::vertical([Fill(1), Length(3)]));
             let error_para = Paragraph::new(vec![
                 Line::from("Error:".bold().fg(palette().error_foreground)),
                 Line::from(Span::styled(error, palette().error_foreground)),
