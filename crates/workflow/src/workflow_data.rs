@@ -34,6 +34,22 @@ pub struct WorkflowData {
     /// "wait" --> `WaitStep`
     /// "abort" --> `AbortStep`
     pub steps: Vec<step::WorkflowStepType>,
+
+    /// By default the workflow will wait for
+    /// network connection before taking the first step
+    /// This value defines the timeout in seconds
+    /// Set to 0 in order to allow offline run (useful for end to end local UI tests)
+    #[serde(
+        default = "get_default_network_connection_timeout",
+        alias = "networkConnectionTimeout",
+        rename = "networkConnectionTimeout"
+    )]
+    pub network_connection_timeout_sec: u16,
+}
+
+/// 10 minutes
+fn get_default_network_connection_timeout() -> u16 {
+    600
 }
 
 /// `WorkflowProcedure`

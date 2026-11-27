@@ -41,12 +41,10 @@ impl Workflow {
                 state: WorkflowState::Valid(data),
                 file_path: Some(json.path),
             },
-            Err(e) => {
-                Workflow {
-                    state: WorkflowState::Invalid(e),
-                    file_path: Some(json.path),
-                }
-            }
+            Err(e) => Workflow {
+                state: WorkflowState::Invalid(e),
+                file_path: Some(json.path),
+            },
         }
     }
 
@@ -58,6 +56,7 @@ impl Workflow {
                 description: None,
                 procedures: vec![],
                 steps: vec![],
+                network_connection_timeout_sec: 600,
             }),
             file_path: None,
         }

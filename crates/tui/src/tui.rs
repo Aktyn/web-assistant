@@ -12,8 +12,8 @@ use std::time::Duration;
 use tui_logger::TuiLoggerWidget;
 
 use crate::common::{consts, init_palette, macros, palette};
-use crate::views::empty::EmptyView;
 use crate::views::config_view::ConfigView;
+use crate::views::empty::EmptyView;
 use crate::views::no_workflows::NoWorkflowsView;
 use crate::views::terminal_size_error::TerminalSizeErrorView;
 use crate::views::workflows::WorkflowView;

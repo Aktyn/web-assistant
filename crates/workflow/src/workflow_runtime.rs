@@ -138,10 +138,22 @@ impl Workflow {
         };
 
         if let WorkflowState::Running(running_workflow, workflow_file_path) = &mut self.state {
+            if running_workflow.data.steps.is_empty() {
+                bail!("Workflow has no steps");
+            }
+
             running_workflow.logger.lock().await.info(&format!(
                 "Running workflow: \"{}\"",
                 running_workflow.data.name
             ));
+
+            if running_workflow.data.network_connection_timeout_sec > 0 {
+                log::info!("Awaiting network connection...");
+                utils::network::check_network_connection(
+                    running_workflow.data.network_connection_timeout_sec,
+                )
+                .await?;
+            }
 
             match running_workflow
                 .run_steps(&running_workflow.data.steps, workflow_file_path)

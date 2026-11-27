@@ -65,12 +65,17 @@ impl Config {
             .await
             .context("Cannot read config file")?;
 
-        let mut parsed: Config = parse_to_serde_value(config_content.as_str(), &ParseOptions::default())
-            .with_context(|| format!("Cannot parse config file: \"{}\"", config_path.display()))?;
+        let mut parsed: Config =
+            parse_to_serde_value(config_content.as_str(), &ParseOptions::default()).with_context(
+                || format!("Cannot parse config file: \"{}\"", config_path.display()),
+            )?;
 
         // If the workflows directory is relative, make it relative to the config file
         if parsed.workflows_directory.is_relative() {
-            parsed.workflows_directory = config_path.parent().unwrap_or(Path::new(".")).join(parsed.workflows_directory);
+            parsed.workflows_directory = config_path
+                .parent()
+                .unwrap_or(Path::new("."))
+                .join(parsed.workflows_directory);
         }
 
         Ok(parsed)

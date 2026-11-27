@@ -148,6 +148,10 @@ impl WorkflowEditor {
                 .as_ref()
                 .map_or_default(|d| d.procedures.clone()),
             steps,
+            network_connection_timeout_sec: self
+                .original_data
+                .as_ref()
+                .map_or(600, |d| d.network_connection_timeout_sec),
         }
     }
 
@@ -348,7 +352,9 @@ impl WorkflowEditor {
 
     fn move_selection(&mut self, count: usize, delta: isize) {
         let current = self.steps_list_state.selected().unwrap_or(0);
-        let new = (current.cast_signed() + delta).clamp(0, count.cast_signed() - 1).cast_unsigned();
+        let new = (current.cast_signed() + delta)
+            .clamp(0, count.cast_signed() - 1)
+            .cast_unsigned();
         self.steps_list_state.select(Some(new));
     }
 

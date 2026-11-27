@@ -142,12 +142,23 @@ impl ConfigView {
                 )),
                 Line::from(format!(
                     "TUI colors: {}",
-                    if config.tui_colors.is_some() { "custom" } else { "default" }
+                    if config.tui_colors.is_some() {
+                        "custom"
+                    } else {
+                        "default"
+                    }
                 )),
-                Line::from(format!("Browser headless mode: {}", config.browser.headless)),
+                Line::from(format!(
+                    "Browser headless mode: {}",
+                    config.browser.headless
+                )),
                 Line::from(format!(
                     "Agent model: {}",
-                    if config.agent.model.is_empty() { "default" } else { &config.agent.model }
+                    if config.agent.model.is_empty() {
+                        "default"
+                    } else {
+                        &config.agent.model
+                    }
                 )),
             ]);
             Paragraph::new(details)
@@ -163,7 +174,9 @@ impl ConfigView {
                     "The default config was successfully saved to: {}",
                     path.display()
                 ),
-                InitConfigOutcome::Failed(message) => format!("Failed to initialize config: {message}"),
+                InitConfigOutcome::Failed(message) => {
+                    format!("Failed to initialize config: {message}")
+                }
             };
             Paragraph::new(text)
                 .style(if is_error {
@@ -293,8 +306,7 @@ mod tests {
     /// Helper to build a `&mut DefaultTerminal` that is never dereferenced.
     fn no_read_term() -> *mut DefaultTerminal {
         use std::mem::MaybeUninit;
-        static SLOT: std::sync::OnceLock<MaybeUninit<DefaultTerminal>> =
-            std::sync::OnceLock::new();
+        static SLOT: std::sync::OnceLock<MaybeUninit<DefaultTerminal>> = std::sync::OnceLock::new();
         let slot = SLOT.get_or_init(MaybeUninit::uninit);
         slot.as_ptr().cast_mut()
     }
@@ -394,7 +406,10 @@ mod tests {
         view.run_button_action(1);
         await_init_task(&mut view, 200).await;
 
-        assert_eq!(view.init_outcome, Some(InitConfigOutcome::Created(output_path.clone())));
+        assert_eq!(
+            view.init_outcome,
+            Some(InitConfigOutcome::Created(output_path.clone()))
+        );
         assert!(output_path.is_file());
     }
 
@@ -422,10 +437,8 @@ mod tests {
     #[tokio::test]
     async fn test_start_init_task_is_idempotent() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut view = ConfigView::with_init_path(
-            config_arc(),
-            Some(tmp.path().join("config.jsonc")),
-        );
+        let mut view =
+            ConfigView::with_init_path(config_arc(), Some(tmp.path().join("config.jsonc")));
 
         view.run_button_action(1);
         assert!(view.init_task.is_some());

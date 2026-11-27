@@ -88,6 +88,7 @@ pub(crate) static EXAMPLE_WORKFLOW_DATA: LazyLock<WorkflowData> = LazyLock::new(
         steps: main_procedure_steps(),
     }],
     steps: top_level_steps(),
+    network_connection_timeout_sec: 600,
 });
 
 fn main_procedure_steps() -> Vec<workflow_step::WorkflowStepType> {
