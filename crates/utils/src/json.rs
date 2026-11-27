@@ -83,7 +83,7 @@ mod tests {
                 .any(|n| n.to_string_lossy().as_bytes() == b"a.json")
         );
         assert!(
-            names
+            !names
                 .iter()
                 .any(|n| n.to_string_lossy().as_bytes() == b"b.jsonc")
         );

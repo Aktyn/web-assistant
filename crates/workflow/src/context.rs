@@ -90,3 +90,96 @@ pub(crate) trait WorkflowContextItem: std::fmt::Debug {
         value: &serde_json::Value,
     ) -> Result<&serde_json::Value>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::WorkflowContextItem;
+    use super::*;
+    use crate::context::basic_context_item::BasicContextItem;
+    use crate::context::utils::PropertyPath;
+
+    #[test]
+    fn test_workflow_context_new_is_empty() {
+        let ctx = WorkflowContext::new();
+        assert!(ctx.get_item("any").is_none());
+    }
+
+    #[test]
+    fn test_workflow_context_set_and_get() {
+        let mut ctx = WorkflowContext::new();
+        ctx.set_item(
+            "user",
+            Box::new(BasicContextItem::new(serde_json::json!({"name": "Alice"}))),
+        );
+        let item = ctx.get_item("user").expect("item should exist");
+        let path: PropertyPath = vec!["name"];
+        assert_eq!(item.get_value(&path), Some(serde_json::json!("Alice")));
+    }
+
+    #[test]
+    fn test_workflow_context_overwrite_existing_item() {
+        let mut ctx = WorkflowContext::new();
+        ctx.set_item("k", Box::new(BasicContextItem::new(serde_json::json!(1))));
+        ctx.set_item("k", Box::new(BasicContextItem::new(serde_json::json!(2))));
+        let item = ctx.get_item("k").expect("item should exist");
+        assert_eq!(item.get_data(), &serde_json::json!(2));
+    }
+
+    #[test]
+    fn test_workflow_context_reset_clears_all() {
+        let mut ctx = WorkflowContext::new();
+        ctx.set_item("a", Box::new(BasicContextItem::new(serde_json::json!(1))));
+        ctx.set_item("b", Box::new(BasicContextItem::new(serde_json::json!(2))));
+        ctx.reset();
+        assert!(ctx.get_item("a").is_none());
+        assert!(ctx.get_item("b").is_none());
+    }
+
+    #[test]
+    fn test_workflow_context_update_item_value_success() {
+        let mut ctx = WorkflowContext::new();
+        ctx.set_item(
+            "data",
+            Box::new(BasicContextItem::new(serde_json::json!({"count": 0}))),
+        );
+        let path: PropertyPath = vec!["count"];
+        let result = ctx
+            .update_item_value("data", &path, &serde_json::json!(99))
+            .unwrap();
+        let path2: PropertyPath = vec!["count"];
+        assert_eq!(result.get_value(&path2), Some(serde_json::json!(99)));
+    }
+
+    #[test]
+    fn test_workflow_context_update_item_value_missing_context_errors() {
+        let mut ctx = WorkflowContext::new();
+        let path: PropertyPath = vec!["key"];
+        let result = ctx.update_item_value("missing", &path, &serde_json::json!("val"));
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No context is set")
+        );
+    }
+
+    #[test]
+    fn test_workflow_context_item_trait_get_value_on_primitive_returns_none() {
+        let item = BasicContextItem::new(serde_json::json!("string_value"));
+        let path: PropertyPath = vec!["nested"];
+        assert!(item.get_value(&path).is_none());
+    }
+
+    #[test]
+    fn test_workflow_context_item_trait_get_value_deep_path() {
+        let item = BasicContextItem::new(serde_json::json!({
+            "level1": {"level2": {"level3": "deep_value"}}
+        }));
+        let path: PropertyPath = vec!["level1", "level2", "level3"];
+        assert_eq!(item.get_value(&path), Some(serde_json::json!("deep_value")));
+        let path2: PropertyPath = vec!["level1", "nonexistent"];
+        // Missing keys return Some(Null), not None
+        assert_eq!(item.get_value(&path2), Some(serde_json::Value::Null));
+    }
+}

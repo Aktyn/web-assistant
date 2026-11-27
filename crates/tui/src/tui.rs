@@ -229,7 +229,7 @@ mod tests {
     use super::*;
     use config::Config;
     use std::path::PathBuf;
-    use workflow::{JsonFile, Workflow, load_from_directory};
+    use workflow::{JsonFile, Workflow};
 
     fn empty_config() -> Config {
         Config::default()

@@ -32,7 +32,6 @@ mod tests {
     use crate::workflow_data::{WorkflowData, WorkflowProcedure};
     use crate::workflow_runtime::RunningWorkflow;
     use config::Config;
-    use std::path::PathBuf;
 
     fn default_config() -> Config {
         Config::default()

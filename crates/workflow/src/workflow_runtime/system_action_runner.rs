@@ -91,7 +91,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_system_action_open_url_with_parsed_variable() {
-        let mut runner = make_runner().await;
+        let runner = make_runner().await;
         {
             let mut ctx = runner.context.lock().await;
             ctx.set_item(

@@ -232,7 +232,7 @@ mod tests {
         // Update the item via context API
         let path: context::PropertyPath = vec!["count"];
         let updated = items[0].update(&path, &serde_json::json!(42)).unwrap();
-        assert_eq!(updated.as_u64().unwrap(), 42);
+        assert_eq!(updated["count"].as_u64().unwrap(), 42);
 
         // Verify file was written back
         let content = std::fs::read_to_string(&data_path).unwrap();

@@ -185,3 +185,79 @@ pub fn build_input_js(index: u32, escaped_text: &str) -> String {
         ",
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_visible_fn_contains_getcomputedstyle() {
+        assert!(VISIBLE_FN.contains("getComputedStyle"));
+        assert!(VISIBLE_FN.contains("isVisible"));
+    }
+
+    #[test]
+    fn test_selectors_contains_expected_tags() {
+        assert!(SELECTORS.contains("'a[href]'"));
+        assert!(SELECTORS.contains("'button'"));
+        assert!(SELECTORS.contains("'input'"));
+    }
+
+    #[test]
+    fn test_matched_fragments_collects_elements() {
+        assert!(MATCHED.contains("document.querySelectorAll"));
+        assert!(MATCHED.contains(".filter("));
+        assert!(MATCHED.contains("matched"));
+    }
+
+    #[test]
+    fn test_extract_body_contains_required_fields() {
+        assert!(EXTRACT_BODY.contains("elements.push"));
+        assert!(EXTRACT_BODY.contains("window.location.href"));
+        assert!(EXTRACT_BODY.contains("document.title"));
+    }
+
+    #[test]
+    fn test_extract_dom_js_assembly() {
+        let script = EXTRACT_DOM_JS.as_str();
+        assert!(script.contains("isVisible"));
+        assert!(script.contains("interactiveSelectors"));
+        assert!(script.contains("matched"));
+        assert!(script.contains("getBoundingClientRect"));
+    }
+
+    #[test]
+    fn test_build_element_info_js_contains_index_placeholder() {
+        let script = build_element_info_js(5);
+        // The format is "matched[{index} - 1]" so with index=5 it becomes "matched[5 - 1]"
+        assert!(script.contains("matched["));
+        assert!(script.contains("getBoundingClientRect"));
+    }
+
+    #[test]
+    fn test_build_input_js_contains_escaped_text() {
+        let escaped = serde_json::to_string("hello world").unwrap();
+        let script = build_input_js(3, &escaped);
+        assert!(script.contains(&escaped));
+        assert!(script.contains("dispatchEvent"));
+    }
+
+    #[test]
+    fn test_build_input_js_dispatches_events() {
+        let script = build_input_js(1, "\"test\"");
+        assert!(script.contains("FocusEvent('focus'"));
+        assert!(script.contains("new Event('input'"));
+        assert!(script.contains("new Event('change'"));
+        assert!(script.contains("FocusEvent('blur'"));
+    }
+
+    #[test]
+    fn test_extract_body_truncates_long_text() {
+        assert!(EXTRACT_BODY.contains("substring(0, 4000)"));
+    }
+
+    #[test]
+    fn test_extract_body_limits_elements_to_100() {
+        assert!(EXTRACT_BODY.contains(".slice(0, 100)"));
+    }
+}

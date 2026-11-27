@@ -84,3 +84,91 @@ pub(crate) async fn get_iteration_items(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_for_each_step_deserialize_minimal() {
+        let json = r#"{"contextName":"item","items":{"type":"file","sourceFile":"data.json"},"steps":[],
+"preserveContext":false}"#;
+        let step: ForEachStep = serde_json::from_str(json).unwrap();
+        assert_eq!(step.context_name, "item");
+        assert!(matches!(step.items, IterationItems::File(_)));
+        assert!(!step.preserve_context);
+    }
+
+    #[test]
+    fn test_for_each_step_preserve_context_default_false() {
+        let json = r#"{"contextName":"i","items":{"type":"file","sourceFile":"f"},"steps":[]}"#;
+        let step: ForEachStep = serde_json::from_str(json).unwrap();
+        assert!(!step.preserve_context);
+    }
+
+    #[test]
+    fn test_for_each_step_preserve_context_true() {
+        let json = r#"{"contextName":"i","items":{"type":"file","sourceFile":"f"},"steps":[],"preserveContext":true}"#;
+        let step: ForEachStep = serde_json::from_str(json).unwrap();
+        assert!(step.preserve_context);
+    }
+
+    #[test]
+    fn test_for_each_step_on_error_steps() {
+        let json = r#"{"contextName":"i","items":{"type":"file","sourceFile":"f"},"steps":[],"onError":[{"type":"abort","message":"fail"}]}"#;
+        let step: ForEachStep = serde_json::from_str(json).unwrap();
+        assert_eq!(step.on_error.as_ref().map(|v| v.len()), Some(1));
+    }
+
+    #[test]
+    fn test_for_each_step_clone() {
+        let step = ForEachStep {
+            context_name: "x".to_string(),
+            items: IterationItems::File(FileIterator {
+                source_file: PathBuf::from("/tmp/data.json"),
+            }),
+            preserve_context: false,
+            order: IterationOrder::default(),
+            steps: vec![],
+            on_error: None,
+        };
+        let cloned = step.clone();
+        assert_eq!(cloned.context_name, step.context_name);
+    }
+
+    #[test]
+    fn test_iteration_items_unknown_type_fails() {
+        let json = r#"{"type":"unknown-source"}"#;
+        let result: Result<IterationItems, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_file_iterator_roundtrip() {
+        let iter = FileIterator {
+            source_file: PathBuf::from("/tmp/items.csv"),
+        };
+        let json = serde_json::to_string(&iter).unwrap();
+        let parsed: FileIterator = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.source_file, iter.source_file);
+    }
+
+    #[test]
+    fn test_for_each_step_full_roundtrip() {
+        let step = ForEachStep {
+            context_name: "item".to_string(),
+            items: IterationItems::File(FileIterator {
+                source_file: PathBuf::from("data.json"),
+            }),
+            preserve_context: true,
+            order: IterationOrder::Reversed,
+            steps: vec![],
+            on_error: Some(vec![]),
+        };
+        let json = serde_json::to_string(&step).unwrap();
+        let parsed: ForEachStep = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.context_name, "item");
+        assert!(parsed.preserve_context);
+        assert!(matches!(parsed.order, IterationOrder::Reversed));
+    }
+}

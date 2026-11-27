@@ -57,6 +57,7 @@ pub struct Browser {
     playwright_page: Option<Page>,
     context: Option<BrowserContext>,
     playwright: Option<Playwright>,
+    test_url: Option<String>,
 }
 
 impl Browser {
@@ -70,6 +71,7 @@ impl Browser {
             playwright_page: None,
             context: None,
             playwright: None,
+            test_url: None,
         }
     }
 
@@ -413,7 +415,14 @@ impl Browser {
     }
 
     pub fn get_url(&self) -> Option<String> {
+        if let Some(url) = &self.test_url {
+            return Some(url.clone());
+        }
         self.playwright_page.as_ref().map(playwright_rs::Page::url)
+    }
+
+    pub fn set_test_url(&mut self, url: &str) {
+        self.test_url = Some(url.to_string());
     }
 
     pub async fn close(&mut self) -> Result<()> {

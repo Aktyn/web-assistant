@@ -36,7 +36,7 @@ impl std::fmt::Debug for RunningWorkflow {
 }
 
 impl RunningWorkflow {
-    fn new(data: WorkflowData, config: Box<Config>) -> Self {
+    pub(crate) fn new(data: WorkflowData, config: Box<Config>) -> Self {
         let browser = Mutex::new(Browser::new(&config.browser));
         let logger = utils::logger::CliLogger::default();
 

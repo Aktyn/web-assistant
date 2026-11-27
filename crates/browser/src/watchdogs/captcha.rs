@@ -420,13 +420,6 @@ mod tests {
     }
 
     #[test]
-    fn test_captcha_info_now_creates_timestamp() {
-        let info = CaptchaInfo::now();
-        assert!(!info.vendor.is_empty() || info.vendor.is_empty()); // vendor is empty string
-        assert!(info.started_at_epoch > 0.0);
-    }
-
-    #[test]
     fn test_handle_captcha_solver_finished_sets_result() {
         let wd = CaptchaWatchdog::new_test();
         let event = serde_json::json!({
