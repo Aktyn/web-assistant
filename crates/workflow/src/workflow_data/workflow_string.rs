@@ -158,6 +158,12 @@ impl From<&str> for WorkflowString {
     }
 }
 
+impl std::fmt::Display for WorkflowString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.raw_value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
