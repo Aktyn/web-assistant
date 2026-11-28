@@ -1,4 +1,4 @@
-use web_assistant::agent::prompts::{PromptMode, SystemPrompt};
+use agent::{PromptMode, SystemPrompt};
 
 #[test]
 fn test_all_system_prompt_modes_non_empty() {

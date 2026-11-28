@@ -40,6 +40,7 @@ mod tests {
                 description: None,
                 procedures: vec![],
                 steps: vec![],
+                network_connection_timeout_sec: 0,
             },
             Box::new(default_config()),
         )

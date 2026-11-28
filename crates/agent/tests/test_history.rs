@@ -1,4 +1,4 @@
-use web_assistant::agent::views::{
+use agent::{
     Action, ActionResult, AgentHistoryItem, AgentHistoryList, AgentOutput, AgentStepState,
 };
 

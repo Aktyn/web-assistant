@@ -143,6 +143,7 @@ mod tests {
             description: Some("description".to_string()),
             procedures: vec![],
             steps: vec![],
+            network_connection_timeout_sec: 0,
         };
         let state = WorkflowState::Valid(data);
         let debug_str = format!("{state:?}");
@@ -156,6 +157,7 @@ mod tests {
             description: None,
             procedures: vec![],
             steps: vec![],
+            network_connection_timeout_sec: 0,
         });
         match state {
             WorkflowState::Valid(d) => assert_eq!(d.name, "ok"),
@@ -170,6 +172,7 @@ mod tests {
             description: Some("test description".to_string()),
             procedures: vec![],
             steps: vec![],
+            network_connection_timeout_sec: 0,
         };
         let cloned = data.clone();
         assert_eq!(data.name, cloned.name);
@@ -207,6 +210,7 @@ mod tests {
     fn test_workflow_state_debug_display() {
         let state = WorkflowState::Valid(WorkflowData {
             name: "Test".to_string(),
+            network_connection_timeout_sec: 0,
             description: None,
             procedures: vec![],
             steps: vec![],

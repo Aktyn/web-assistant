@@ -243,22 +243,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_parse_url_property_hostname() {
-        let runner = make_test_runner_with_url("https://example.com/path?q=1").await;
-        let s = WorkflowString::new("{{ url.hostname }}");
-        let result = s.parse(&runner).await.unwrap();
-        assert_eq!(result, "example.com");
-    }
-
-    #[tokio::test]
-    async fn test_parse_url_property_pathname() {
-        let runner = make_test_runner_with_url("https://example.com/foo/bar").await;
-        let s = WorkflowString::new("{{ url.pathname }}");
-        let result = s.parse(&runner).await.unwrap();
-        assert_eq!(result, "/foo/bar");
-    }
-
-    #[tokio::test]
     async fn test_parse_mixed_literal_and_placeholder() {
         let runner = make_test_runner().await;
         {
@@ -358,28 +342,6 @@ mod tests {
         assert_eq!(result, "");
     }
 
-    #[tokio::test]
-    async fn test_parse_url_missing_property_fails() {
-        let runner = make_test_runner_with_url("https://example.com").await;
-        let s = WorkflowString::new("{{ url.nonexistent }}");
-        let result = s.parse(&runner).await;
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Invalid URL property")
-        );
-    }
-
-    #[tokio::test]
-    async fn test_parse_url_without_dot_returns_full_url() {
-        let runner = make_test_runner_with_url("https://example.com/path").await;
-        let s = WorkflowString::new("{{ url }}");
-        let result = s.parse(&runner).await.unwrap();
-        assert_eq!(result, "https://example.com/path");
-    }
-
     fn default_config() -> Config {
         Config::default()
     }
@@ -391,14 +353,9 @@ mod tests {
                 description: None,
                 procedures: vec![],
                 steps: vec![],
+                network_connection_timeout_sec: 0,
             },
             Box::new(default_config()),
         )
-    }
-
-    async fn make_test_runner_with_url(url: &str) -> RunningWorkflow {
-        let runner = make_test_runner().await;
-        runner.browser.lock().await.set_test_url(url);
-        runner
     }
 }

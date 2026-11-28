@@ -113,6 +113,7 @@ fn collect_strings_from_json(val: &serde_json::Value, out: &mut Vec<String>) {
     }
 }
 
+#[must_use]
 pub fn detect_variable_type(
     value: &str,
     element: Option<&InteractedElementMetadata>,
@@ -127,8 +128,9 @@ pub fn detect_variable_type(
     detect_from_value_pattern(value)
 }
 
-pub fn detect_from_attributes(
-    attributes: &HashMap<String, String>,
+#[must_use]
+pub fn detect_from_attributes<S: std::hash::BuildHasher>(
+    attributes: &HashMap<String, String, S>,
 ) -> Option<(String, Option<String>)> {
     let input_type = attributes.get("type").map_or_default(|s| s.to_lowercase());
 

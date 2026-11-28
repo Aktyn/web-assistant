@@ -598,7 +598,7 @@ mod tests {
             // Already in edit or preview, skip
         }
         // The proper way: set mode to Edit and verify Esc returns to Preview.
-        let editor = WorkflowEditor::new(workflows, 0, None, None);
+        let editor = WorkflowEditor::new(None);
         panel.mode = WorkflowPanelMode::Edit(editor);
         let esc_event = Event::Key(KeyCode::Esc.into());
         let handled = panel.handle_event(&esc_event, unsafe { &mut *no_read_term() });
@@ -625,7 +625,7 @@ mod tests {
         let workflows = workflows_with_one("Test");
         let mut panel = WorkflowPanel::new(workflows.clone());
         panel.update(Some(0));
-        panel.mode = WorkflowPanelMode::Edit(WorkflowEditor::new(workflows, 0, None, None));
+        panel.mode = WorkflowPanelMode::Edit(WorkflowEditor::new(None));
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
         panel.draw(area, &mut buf, false);

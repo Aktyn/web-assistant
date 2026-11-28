@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-use web_assistant::agent::substitute_variables_in_history;
-use web_assistant::agent::views::{
+use agent::{
     Action, AgentHistoryItem, AgentHistoryList, AgentOutput, AgentStepState,
-    InteractedElementMetadata,
+    InteractedElementMetadata, substitute_variables_in_history,
 };
+use std::collections::HashMap;
 
 #[test]
 fn test_all_input_types_detection() {

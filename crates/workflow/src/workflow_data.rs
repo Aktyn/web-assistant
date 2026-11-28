@@ -107,6 +107,7 @@ mod tests {
             description: Some("desc".to_string()),
             procedures: vec![],
             steps: vec![],
+            network_connection_timeout_sec: 0,
         };
         let cloned = data.clone();
         assert_eq!(cloned.name, data.name);

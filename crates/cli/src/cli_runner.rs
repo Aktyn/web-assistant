@@ -181,6 +181,7 @@ mod tests {
                         },
                     ),
                 ],
+                network_connection_timeout_sec: 600,
             };
             data
         })

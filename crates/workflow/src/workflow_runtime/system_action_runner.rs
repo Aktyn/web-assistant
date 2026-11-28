@@ -42,6 +42,7 @@ mod tests {
                 description: None,
                 procedures: vec![],
                 steps: vec![],
+                ..Default::default()
             },
             Box::new(default_config()),
         )

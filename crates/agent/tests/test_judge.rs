@@ -1,4 +1,4 @@
-use web_assistant::agent::judge::{construct_judge_messages, parse_judgement_response};
+use agent::{construct_judge_messages, parse_judgement_response};
 
 #[test]
 fn test_construct_judge_messages_with_and_without_ground_truth() {

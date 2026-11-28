@@ -77,7 +77,7 @@ mod tests {
         std::fs::write(tmp.path().join("c.txt"), "hello").unwrap();
 
         let result = read_json_files(tmp.path()).await.unwrap();
-        // Only .json files should be returned (not .txt or directories)
+        // Both .json and .jsonc files should be returned (not .txt or directories)
         let names: Vec<_> = result.iter().map(|e| e.file_name()).collect();
         assert!(
             names
@@ -85,7 +85,7 @@ mod tests {
                 .any(|n| n.to_string_lossy().as_bytes() == b"a.json")
         );
         assert!(
-            !names
+            names
                 .iter()
                 .any(|n| n.to_string_lossy().as_bytes() == b"b.jsonc")
         );

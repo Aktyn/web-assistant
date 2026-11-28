@@ -1,8 +1,8 @@
-mod browser;
-mod dom;
-mod js;
-mod utils;
-mod watchdogs;
+pub(crate) mod browser;
+pub(crate) mod dom;
+pub(crate) mod js;
+pub(crate) mod utils;
+pub mod watchdogs;
 
 pub use browser::Browser;
 

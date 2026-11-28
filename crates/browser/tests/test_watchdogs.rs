@@ -1,9 +1,9 @@
 //! Integration tests for browser watchdog modules.
-//! These exercise the public types exported through `web_assistant::browser::watchdogs`.
+//! These exercise the public types exported through `browser::watchdogs`.
 
 use std::path::PathBuf;
 
-use web_assistant::browser::watchdogs::{
+use browser::watchdogs::{
     captcha::{CaptchaResultType, CaptchaWaitResult},
     downloads::{DownloadItem, DownloadState},
     security::SecurityWatchdog,
