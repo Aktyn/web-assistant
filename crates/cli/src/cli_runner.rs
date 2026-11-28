@@ -46,7 +46,7 @@ impl Cli {
                 logger.success("Workflow finished successfully");
             }
             WorkflowState::FailedRun(failed_run) => {
-                logger.error(&format!("Workflow run failed: {}", failed_run.error));
+                logger.error(&format!("Workflow run failed: {:#?}", failed_run.error));
             }
             WorkflowState::Valid(..) | WorkflowState::Invalid(..) | WorkflowState::Running(..) => {
                 bail!("Workflow state is not expected")

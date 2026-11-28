@@ -1,6 +1,6 @@
 use crate::dom::{BrowserState, ElementRect, EnhancedElement};
 use crate::js;
-use crate::utils::chrome;
+use crate::utils::browser_info;
 use crate::watchdogs::BrowserWatchdogs;
 use anyhow::{Context, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose};
@@ -13,7 +13,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use config::BrowserConfig;
-use utils as crate_utils;
+use utils as project_utils;
 
 /// Internal CDP client used when connecting to a remote browser via WebSocket URL.
 /// When using Playwright's native launch mode, this field remains `None`.
@@ -42,7 +42,7 @@ impl CdpClient {
     pub async fn evaluate(&self, expression: &str) -> Result<Value> {
         if let Some(ref page) = self.page {
             let val_str = page.evaluate_value(expression).await?;
-            Ok(crate_utils::json::json_parse(&val_str))
+            Ok(project_utils::json::json_parse(&val_str))
         } else {
             Err(anyhow!("No page available for evaluation"))
         }
@@ -78,19 +78,7 @@ impl Browser {
             return Ok(());
         }
 
-        let executable_path = if let Some(path) = &self.config.executable_path {
-            Ok(path.clone())
-        } else if let Ok(p) = chrome::find_executable() {
-            Ok(p)
-        } else {
-            Err(anyhow!("Could not determine browser executable path"))
-        }?;
-
-        if !executable_path.exists() || !executable_path.is_file() {
-            return Err(anyhow!(
-                "Browser executable path does not exist or is not a file"
-            ));
-        }
+        let browser_info = browser_info::get_browser_info(&self.config)?;
 
         // If a CDP URL is provided, connect to it (for external browser control)
         if let Some(ref ws_url) = self.config.cdp_url {
@@ -102,51 +90,52 @@ impl Browser {
 
         // Launch locally with Playwright
         let playwright = Playwright::launch().await?;
+        let browser_type = match browser_info.browser_type {
+            browser_info::BrowserType::Chrome => playwright.chromium(),
+            browser_info::BrowserType::Firefox => playwright.firefox(),
+        };
 
         let headless = self.config.headless;
-        let user_data_dir = chrome::resolve_user_data_dir(
-            Some(&executable_path),
-            self.config.user_data_dir.as_deref(),
-        );
-
-        let chromium = playwright.chromium();
-
         let mut context_options = BrowserContextOptions::builder()
-            .args(chrome::default_args())
+            .args(browser_info.default_args.clone())
             .headless(headless)
             .no_viewport(!headless)
-            .executable_path(executable_path.display().to_string());
+            .executable_path(browser_info.executable_path.display().to_string());
         if let Some(downloads_dir) = &self.config.downloads_dir {
             context_options = context_options.downloads_path(downloads_dir.display().to_string());
         }
         log::info!(
             "Starting browser {:#?}",
-            (&executable_path, &user_data_dir, &headless)
+            (
+                &browser_info.executable_path,
+                &browser_info.user_data_dir,
+                &headless
+            )
         );
 
-        if let Ok(data_dir) = user_data_dir {
-            let context = chromium
+        if let Some(data_dir) = browser_info.user_data_dir {
+            let context = browser_type
                 .launch_persistent_context_with_options(
-                    data_dir.display().to_string(),
+                    data_dir.to_str().unwrap_or_default(),
                     context_options.build(),
                 )
                 .await
-                .context("Failed to launch persistent context")?;
+                .with_context(|| "Failed to launch persistent context")?;
 
             let page = context.new_page().await?;
             self.context = Some(context);
             self.playwright_page = Some(page);
         } else {
             let mut options = LaunchOptions::new()
-                .args(chrome::default_args())
+                .args(browser_info.default_args.clone())
                 .headless(headless)
-                .executable_path(executable_path.display().to_string());
+                .executable_path(browser_info.executable_path.display().to_string());
 
             if let Some(downloads_dir) = &self.config.downloads_dir {
                 options = options.downloads_path(downloads_dir.display().to_string());
             }
 
-            let browser = chromium
+            let browser = browser_type
                 .launch_with_options(options)
                 .await
                 .context("Failed to launch browser with options")?;
@@ -434,5 +423,15 @@ impl Browser {
 impl Default for Browser {
     fn default() -> Self {
         Self::new(&BrowserConfig::default())
+    }
+}
+
+#[cfg(test)]
+impl CdpClient {
+    /// Constructs a disconnected client for unit tests that only exercise the
+    /// watchdog decision logic (no live CDP connection is required).
+    #[must_use]
+    pub(crate) fn new_test_client() -> Self {
+        Self { page: None }
     }
 }

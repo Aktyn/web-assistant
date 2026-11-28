@@ -1,6 +1,7 @@
 use anyhow::{Result, anyhow};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChromeProfileInfo {
@@ -197,7 +198,7 @@ fn is_user_data_dir_locked(user_data_dir: &Path) -> bool {
 /// List available profiles inside user data directory
 #[must_use]
 #[allow(unused)] //TODO: use or discard
-pub fn list_profiles(user_data_dir: &Path) -> Vec<ChromeProfileInfo> {
+fn list_profiles(user_data_dir: &Path) -> Vec<ChromeProfileInfo> {
     let mut profiles = Vec::new();
     if !user_data_dir.is_dir() {
         return profiles;
@@ -226,8 +227,7 @@ pub fn list_profiles(user_data_dir: &Path) -> Vec<ChromeProfileInfo> {
 }
 
 /// Standard Chrome arguments optimized for automation and CDP
-#[must_use]
-pub fn default_args() -> Vec<String> {
+pub(crate) static DEFAULT_ARGS: LazyLock<Vec<String>> = LazyLock::new(|| {
     vec![
         "--no-first-run".into(),
         "--no-default-browser-check".into(),
@@ -251,7 +251,7 @@ pub fn default_args() -> Vec<String> {
         "--metrics-recording-only".into(),
         "--no-sandbox".into(),
     ]
-}
+});
 
 #[cfg(test)]
 mod tests {
@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_default_args_contains_required_flags() {
-        let args = default_args();
+        let args = &*DEFAULT_ARGS;
         assert!(args.iter().any(|a| a == "--no-sandbox"));
         assert!(args.iter().any(|a| a == "--disable-extensions"));
         assert!(args.iter().any(|a| a == "--no-first-run"));
@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn test_default_args_includes_disable_features() {
-        let args = default_args();
+        let args = &*DEFAULT_ARGS;
         assert!(args.iter().any(|a| a.contains("--disable-features")));
         assert!(args.iter().any(|a| a.contains("--disable-sync")));
     }
