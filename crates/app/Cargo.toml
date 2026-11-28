@@ -1,0 +1,21 @@
+[package]
+name = "web-assistant"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "web-assistant"
+path = "src/main.rs"
+
+[dependencies]
+cli = { path = "../cli" }
+tui = { path = "../tui" }
+utils.workspace = true
+config.workspace = true
+
+tokio.workspace = true
+anyhow.workspace = true
+tui-logger.workspace = true
+
+[lints]
+workspace = true

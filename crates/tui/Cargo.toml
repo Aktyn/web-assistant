@@ -1,0 +1,24 @@
+[package]
+name = "tui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+config.workspace = true
+utils.workspace = true
+workflow.workspace = true
+
+log.workspace = true
+anyhow.workspace = true
+tui-logger.workspace = true
+serde_json.workspace = true
+ratatui = { version = "0.30.2", features = ["unstable-rendered-line-info"] }
+crossterm = "0.29.0"
+tokio = { version = "1", features = ["sync", "rt-multi-thread", "macros", "time"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

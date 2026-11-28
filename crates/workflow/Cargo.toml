@@ -1,0 +1,31 @@
+[package]
+name = "workflow"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+config.workspace = true
+utils.workspace = true
+browser.workspace = true
+agent.workspace = true
+llm.workspace = true
+
+anyhow.workspace = true
+tokio.workspace = true
+log.workspace = true
+scopeguard.workspace = true
+jsonc-parser.workspace = true
+regex.workspace = true
+url.workspace = true
+documented.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+strum.workspace = true
+rand.workspace = true
+notifica = "3.0.2"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "llm"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "llm"
+path = "src/llm.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+reqwest = { version = "0.13", features = ["json"] }
+
+[lints]
+workspace = true
