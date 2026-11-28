@@ -5,6 +5,7 @@ mod workflow_runner;
 
 use crate::views::workflows::workflow_panel::workflow_editor::WorkflowEditor;
 use crate::views::workflows::workflow_panel::workflow_runner::WorkflowRunner;
+use config::Config;
 use crossterm::event::Event;
 use ratatui::{
     DefaultTerminal,
@@ -20,20 +21,21 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use super::super::common::widgets::{Separator, TextField};
+use super::super::common::widgets::{ErrorAlert, Separator, TextField};
 use crate::common::{palette, panel};
 use workflow::{Workflow, WorkflowState, workflow_data::WorkflowData};
 use workflow_delete::WorkflowDelete;
 use workflow_preview::WorkflowPreview;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-enum WorkflowAction {
+pub(super) enum WorkflowAction {
     BackToPreview,
     OpenFile,
     Edit,
     Delete,
     Execution,
     ConfirmDelete,
+    Save,
 }
 
 #[allow(clippy::large_enum_variant)] //TODO: optimize this enum
@@ -44,6 +46,17 @@ pub(super) enum WorkflowPanelMode {
     Delete(WorkflowDelete),
 }
 
+/// Result of handling an event in a panel mode view
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PanelEventOutcome {
+    /// Key was consumed by this mode view (e.g. text input); must not propagate
+    Consumed,
+    /// Key was not handled by this mode view; let it propagate
+    Ignored,
+    /// Key was consumed and produced a panel-level action
+    Action(WorkflowAction),
+}
+
 trait WorkflowPanelModeView {
     fn render(&self, selection: &WorkflowSelection, area: Rect, buf: &mut Buffer);
     fn handle_event(
@@ -51,7 +64,10 @@ trait WorkflowPanelModeView {
         event: &Event,
         _terminal: &mut DefaultTerminal,
         selection: &WorkflowSelection,
-    ) -> Option<WorkflowAction>;
+    ) -> PanelEventOutcome;
+
+    /// Called periodically (also without any input events), e.g. for polling async updates
+    fn tick(&mut self) {}
 }
 
 #[derive(Debug)]
@@ -71,20 +87,61 @@ struct WorkflowSelection {
     index: usize,
     workflow_file: Option<PathBuf>,
     state: WorkflowSelectionState,
+    /// Whether the workflow is currently being executed
+    is_running: bool,
 }
 
 pub(crate) struct WorkflowPanel {
     workflows: Arc<RwLock<Vec<Workflow>>>,
+    config: Arc<RwLock<Config>>,
+    /// A runner that was left while its background run was still in flight; kept alive
+    /// until its final state is written to the shared workflow list
+    detached_runner: Option<WorkflowRunner>,
     selected_workflow: Option<WorkflowSelection>,
     pub(super) mode: WorkflowPanelMode,
+    workflows_directory: PathBuf,
+    save_error: Option<String>,
 }
 
 impl WorkflowPanel {
-    pub(super) fn new(workflows: Arc<RwLock<Vec<Workflow>>>) -> Self {
+    pub(super) fn new(
+        workflows: Arc<RwLock<Vec<Workflow>>>,
+        config: Arc<RwLock<Config>>,
+        workflows_directory: PathBuf,
+    ) -> Self {
         Self {
             workflows,
+            config,
+            detached_runner: None,
             selected_workflow: None,
             mode: WorkflowPanelMode::Preview(WorkflowPreview::new()),
+            workflows_directory,
+            save_error: None,
+        }
+    }
+
+    /// Replace the current mode, keeping a still-running workflow runner alive in the background
+    fn swap_mode(
+        mode: &mut WorkflowPanelMode,
+        detached_runner: &mut Option<WorkflowRunner>,
+        new_mode: WorkflowPanelMode,
+    ) {
+        if let WorkflowPanelMode::Run(runner) = std::mem::replace(mode, new_mode)
+            && runner.is_active()
+        {
+            *detached_runner = Some(runner);
+        }
+    }
+
+    pub(super) fn tick(&mut self) {
+        if let WorkflowPanelMode::Run(runner) = &mut self.mode {
+            runner.tick();
+        }
+        if let Some(runner) = &mut self.detached_runner {
+            runner.tick();
+            if !runner.is_active() {
+                self.detached_runner = None;
+            }
         }
     }
 
@@ -103,6 +160,7 @@ impl WorkflowPanel {
 
     pub(super) fn open_workflow(&mut self, index: usize) {
         log::info!("Opening workflow: {index:?}");
+        self.save_error = None;
 
         let return_valid_selection = |data: &WorkflowData| {
             WorkflowSelectionState::Valid(ValidWorkflowState {
@@ -120,6 +178,7 @@ impl WorkflowPanel {
                     self.selected_workflow = Some(WorkflowSelection {
                         index,
                         workflow_file: workflow.file_path.clone(),
+                        is_running: matches!(workflow.state, WorkflowState::Running(..)),
                         state: match &workflow.state {
                             WorkflowState::Valid(data) => return_valid_selection(data),
                             WorkflowState::Invalid(error) => {
@@ -154,7 +213,18 @@ impl WorkflowPanel {
                             },
                             // workflow.file_path.clone(),
                         );
-                        self.mode = WorkflowPanelMode::Edit(editor);
+                        Self::swap_mode(
+                            &mut self.mode,
+                            &mut self.detached_runner,
+                            WorkflowPanelMode::Edit(editor),
+                        );
+                    } else {
+                        // For non-draft workflows, always switch to Preview mode
+                        Self::swap_mode(
+                            &mut self.mode,
+                            &mut self.detached_runner,
+                            WorkflowPanelMode::Preview(WorkflowPreview::new()),
+                        );
                     }
                 } else {
                     log::error!("Cannot get workflow with index: {index}");
@@ -172,8 +242,18 @@ impl WorkflowPanel {
         area: Rect,
         buf: &mut Buffer,
     ) {
-        let [path_area, options_separator_area, mode_area] =
-            area.layout(&Layout::vertical([Length(1), Length(1), Fill(1)]));
+        let error_height = if self.save_error.is_some() { 3 } else { 0 };
+        let [path_area, error_area, options_separator_area, mode_area] =
+            area.layout(&Layout::vertical([
+                Length(1),
+                Length(error_height),
+                Length(1),
+                Fill(1),
+            ]));
+
+        if let Some(save_error) = &self.save_error {
+            ErrorAlert::new(save_error.as_str()).render(error_area, buf);
+        }
 
         if let Some(workflow_file) = &selection.workflow_file {
             let absolute_path =
@@ -210,6 +290,7 @@ impl WorkflowPanel {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn run_workflow_action(&mut self, action: WorkflowAction) {
         let Some(selected_workflow) = &self.selected_workflow else {
             return;
@@ -258,7 +339,11 @@ impl WorkflowPanel {
                     workflow_data,
                     // selected_workflow.workflow_file.clone(),
                 );
-                self.mode = WorkflowPanelMode::Edit(editor);
+                Self::swap_mode(
+                    &mut self.mode,
+                    &mut self.detached_runner,
+                    WorkflowPanelMode::Edit(editor),
+                );
             }
             WorkflowAction::Delete => self.mode = WorkflowPanelMode::Delete(WorkflowDelete::new()),
             WorkflowAction::Execution => {
@@ -289,11 +374,16 @@ impl WorkflowPanel {
 
                 let runner = WorkflowRunner::new(
                     self.workflows.clone(),
+                    self.config.clone(),
                     selected_workflow.index,
                     workflow_data,
                     selected_workflow.workflow_file.clone(),
                 );
-                self.mode = WorkflowPanelMode::Run(runner);
+                Self::swap_mode(
+                    &mut self.mode,
+                    &mut self.detached_runner,
+                    WorkflowPanelMode::Run(runner),
+                );
             }
             WorkflowAction::ConfirmDelete => {
                 if let Some(file_path) = selected_workflow.workflow_file.as_ref() {
@@ -310,13 +400,107 @@ impl WorkflowPanel {
                     workflows.remove(target_index);
                 }
                 self.selected_workflow = None;
-                self.mode = WorkflowPanelMode::Preview(WorkflowPreview::new());
+                Self::swap_mode(
+                    &mut self.mode,
+                    &mut self.detached_runner,
+                    WorkflowPanelMode::Preview(WorkflowPreview::new()),
+                );
             }
             WorkflowAction::BackToPreview => {
-                self.mode = WorkflowPanelMode::Preview(WorkflowPreview::new());
+                Self::swap_mode(
+                    &mut self.mode,
+                    &mut self.detached_runner,
+                    WorkflowPanelMode::Preview(WorkflowPreview::new()),
+                );
+            }
+            WorkflowAction::Save => {
+                self.save_workflow();
             }
         }
     }
+
+    fn save_workflow(&mut self) {
+        let Some(selected_workflow) = &self.selected_workflow else {
+            return;
+        };
+        let target_index = selected_workflow.index;
+        let existing_file = selected_workflow.workflow_file.clone();
+
+        // Only save if we're in edit mode
+        let workflow_data = if let WorkflowPanelMode::Edit(editor) = &self.mode {
+            editor.build_workflow_data()
+        } else {
+            return;
+        };
+
+        self.save_error = None;
+
+        let file_path = if let Some(path) = existing_file {
+            // Existing workflow: overwrite in place
+            path
+        } else {
+            // Draft workflow: generate a new file name from the workflow name
+            let file_name = sanitize_filename(&workflow_data.name);
+            let path = self.workflows_directory.join(format!("{file_name}.json"));
+            if path.exists() {
+                let message = format!("Workflow file already exists: {}", path.display());
+                log::error!("{message}");
+                self.save_error = Some(message);
+                return;
+            }
+            path
+        };
+
+        let json = match serde_json::to_string_pretty(&workflow_data) {
+            Ok(json) => json,
+            Err(err) => {
+                log::error!("Failed to serialize workflow: {err}");
+                self.save_error = Some(format!("Failed to serialize workflow: {err}"));
+                return;
+            }
+        };
+
+        if let Err(err) = std::fs::write(&file_path, &json) {
+            log::error!("Failed to write workflow file: {err}");
+            self.save_error = Some(format!("Failed to write workflow file: {err}"));
+            return;
+        }
+
+        log::info!("Saved workflow to: {}", file_path.display());
+
+        // Update the workflow in the list
+        if let Ok(mut workflows) = self.workflows.write()
+            && target_index < workflows.len()
+        {
+            let json_file = workflow::JsonFile::from_raw(file_path.clone(), json);
+            workflows[target_index] = Workflow::new(json_file);
+
+            // Update the selected workflow to reflect the file path
+            if let Some(s) = self.selected_workflow.as_mut() {
+                s.workflow_file = Some(file_path);
+            }
+
+            // Switch back to preview mode
+            Self::swap_mode(
+                &mut self.mode,
+                &mut self.detached_runner,
+                WorkflowPanelMode::Preview(WorkflowPreview::new()),
+            );
+        }
+    }
+}
+
+fn sanitize_filename(name: &str) -> String {
+    name.chars()
+        .map(|c| match c {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | ' ' | '-' | '_' => c,
+            _ => '-',
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join("-")
+        .to_lowercase()
 }
 
 impl panel::Panel for WorkflowPanel {
@@ -339,7 +523,7 @@ impl panel::Panel for WorkflowPanel {
             return false;
         };
 
-        let action: Option<WorkflowAction> = match &mut self.mode {
+        let outcome = match &mut self.mode {
             WorkflowPanelMode::Preview(preview) => preview.handle_event(event, terminal, selection),
             WorkflowPanelMode::Edit(editor) => editor.handle_event(event, terminal, selection),
             WorkflowPanelMode::Run(runner) => runner.handle_event(event, terminal, selection),
@@ -347,12 +531,15 @@ impl panel::Panel for WorkflowPanel {
                 workflow_delete.handle_event(event, terminal, selection)
             }
         };
-        if let Some(action) = action {
-            self.run_workflow_action(action);
-            return true;
-        }
 
-        false
+        match outcome {
+            PanelEventOutcome::Consumed => true,
+            PanelEventOutcome::Action(action) => {
+                self.run_workflow_action(action);
+                true
+            }
+            PanelEventOutcome::Ignored => false,
+        }
     }
 }
 
@@ -382,16 +569,26 @@ mod tests {
         Arc::new(RwLock::new(Vec::new()))
     }
 
+    fn test_workflows_directory() -> PathBuf {
+        PathBuf::from("/tmp/test-workflows")
+    }
+
+    fn test_config() -> Arc<RwLock<config::Config>> {
+        Arc::new(RwLock::new(config::Config::default()))
+    }
+
     #[test]
     fn test_workflow_panel_new() {
         let workflows = empty_workflows();
-        let _panel = WorkflowPanel::new(workflows.clone());
+        let _panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
     }
 
     #[test]
     fn test_workflow_panel_draw_no_panic() {
         let workflows = empty_workflows();
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         let area = Rect::new(0, 0, 50, 20);
         let mut buf = Buffer::empty(area);
         panel.draw(area, &mut buf, false);
@@ -400,7 +597,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_draw_focused() {
         let workflows = empty_workflows();
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         let area = Rect::new(0, 0, 50, 20);
         let mut buf = Buffer::empty(area);
         panel.draw(area, &mut buf, true);
@@ -419,7 +617,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_handle_up_event_ok() {
         let workflows = empty_workflows();
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         let event = Event::Key(KeyCode::Up.into());
         let _handled = panel.handle_event(&event, unsafe { &mut *no_read_term() });
     }
@@ -427,7 +626,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_handle_mouse_event_ok() {
         let workflows = empty_workflows();
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         let event = Event::Mouse(crossterm::event::MouseEvent {
             kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
             column: 0,
@@ -440,7 +640,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_draw_with_default_path_no_panic() {
         let workflows = empty_workflows();
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         let area = Rect::new(0, 0, 50, 20);
         let mut buf = Buffer::empty(area);
         panel.draw(area, &mut buf, false);
@@ -478,7 +679,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_update_opens_new_selection() {
         let workflows = workflows_with_one("My Workflow");
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         assert!(panel.selected_workflow.is_none());
         panel.update(Some(0));
         assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 0);
@@ -487,7 +689,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_update_skips_same_index() {
         let workflows = workflows_with_one("My Workflow");
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
         // Update again with the same index — should not re-open (no-op).
         panel.update(Some(0));
@@ -497,7 +700,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_update_changes_index() {
         let workflows = workflows_with_two();
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
         assert_eq!(panel.selected_workflow.as_ref().unwrap().index, 0);
         // Different index triggers re-open.
@@ -508,7 +712,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_update_none_is_noop() {
         let workflows = workflows_with_one("My Workflow");
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
         assert!(panel.selected_workflow.is_some());
         // None means "keep current selection".
@@ -519,7 +724,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_draw_with_valid_workflow_no_panic() {
         let workflows = workflows_with_one("My Workflow");
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
@@ -529,7 +735,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_draw_with_invalid_workflow_renders_error() {
         let workflows = workflows_with_invalid();
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
@@ -539,7 +746,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_draw_with_out_of_bounds_index_renders_error() {
         let workflows = workflows_with_one("X");
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         // Index 5 does not exist in a single-workflow list.
         panel.update(Some(5));
         let area = Rect::new(0, 0, 80, 24);
@@ -550,7 +758,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_draw_with_small_area_no_panic() {
         let workflows = workflows_with_one("Hi");
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
         // Give enough vertical space for header (2) + content separators.
         let area = Rect::new(0, 0, 10, 8);
@@ -561,7 +770,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_handle_down_event_ok() {
         let workflows = empty_workflows();
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         let event = Event::Key(KeyCode::Down.into());
         let _handled = panel.handle_event(&event, unsafe { &mut *no_read_term() });
     }
@@ -569,7 +779,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_handle_unknown_key_ignored() {
         let workflows = empty_workflows();
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         let event = Event::Key(KeyCode::Char('z').into());
         let handled = panel.handle_event(&event, unsafe { &mut *no_read_term() });
         assert!(!handled);
@@ -578,7 +789,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_open_edit_mode_and_return_to_preview() {
         let workflows = workflows_with_one("Test");
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
         // Verify panel is in preview mode after opening.
         assert!(matches!(panel.mode, WorkflowPanelMode::Preview(_)));
@@ -609,10 +821,11 @@ mod tests {
     #[test]
     fn test_workflow_panel_open_run_mode_and_return_to_preview() {
         let workflows = workflows_with_one("Test");
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
         // Simulate being in Run mode and pressing Esc.
-        let runner = WorkflowRunner::new(workflows, 0, None, None);
+        let runner = WorkflowRunner::new(workflows, test_config(), 0, None, None);
         panel.mode = WorkflowPanelMode::Run(runner);
         let esc_event = Event::Key(KeyCode::Esc.into());
         let handled = panel.handle_event(&esc_event, unsafe { &mut *no_read_term() });
@@ -623,7 +836,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_draw_in_edit_mode_no_panic() {
         let workflows = workflows_with_one("Test");
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
         panel.mode = WorkflowPanelMode::Edit(WorkflowEditor::new(None));
         let area = Rect::new(0, 0, 80, 24);
@@ -635,9 +849,10 @@ mod tests {
     #[test]
     fn test_workflow_panel_draw_in_run_mode_no_panic() {
         let workflows = workflows_with_one("Test");
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
-        let runner = WorkflowRunner::new(workflows, 0, None, None);
+        let runner = WorkflowRunner::new(workflows, test_config(), 0, None, None);
         panel.mode = WorkflowPanelMode::Run(runner);
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
@@ -649,7 +864,8 @@ mod tests {
     fn test_workflow_panel_draw_with_draft_workflow_opens_edit_mode() {
         let draft = Workflow::new_draft();
         let workflows = Arc::new(RwLock::new(vec![draft]));
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
         // Draft workflows should open in Edit mode.
         assert!(matches!(panel.mode, WorkflowPanelMode::Edit(_)));
@@ -666,7 +882,8 @@ mod tests {
         let json = JsonFile::from_raw(wf_path.clone(), json_content.to_string());
         let workflow = Workflow::new(json);
         let workflows = Arc::new(RwLock::new(vec![workflow]));
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
 
         // Set mode to Delete and simulate confirming.
@@ -689,7 +906,8 @@ mod tests {
         );
         let workflow = Workflow::new(json);
         let workflows = Arc::new(RwLock::new(vec![workflow]));
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
 
         panel.mode = WorkflowPanelMode::Delete(WorkflowDelete::new());
@@ -705,7 +923,8 @@ mod tests {
     #[test]
     fn test_workflow_panel_escape_from_delete_returns_to_preview() {
         let workflows = workflows_with_one("Test");
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
         panel.mode = WorkflowPanelMode::Delete(WorkflowDelete::new());
         let esc_event = Event::Key(KeyCode::Esc.into());
@@ -718,7 +937,8 @@ mod tests {
     fn test_workflow_panel_draw_draft_workflow_shows_draft_text() {
         let draft = Workflow::new_draft();
         let workflows = Arc::new(RwLock::new(vec![draft]));
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
@@ -726,10 +946,108 @@ mod tests {
         // If we get here without panicking, rendering succeeded with draft text.
     }
 
+    fn data_named(name: &str) -> WorkflowData {
+        serde_json::from_str(&format!(r#"{{"name":"{name}","steps":[]}}"#)).unwrap()
+    }
+
+    #[test]
+    fn test_save_draft_creates_new_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workflows = Arc::new(RwLock::new(vec![Workflow::new_draft()]));
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), tmp.path().to_path_buf());
+        panel.update(Some(0));
+        assert!(matches!(panel.mode, WorkflowPanelMode::Edit(_)));
+        panel.mode = WorkflowPanelMode::Edit(WorkflowEditor::new(Some(data_named("My Flow"))));
+
+        panel.run_workflow_action(WorkflowAction::Save);
+
+        let expected = tmp.path().join("my-flow.json");
+        assert!(expected.exists());
+        assert!(panel.save_error.is_none());
+        assert!(matches!(panel.mode, WorkflowPanelMode::Preview(_)));
+        let wfs = panel.workflows.read().unwrap();
+        assert_eq!(wfs[0].file_path.as_ref(), Some(&expected));
+        assert_eq!(
+            panel.selected_workflow.as_ref().unwrap().workflow_file,
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn test_save_existing_workflow_overwrites_same_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let wf_path = tmp.path().join("original-file-name.json");
+        let original = r#"{"name":"Original","steps":[]}"#;
+        std::fs::write(&wf_path, original).unwrap();
+
+        let workflow = Workflow::new(JsonFile::from_raw(wf_path.clone(), original.to_string()));
+        let workflows = Arc::new(RwLock::new(vec![workflow]));
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), tmp.path().to_path_buf());
+        panel.update(Some(0));
+        assert!(matches!(panel.mode, WorkflowPanelMode::Preview(_)));
+
+        panel.run_workflow_action(WorkflowAction::Edit);
+        assert!(matches!(panel.mode, WorkflowPanelMode::Edit(_)));
+        panel.mode = WorkflowPanelMode::Edit(WorkflowEditor::new(Some(data_named("Renamed"))));
+
+        panel.run_workflow_action(WorkflowAction::Save);
+
+        assert!(panel.save_error.is_none());
+        assert!(matches!(panel.mode, WorkflowPanelMode::Preview(_)));
+        // Written in place, no new name-based file created.
+        assert!(!tmp.path().join("renamed.json").exists());
+        let content = std::fs::read_to_string(&wf_path).unwrap();
+        assert_ne!(content, original);
+        assert!(content.contains("Renamed"));
+        let wfs = panel.workflows.read().unwrap();
+        assert_eq!(wfs[0].file_path.as_ref(), Some(&wf_path));
+    }
+
+    #[test]
+    fn test_save_draft_name_collision_sets_error_and_keeps_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let existing = tmp.path().join("my-flow.json");
+        std::fs::write(&existing, "original content").unwrap();
+
+        let workflows = Arc::new(RwLock::new(vec![Workflow::new_draft()]));
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), tmp.path().to_path_buf());
+        panel.update(Some(0));
+        panel.mode = WorkflowPanelMode::Edit(WorkflowEditor::new(Some(data_named("My Flow"))));
+
+        panel.run_workflow_action(WorkflowAction::Save);
+
+        let error = panel.save_error.as_ref().unwrap();
+        assert!(error.starts_with("Workflow file already exists:"));
+        assert_eq!(
+            std::fs::read_to_string(&existing).unwrap(),
+            "original content"
+        );
+        assert!(matches!(panel.mode, WorkflowPanelMode::Edit(_)));
+        assert!(
+            panel
+                .selected_workflow
+                .as_ref()
+                .unwrap()
+                .workflow_file
+                .is_none()
+        );
+
+        // Error is rendered without panicking and cleared on re-open.
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buf = Buffer::empty(area);
+        panel.draw(area, &mut buf, false);
+        panel.open_workflow(0);
+        assert!(panel.save_error.is_none());
+    }
+
     #[test]
     fn test_workflow_panel_handles_edit_action_via_preview() {
         let workflows = workflows_with_one("Test");
-        let mut panel = WorkflowPanel::new(workflows.clone());
+        let mut panel =
+            WorkflowPanel::new(workflows.clone(), test_config(), test_workflows_directory());
         panel.update(Some(0));
         // Preview button list_state starts at index 1 (Edit button).
         // We can't easily trigger the preview's handle_event navigation,

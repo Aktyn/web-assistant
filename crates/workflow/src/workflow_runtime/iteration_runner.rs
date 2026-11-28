@@ -1,5 +1,6 @@
 use anyhow::{Result, anyhow};
 use rand::seq::SliceRandom;
+use std::ops::ControlFlow;
 use std::path::Path;
 
 use super::step;
@@ -46,12 +47,21 @@ impl super::RunningWorkflow {
                 context.set_item(&for_each_step.context_name, item);
             }
 
-            let run_result =
-                Box::pin(self.run_steps(&for_each_step.steps, workflow_file_path)).await;
+            let run_result = Box::pin(self.run_steps(
+                &for_each_step.steps,
+                workflow_file_path,
+                &mut |_| ControlFlow::Continue(()),
+            ))
+            .await;
 
             if let Err(error) = run_result {
                 if let Some(steps_on_error) = &for_each_step.on_error {
-                    Box::pin(self.run_steps(steps_on_error, workflow_file_path)).await?;
+                    Box::pin(
+                        self.run_steps(steps_on_error, workflow_file_path, &mut |_| {
+                            ControlFlow::Continue(())
+                        }),
+                    )
+                    .await?;
                 } else {
                     self.logger.lock().await.error(&format!(
                         "Error running iteration {}: {}",

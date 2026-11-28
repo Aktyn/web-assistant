@@ -14,8 +14,9 @@ use ratatui::{
 
 use super::super::super::common::palette;
 use super::super::super::common::widgets::{Button, ButtonData, EditableTextField, Separator};
-use super::{WorkflowAction, WorkflowPanelModeView, WorkflowSelection};
-use workflow::workflow_data::WorkflowData;
+use super::{PanelEventOutcome, WorkflowAction, WorkflowPanelModeView, WorkflowSelection};
+use workflow::workflow_data::{WorkflowData, step::WorkflowStepType};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EditorFocus {
     Name,
@@ -44,24 +45,6 @@ impl EditorFocus {
     }
 }
 
-/// Action that the workflow editor can return
-#[derive(Debug, Clone)]
-pub(crate) enum WorkflowEditorAction {
-    Save(WorkflowData),
-    Cancel,
-}
-
-impl PartialEq for WorkflowEditorAction {
-    fn eq(&self, other: &Self) -> bool {
-        matches!(
-            (self, other),
-            (WorkflowEditorAction::Cancel, WorkflowEditorAction::Cancel)
-                | (WorkflowEditorAction::Save(_), WorkflowEditorAction::Save(_))
-        )
-    }
-}
-impl Eq for WorkflowEditorAction {}
-
 /// The main workflow editor
 pub(crate) struct WorkflowEditor {
     // workflows: Arc<RwLock<Vec<Workflow>>>,
@@ -75,8 +58,13 @@ pub(crate) struct WorkflowEditor {
     steps_list_state: ListState,
     json_editor: Option<JsonEditor>,
 
+    /// Steps modified in this editing session (`None` means untouched original steps)
+    edited_steps: Option<Vec<WorkflowStepType>>,
+    /// Index of the step currently opened in the JSON editor (`None` for a new step)
+    editing_step_index: Option<usize>,
+
     // Buttons
-    buttons: [ButtonData<WorkflowEditorAction>; 2],
+    buttons: [ButtonData<WorkflowAction>; 2],
     buttons_list_state: ListState,
 
     // Current focus
@@ -118,23 +106,19 @@ impl WorkflowEditor {
             description_field,
             steps_list_state,
             json_editor: None,
+            edited_steps: None,
+            editing_step_index: None,
             buttons: [
-                ButtonData::new("Save", WorkflowEditorAction::Save(WorkflowData::default())),
-                ButtonData::new("Cancel", WorkflowEditorAction::Cancel),
+                ButtonData::new("Save", WorkflowAction::Save),
+                ButtonData::new("Cancel", WorkflowAction::BackToPreview),
             ],
             buttons_list_state: ListState::default().with_selected(Some(0)),
             focus: EditorFocus::Name,
         }
     }
 
-    fn build_workflow_data(&self) -> WorkflowData {
-        let steps = if let Some(editor) = &self.json_editor {
-            editor.get_steps()
-        } else {
-            self.original_data
-                .as_ref()
-                .map_or_default(|d| d.steps.clone())
-        };
+    pub(crate) fn build_workflow_data(&self) -> WorkflowData {
+        let steps = self.current_base_steps();
 
         WorkflowData {
             name: self.name_field.value().to_string(),
@@ -227,55 +211,58 @@ impl WorkflowEditor {
             .render(cancel_area, buf);
     }
 
-    fn get_current_steps(&self) -> Vec<workflow::workflow_data::step::WorkflowStepType> {
-        if let Some(editor) = &self.json_editor {
-            editor.get_steps()
-        } else {
+    fn current_base_steps(&self) -> Vec<WorkflowStepType> {
+        self.edited_steps.clone().unwrap_or_else(|| {
             self.original_data
                 .as_ref()
                 .map_or_default(|d| d.steps.clone())
-        }
+        })
     }
 
-    fn handle_key_event(&mut self, key: KeyEvent) -> Option<WorkflowEditorAction> {
+    fn get_current_steps(&self) -> Vec<WorkflowStepType> {
+        self.current_base_steps()
+    }
+
+    fn handle_key_event(&mut self, key: KeyEvent) -> PanelEventOutcome {
         if let Some(editor) = &mut self.json_editor {
-            if let Some(action) = editor.handle_key_event(key) {
-                match action {
-                    JsonEditorAction::Save(_steps) => {
-                        self.json_editor = None;
-                    }
-                    JsonEditorAction::Cancel => {
-                        self.json_editor = None;
-                    }
+            match editor.handle_key_event(key) {
+                Some(JsonEditorAction::Save(steps)) => {
+                    self.json_editor = None;
+                    self.apply_edited_steps(steps);
                 }
+                Some(JsonEditorAction::Cancel) => {
+                    self.json_editor = None;
+                    self.editing_step_index = None;
+                }
+                None => {}
             }
-            return None;
+            return PanelEventOutcome::Consumed;
         }
 
         match (key.code, key.modifiers) {
-            (KeyCode::Tab, KeyModifiers::NONE) => {
+            (KeyCode::Tab, _) => {
                 self.focus = self.focus.next();
                 self.update_focus();
-                None
+                PanelEventOutcome::Consumed
             }
-            (KeyCode::BackTab, KeyModifiers::SHIFT) => {
+            (KeyCode::BackTab, _) => {
                 self.focus = self.focus.prev();
                 self.update_focus();
-                None
+                PanelEventOutcome::Consumed
             }
             (KeyCode::Up, _) if self.focus == EditorFocus::StepsList => {
                 let steps = self.get_current_steps();
                 if !steps.is_empty() {
                     self.move_selection(steps.len(), -1);
                 }
-                None
+                PanelEventOutcome::Consumed
             }
             (KeyCode::Down, _) if self.focus == EditorFocus::StepsList => {
                 let steps = self.get_current_steps();
                 if !steps.is_empty() {
                     self.move_selection(steps.len(), 1);
                 }
-                None
+                PanelEventOutcome::Consumed
             }
             (KeyCode::Enter, _) if self.focus == EditorFocus::StepsList => {
                 if let Some(selected) = self.steps_list_state.selected() {
@@ -283,46 +270,61 @@ impl WorkflowEditor {
                 } else {
                     self.add_new_step();
                 }
-                None
+                PanelEventOutcome::Consumed
             }
             (KeyCode::Delete, _) if self.focus == EditorFocus::StepsList => {
                 if let Some(selected) = self.steps_list_state.selected() {
                     self.delete_step(selected);
                 }
-                None
+                PanelEventOutcome::Consumed
             }
-            (KeyCode::Left, _) if self.focus == EditorFocus::Buttons => {
-                self.buttons_list_state.select(Some(0));
-                None
-            }
-            (KeyCode::Right, _) if self.focus == EditorFocus::Buttons => {
-                self.buttons_list_state.select(Some(1));
-                None
+            (KeyCode::Left | KeyCode::Right, _) if self.focus == EditorFocus::Buttons => {
+                self.buttons_list_state
+                    .select(Some(usize::from(key.code == KeyCode::Right)));
+                PanelEventOutcome::Consumed
             }
             (KeyCode::Enter, _) if self.focus == EditorFocus::Buttons => {
                 if let Some(selected) = self.buttons_list_state.selected()
                     && let Some(button_data) = self.buttons.get(selected)
                 {
-                    if button_data.action == WorkflowEditorAction::Cancel {
-                        return Some(WorkflowEditorAction::Cancel);
-                    }
-                    let data = self.build_workflow_data();
-                    return Some(WorkflowEditorAction::Save(data));
+                    return PanelEventOutcome::Action(button_data.action);
                 }
-                None
+                PanelEventOutcome::Consumed
             }
-            (KeyCode::Esc, _) => Some(WorkflowEditorAction::Cancel),
+            (KeyCode::Esc, _) => PanelEventOutcome::Action(WorkflowAction::BackToPreview),
             _ => match self.focus {
                 EditorFocus::Name => {
                     self.handle_text_input(true, key);
-                    None
+                    PanelEventOutcome::Consumed
                 }
                 EditorFocus::Description => {
                     self.handle_text_input(false, key);
-                    None
+                    PanelEventOutcome::Consumed
                 }
-                _ => None,
+                _ => PanelEventOutcome::Ignored,
             },
+        }
+    }
+
+    /// Merge steps saved from the JSON editor into the edited steps
+    fn apply_edited_steps(&mut self, steps: Vec<WorkflowStepType>) {
+        let editing_index = self.editing_step_index.take();
+        if steps.is_empty() {
+            return;
+        }
+
+        let mut base = self.current_base_steps();
+        match editing_index {
+            Some(index) => {
+                let start = index.min(base.len());
+                let end = (start + 1).min(base.len());
+                base.splice(start..end, steps);
+            }
+            None => base.extend(steps),
+        }
+        self.edited_steps = Some(base);
+        if self.steps_list_state.selected().is_none() {
+            self.steps_list_state.select(Some(0));
         }
     }
 
@@ -359,10 +361,11 @@ impl WorkflowEditor {
     }
 
     fn edit_step(&mut self, index: usize) {
-        let steps = self.get_current_steps();
+        let steps = self.current_base_steps();
         if let Some(step) = steps.get(index) {
             let step_json = serde_json::to_string_pretty(step).unwrap_or_default();
             self.json_editor = Some(JsonEditor::new(step_json));
+            self.editing_step_index = Some(index);
         }
     }
 
@@ -376,12 +379,22 @@ impl WorkflowEditor {
   }
 }"#;
         self.json_editor = Some(JsonEditor::new(template.to_string()));
+        self.editing_step_index = None;
     }
 
     fn delete_step(&mut self, index: usize) {
-        if let Some(editor) = &mut self.json_editor {
-            editor.delete_step(index);
+        let mut steps = self.current_base_steps();
+        if index >= steps.len() {
+            return;
         }
+        steps.remove(index);
+        let remaining = steps.len();
+        self.edited_steps = Some(steps);
+        self.steps_list_state.select(if remaining == 0 {
+            None
+        } else {
+            Some(index.min(remaining - 1))
+        });
     }
 }
 
@@ -431,20 +444,11 @@ impl WorkflowPanelModeView for WorkflowEditor {
         event: &Event,
         _terminal: &mut ratatui::DefaultTerminal,
         _selection: &WorkflowSelection,
-    ) -> Option<WorkflowAction> {
-        if let Some(key) = event.as_key_event()
-            && let Some(action) = self.handle_key_event(key)
-        {
-            match action {
-                WorkflowEditorAction::Save(_data) => {
-                    return Some(WorkflowAction::BackToPreview);
-                }
-                WorkflowEditorAction::Cancel => {
-                    return Some(WorkflowAction::BackToPreview);
-                }
-            }
+    ) -> PanelEventOutcome {
+        if let Some(key) = event.as_key_event() {
+            return self.handle_key_event(key);
         }
-        None
+        PanelEventOutcome::Ignored
     }
 }
 
@@ -553,17 +557,6 @@ impl JsonEditor {
         } else {
             self.error = None;
             true
-        }
-    }
-
-    fn delete_step(&mut self, index: usize) {
-        if let Ok(mut steps) = serde_json::from_str::<
-            Vec<workflow::workflow_data::step::WorkflowStepType>,
-        >(&self.text_area.content)
-            && index < steps.len()
-        {
-            steps.remove(index);
-            self.text_area.content = serde_json::to_string_pretty(&steps).unwrap_or_default();
         }
     }
 

@@ -24,6 +24,10 @@ pub(super) trait View {
     /// Should return true if event was handled internally and should not be propagated further
     fn handle_event(&mut self, event: &Event, terminal: &mut DefaultTerminal) -> bool;
     fn get_action(&self) -> Option<ViewAction>;
+    /// Called after the action returned by `get_action` has been processed
+    fn consume_action(&mut self) {}
+    /// Called on every iteration of the main loop, even when there were no events
+    fn tick(&mut self) {}
 
     fn as_any(&self) -> &dyn Any;
 }

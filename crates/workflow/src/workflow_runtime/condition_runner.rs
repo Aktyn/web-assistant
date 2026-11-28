@@ -1,5 +1,6 @@
 use anyhow::Result;
 use regex::Regex;
+use std::ops::ControlFlow;
 use std::path::Path;
 
 use super::step;
@@ -42,9 +43,15 @@ impl super::RunningWorkflow {
         };
 
         if is_met {
-            Box::pin(self.run_steps(&step.then, workflow_file_path)).await?;
+            Box::pin(self.run_steps(&step.then, workflow_file_path, &mut |_| {
+                ControlFlow::Continue(())
+            }))
+            .await?;
         } else {
-            Box::pin(self.run_steps(&step.else_, workflow_file_path)).await?;
+            Box::pin(self.run_steps(&step.else_, workflow_file_path, &mut |_| {
+                ControlFlow::Continue(())
+            }))
+            .await?;
         }
 
         Ok(())

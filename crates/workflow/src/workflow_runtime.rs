@@ -10,6 +10,7 @@ mod system_action_runner;
 use anyhow::{Context as _, Result, bail};
 use scopeguard::defer;
 use std::mem;
+use std::ops::ControlFlow;
 use std::path::Path;
 use tokio::sync::Mutex;
 
@@ -18,6 +19,13 @@ use crate::workflow::{Workflow, WorkflowState};
 use crate::workflow_data::{WorkflowData, step};
 use browser::Browser;
 use config::Config;
+
+/// Step progress update emitted while a workflow runs
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StepProgress {
+    StepStarted { index: usize },
+    StepCompleted { index: usize },
+}
 
 pub struct RunningWorkflow {
     pub data: WorkflowData,
@@ -51,10 +59,14 @@ impl RunningWorkflow {
 
     async fn run_steps(
         &self,
-        steps: &Vec<step::WorkflowStepType>,
+        steps: &[step::WorkflowStepType],
         workflow_file_path: &Path,
+        on_step: &mut impl FnMut(StepProgress) -> ControlFlow<()>,
     ) -> Result<()> {
-        for step in steps {
+        for (index, step) in steps.iter().enumerate() {
+            if on_step(StepProgress::StepStarted { index }).is_break() {
+                return Ok(());
+            }
             match step {
                 step::WorkflowStepType::PageAction(page_action_step) => {
                     self.browser.lock().await.start().await?;
@@ -92,6 +104,9 @@ impl RunningWorkflow {
                     self.abort_workflow(abort_step).await?;
                 }
             }
+            if on_step(StepProgress::StepCompleted { index }).is_break() {
+                return Ok(());
+            }
         }
 
         Ok(())
@@ -113,6 +128,21 @@ impl Workflow {
     /// # Errors
     /// This function returns an error if the workflow fails to run.
     pub async fn run(&mut self, config: Box<Config>) -> Result<()> {
+        self.run_with_progress(config, &mut |_| std::ops::ControlFlow::Continue(()))
+            .await
+    }
+
+    /// Runs the workflow, reporting per-step progress through `on_step`.
+    /// A `ControlFlow::Break` from the callback stops execution at the next step
+    /// boundary and leaves the state as `Running`.
+    ///
+    /// # Errors
+    /// This function returns an error if the workflow fails to run.
+    pub async fn run_with_progress(
+        &mut self,
+        config: Box<Config>,
+        on_step: &mut impl FnMut(StepProgress) -> std::ops::ControlFlow<()>,
+    ) -> Result<()> {
         defer! {
             utils::logger::CliLogger::default().reset();
         }
@@ -155,10 +185,26 @@ impl Workflow {
                 .await?;
             }
 
-            match running_workflow
-                .run_steps(&running_workflow.data.steps, workflow_file_path)
-                .await
-            {
+            let mut broke = false;
+            let mut tracking = |progress: StepProgress| {
+                let flow = on_step(progress);
+                if flow.is_break() {
+                    broke = true;
+                }
+                flow
+            };
+            let result = running_workflow
+                .run_steps(
+                    &running_workflow.data.steps,
+                    workflow_file_path,
+                    &mut tracking,
+                )
+                .await;
+            if broke && result.is_ok() {
+                // Interrupted by the caller: leave the state as `Running`.
+                return Ok(());
+            }
+            match result {
                 Ok(()) => {
                     self.state = WorkflowState::SuccessfulRun(SuccessfullWorkflow {
                         data: mem::take(&mut running_workflow.data),
@@ -238,7 +284,9 @@ mod tests {
             Box::new(default_config()),
         );
         let result = runner
-            .run_steps(&Vec::new(), Path::new("/tmp/test.json"))
+            .run_steps(&Vec::new(), Path::new("/tmp/test.json"), &mut |_| {
+                ControlFlow::Continue(())
+            })
             .await;
         assert!(result.is_ok());
     }

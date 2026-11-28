@@ -23,13 +23,15 @@ use workflow::{self, Workflow};
 
 /// Initializes the TUI and runs it
 /// Note that asynchronization occurs only during the app initialization
-pub async fn render_tui(config: Config) -> Result<()> {
-    let app = TuiApp::new(config).await;
+pub async fn render_tui(config: Config, config_path: PathBuf) -> Result<()> {
+    let app = TuiApp::new(config, config_path).await;
     ratatui::run(|terminal| app.run(terminal))
 }
 
 struct TuiApp {
     config: Arc<RwLock<Config>>,
+    /// Path of the config file, used by the config view editor
+    config_path: PathBuf,
     workflows: Arc<RwLock<Vec<Workflow>>>,
     is_running: bool,
     show_logs: bool,
@@ -37,7 +39,7 @@ struct TuiApp {
 }
 
 impl TuiApp {
-    async fn new(config: Config) -> Self {
+    async fn new(config: Config, config_path: PathBuf) -> Self {
         if let Some(colors) = &config.tui_colors
             && let Err(error) = init_palette(colors)
         {
@@ -69,6 +71,7 @@ impl TuiApp {
 
         Self {
             config: config_arc,
+            config_path,
             workflows: workflows_arc,
             is_running: false,
             show_logs: cfg!(debug_assertions),
@@ -89,38 +92,33 @@ impl TuiApp {
                 .context("failed to draw frame")?;
             self.handle_events(terminal)?;
             self.post_update();
+            self.view.tick();
         }
         Ok(())
     }
 
     fn handle_events(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
-        if smart_event_poll(terminal)? {
-            terminal.autoresize()?;
-            return Ok(());
-        }
+        if event::poll(Duration::from_millis(50))? {
+            let event = event::read()?;
+            let prevent_propagation = self.view.handle_event(&event, terminal);
+            if prevent_propagation {
+                return Ok(());
+            }
 
-        let event = event::read()?;
-        let prevent_propagation = self.view.handle_event(&event, terminal);
-
-        if prevent_propagation {
-            return Ok(());
-        }
-
-        match event {
-            Event::Key(key) => match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => self.exit(),
-                KeyCode::Char('L') => {
-                    self.show_logs = !self.show_logs;
+            match event {
+                Event::Key(key) => match key.code {
+                    // Last-resort global keys; workflow views consume q/Esc themselves
+                    KeyCode::Char('q') | KeyCode::Esc => self.exit(),
+                    KeyCode::Char('g') => self.show_logs = !self.show_logs,
+                    _ => {}
+                },
+                Event::Resize(_, _) => {
+                    log::info!("Resizing terminal");
+                    terminal.autoresize()?;
                 }
                 _ => {}
-            },
-            Event::Resize(_width, _height) => {
-                log::info!("Resizing terminal");
-                terminal.autoresize()?;
             }
-            _ => {}
         }
-
         Ok(())
     }
 
@@ -142,34 +140,69 @@ impl TuiApp {
 
         if self.view.as_any().is::<EmptyView>() || self.view.as_any().is::<TerminalSizeErrorView>()
         {
-            self.go_to_starting_view();
+            let workflows_directory = {
+                let Ok(config) = self.config.read() else {
+                    return;
+                };
+                config.workflows_directory.clone()
+            };
+            self.go_to_starting_view(workflows_directory);
         }
     }
 
     /// Should run after handling events
     /// Reacts to state changes in current view
     fn post_update(&mut self) {
-        match self.view.get_action() {
-            Some(ViewAction::QuitApp) => self.exit(),
+        let action = self.view.get_action();
+
+        if matches!(action, Some(ViewAction::QuitApp)) {
+            self.exit();
+            self.view.consume_action();
+            return;
+        }
+
+        // Get the workflows directory
+        let workflows_directory = {
+            let Ok(config) = self.config.read() else {
+                return;
+            };
+            config.workflows_directory.clone()
+        };
+
+        match action {
             Some(ViewAction::CreateWorkflow) => {
-                let mut workflow_view = WorkflowView::new(self.workflows.clone());
+                let mut workflow_view = WorkflowView::new_with_directory(
+                    self.workflows.clone(),
+                    self.config.clone(),
+                    workflows_directory.clone(),
+                );
                 workflow_view.create_workflow();
                 self.view = Box::new(workflow_view);
             }
             Some(ViewAction::OpenConfig) => {
-                self.view = Box::new(ConfigView::new(self.config.clone()));
+                self.view = Box::new(
+                    ConfigView::new(self.config.clone()).with_config_path(self.config_path.clone()),
+                );
             }
             Some(ViewAction::GoToWorkflows) => {
-                self.go_to_starting_view();
+                self.go_to_starting_view(workflows_directory);
             }
             None => (),
+            Some(ViewAction::QuitApp) => unreachable!(), // Already handled above
         }
+        self.view.consume_action();
     }
 
-    fn go_to_starting_view(&mut self) {
+    fn go_to_starting_view(&mut self, workflows_directory: std::path::PathBuf) {
         match macros::workflows_count!(&self.workflows) {
             0 => self.view = Box::new(NoWorkflowsView::new(self.config.clone())),
-            _ => self.view = Box::new(WorkflowView::new(self.workflows.clone())),
+            _ => {
+                self.view = Box::new(WorkflowView::new_with_directory(
+                    self.workflows.clone(),
+                    self.config.clone(),
+                    workflows_directory,
+                ));
+            }
         }
     }
 
@@ -210,25 +243,12 @@ fn render_logs(area: Rect, buf: &mut Buffer) {
         .output_target(false)
         .block(
             Block::default()
-                .title(Line::from(" Logs (press L to toggle) ").centered())
+                .title(Line::from(" Logs (press g to toggle) ").centered())
                 .borders(Borders::TOP)
                 .border_style(palette().separator_style),
         )
         .style(palette().style);
     log_widget.render(area, buf);
-}
-
-/// Apart from waiting for the next event, it also checks if the terminal size has changed
-fn smart_event_poll(terminal: &mut DefaultTerminal) -> Result<bool> {
-    let start_size = terminal.size().unwrap_or(Size::ZERO);
-    loop {
-        if event::poll(Duration::from_secs(1))? {
-            return Ok(false);
-        }
-        if start_size != terminal.size().unwrap_or(Size::ZERO) {
-            return Ok(true);
-        }
-    }
 }
 
 #[cfg(test)]
@@ -237,6 +257,10 @@ mod tests {
     use config::Config;
     use std::path::PathBuf;
     use workflow::{JsonFile, Workflow};
+
+    fn test_config_path() -> PathBuf {
+        PathBuf::from(config::DEFAULT_CONFIG_FILE)
+    }
 
     fn empty_config() -> Config {
         Config::default()
@@ -258,10 +282,14 @@ mod tests {
         view
     }
 
+    fn test_workflows_directory() -> PathBuf {
+        PathBuf::from("/tmp/test-workflows")
+    }
+
     #[tokio::test]
     async fn test_tui_app_new_with_empty_config() {
         let config = empty_config();
-        let app = TuiApp::new(config).await;
+        let app = TuiApp::new(config, test_config_path()).await;
         assert!(!app.is_running);
         let _ = app.config;
     }
@@ -269,7 +297,7 @@ mod tests {
     #[tokio::test]
     async fn test_tui_app_exit_sets_running_false() {
         let config = empty_config();
-        let mut app = TuiApp::new(config).await;
+        let mut app = TuiApp::new(config, test_config_path()).await;
         assert!(!app.is_running);
         app.exit();
         assert!(!app.is_running);
@@ -278,7 +306,7 @@ mod tests {
     #[tokio::test]
     async fn test_tui_app_exit_while_not_running_stays_false() {
         let config = empty_config();
-        let mut app = TuiApp::new(config).await;
+        let mut app = TuiApp::new(config, test_config_path()).await;
         app.exit();
         app.exit();
         assert!(!app.is_running);
@@ -310,16 +338,16 @@ mod tests {
     #[tokio::test]
     async fn test_go_to_starting_view_with_empty_config_selects_no_workflows() {
         let config = empty_config();
-        let mut app = TuiApp::new(config).await;
+        let mut app = TuiApp::new(config, test_config_path()).await;
         assert!(view_is::<EmptyView>(&app));
-        app.go_to_starting_view();
+        app.go_to_starting_view(test_workflows_directory());
         assert!(view_is::<NoWorkflowsView>(&app));
     }
 
     #[tokio::test]
     async fn test_go_to_starting_view_with_workflows_selects_workflow_view() {
         let config = empty_config();
-        let mut app = TuiApp::new(config).await;
+        let mut app = TuiApp::new(config, test_config_path()).await;
         // Inject a workflow into the app's workflows list.
         let json = JsonFile::from_raw(
             PathBuf::from("/tmp/test-workflow.json"),
@@ -327,14 +355,14 @@ mod tests {
         );
         let workflow = Workflow::new(json);
         app.workflows = Arc::new(RwLock::new(vec![workflow]));
-        app.go_to_starting_view();
+        app.go_to_starting_view(test_workflows_directory());
         assert!(view_is::<WorkflowView>(&app));
     }
 
     #[tokio::test]
     async fn test_post_update_quit_action_exits_app() {
         let config = empty_config();
-        let mut app = TuiApp::new(config).await;
+        let mut app = TuiApp::new(config, test_config_path()).await;
         app.is_running = true;
         let no_wf = no_workflows_view_with_action(&app.config, 2); // index 2 → QuitApp
         app.view = Box::new(no_wf);
@@ -345,7 +373,7 @@ mod tests {
     #[tokio::test]
     async fn test_post_update_create_workflow_action_swaps_to_workflow_view() {
         let config = empty_config();
-        let mut app = TuiApp::new(config).await;
+        let mut app = TuiApp::new(config, test_config_path()).await;
         let no_wf = no_workflows_view_with_action(&app.config, 0); // index 0 → CreateWorkflow
         app.view = Box::new(no_wf);
         app.post_update();
@@ -355,7 +383,7 @@ mod tests {
     #[tokio::test]
     async fn test_post_update_none_action_is_noop() {
         let config = empty_config();
-        let mut app = TuiApp::new(config).await;
+        let mut app = TuiApp::new(config, test_config_path()).await;
         app.is_running = true;
         app.view = Box::new(EmptyView);
         app.post_update();
@@ -373,7 +401,7 @@ mod tests {
             browser: config::BrowserConfig::default(),
             agent: config::AgentConfig::default(),
         };
-        let app = TuiApp::new(config).await;
+        let app = TuiApp::new(config, test_config_path()).await;
         // Should not panic during construction.
         assert!(!app.is_running);
         // Starting view should be NoWorkflowsView since no workflows were found.
@@ -382,9 +410,9 @@ mod tests {
             r#"{"name":"W"}"#.to_string(),
         );
         let workflow = Workflow::new(json);
-        let mut app2 = TuiApp::new(Config::default()).await;
+        let mut app2 = TuiApp::new(Config::default(), test_config_path()).await;
         app2.workflows = Arc::new(RwLock::new(vec![workflow]));
-        app2.go_to_starting_view();
+        app2.go_to_starting_view(test_workflows_directory());
         assert!(view_is::<WorkflowView>(&app2));
     }
 
@@ -392,10 +420,14 @@ mod tests {
     #[tokio::test]
     async fn test_post_update_workflow_view_no_action_is_noop() {
         let config = empty_config();
-        let mut app = TuiApp::new(config).await;
+        let mut app = TuiApp::new(config, test_config_path()).await;
         app.is_running = true;
         let workflows = Arc::new(RwLock::new(Vec::new()));
-        app.view = Box::new(WorkflowView::new(workflows));
+        app.view = Box::new(WorkflowView::new_with_directory(
+            workflows,
+            app.config.clone(),
+            test_workflows_directory(),
+        ));
         app.post_update();
         assert!(app.is_running);
     }
