@@ -5,6 +5,7 @@ use crossterm::event::KeyCode;
 use ratatui::layout::Constraint::{Fill, Length};
 use ratatui::layout::Layout;
 use ratatui::widgets::Widget;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use super::View;
@@ -28,14 +29,17 @@ pub(crate) struct WorkflowView {
 }
 
 impl WorkflowView {
-    pub(crate) fn new(workflows: Arc<RwLock<Vec<Workflow>>>) -> Self {
+    pub(crate) fn new_with_directory(
+        workflows: Arc<RwLock<Vec<Workflow>>>,
+        workflows_directory: PathBuf,
+    ) -> Self {
         let workflows_sidebar_arc = workflows.clone();
         let workflows_panel_arc = workflows.clone();
 
         Self {
             workflows,
             sidebar: WorkflowsSidebar::new(workflows_sidebar_arc),
-            panel: WorkflowPanel::new(workflows_panel_arc),
+            panel: WorkflowPanel::new(workflows_panel_arc, workflows_directory),
             show_sidebar: true,
             focused_panel: WorkflowsPanelType::Sidebar,
         }
@@ -208,6 +212,10 @@ mod tests {
         Workflow::new(json)
     }
 
+    fn test_workflows_directory() -> PathBuf {
+        PathBuf::from("/tmp/test-workflows")
+    }
+
     #[test]
     fn test_panel_type_debug() {
         assert_eq!(format!("{:?}", WorkflowsPanelType::Sidebar), "Sidebar");
@@ -224,7 +232,7 @@ mod tests {
     #[test]
     fn test_workflow_view_new_default_state() {
         let workflows = empty_workflows();
-        let view = WorkflowView::new(workflows);
+        let view = WorkflowView::new_with_directory(workflows, test_workflows_directory());
         // Public state after construction: show_sidebar=true, focused=Sidebar
         assert!(view.show_sidebar);
         assert_eq!(view.focused_panel, WorkflowsPanelType::Sidebar);
@@ -233,7 +241,7 @@ mod tests {
     #[test]
     fn test_workflow_view_move_to_next_panel_from_sidebar() {
         let workflows = empty_workflows();
-        let mut view = WorkflowView::new(workflows);
+        let mut view = WorkflowView::new_with_directory(workflows, test_workflows_directory());
         view.move_to_next_panel();
         assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);
     }
@@ -242,7 +250,7 @@ mod tests {
     fn test_workflow_view_move_to_next_panel_from_panel_empty() {
         // When no workflows exist, moving from Panel stays at Panel
         let workflows = empty_workflows();
-        let mut view = WorkflowView::new(workflows);
+        let mut view = WorkflowView::new_with_directory(workflows, test_workflows_directory());
         // Move to Panel first
         view.move_to_next_panel();
         assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);
@@ -254,14 +262,14 @@ mod tests {
     #[test]
     fn test_workflow_view_as_any() {
         let workflows = empty_workflows();
-        let view = WorkflowView::new(workflows);
+        let view = WorkflowView::new_with_directory(workflows, test_workflows_directory());
         assert!(view.as_any().is::<WorkflowView>());
     }
 
     #[test]
     fn test_workflow_view_get_focused_panel_returns_sidebar_when_focused() {
         let workflows = empty_workflows();
-        let view = WorkflowView::new(workflows);
+        let view = WorkflowView::new_with_directory(workflows, test_workflows_directory());
         // Verify show_sidebar starts true and focused_panel is Sidebar
         assert!(view.show_sidebar);
         assert_eq!(view.focused_panel, WorkflowsPanelType::Sidebar);
@@ -270,7 +278,7 @@ mod tests {
     #[test]
     fn test_workflow_view_get_focused_panel_returns_panel_after_tab() {
         let workflows = empty_workflows();
-        let mut view = WorkflowView::new(workflows);
+        let mut view = WorkflowView::new_with_directory(workflows, test_workflows_directory());
         view.move_to_next_panel();
         assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);
     }
@@ -288,7 +296,7 @@ mod tests {
     #[test]
     fn test_workflow_view_draw_no_panic() {
         let workflows = empty_workflows();
-        let mut view = WorkflowView::new(workflows);
+        let mut view = WorkflowView::new_with_directory(workflows, test_workflows_directory());
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
         view.draw(area, &mut buf);
@@ -297,7 +305,7 @@ mod tests {
     #[test]
     fn test_workflow_view_handle_event_tab_moves_focus() {
         let workflows = empty_workflows();
-        let mut view = WorkflowView::new(workflows);
+        let mut view = WorkflowView::new_with_directory(workflows, test_workflows_directory());
         let event = Event::Key(KeyCode::Tab.into());
         // Use a dummy terminal reference — handle_event never reads it for Tab key
         let _ = view.handle_event(&event, unsafe { &mut *no_read_term() });
@@ -307,7 +315,7 @@ mod tests {
     #[test]
     fn test_workflow_view_get_action_no_button_pressed_returns_none() {
         let workflows = empty_workflows();
-        let view = WorkflowView::new(workflows);
+        let view = WorkflowView::new_with_directory(workflows, test_workflows_directory());
         // The sidebar has create_workflow_button_pressed = false by default
         assert!(view.get_action().is_none());
     }
@@ -315,7 +323,7 @@ mod tests {
     #[test]
     fn test_workflow_view_move_back_from_panel_with_workflows() {
         let workflows = Arc::new(RwLock::new(vec![make_workflow("test")]));
-        let mut view = WorkflowView::new(workflows);
+        let mut view = WorkflowView::new_with_directory(workflows, test_workflows_directory());
         // Move to panel
         view.move_to_next_panel();
         assert_eq!(view.focused_panel, WorkflowsPanelType::Panel);
@@ -331,7 +339,7 @@ mod tests {
     #[test]
     fn test_enter_on_create_button_creates_draft_and_focuses_panel() {
         let workflows = empty_workflows();
-        let mut view = WorkflowView::new(workflows);
+        let mut view = WorkflowView::new_with_directory(workflows, test_workflows_directory());
         // With no workflows, the list selection is `Some(0)` by default, which
         // is *not* the create button. Select `None` to land on the create
         // button while the sidebar is still focused.
@@ -351,7 +359,7 @@ mod tests {
     #[test]
     fn test_enter_on_workflow_item_moves_focus_to_panel() {
         let workflows = Arc::new(RwLock::new(vec![make_workflow("test")]));
-        let mut view = WorkflowView::new(workflows);
+        let mut view = WorkflowView::new_with_directory(workflows, test_workflows_directory());
         assert_eq!(view.focused_panel, WorkflowsPanelType::Sidebar);
         let enter = Event::Key(KeyCode::Enter.into());
         view.handle_event(&enter, unsafe { &mut *no_read_term() });

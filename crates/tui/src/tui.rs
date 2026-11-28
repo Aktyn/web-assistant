@@ -142,17 +142,35 @@ impl TuiApp {
 
         if self.view.as_any().is::<EmptyView>() || self.view.as_any().is::<TerminalSizeErrorView>()
         {
-            self.go_to_starting_view();
+            let workflows_directory = {
+                let config = self.config.read().unwrap();
+                config.workflows_directory.clone()
+            };
+            self.go_to_starting_view(workflows_directory);
         }
     }
 
     /// Should run after handling events
     /// Reacts to state changes in current view
     fn post_update(&mut self) {
+        // Check for QuitApp first without holding the lock
+        if matches!(self.view.get_action(), Some(ViewAction::QuitApp)) {
+            self.exit();
+            return;
+        }
+
+        // Get the workflows directory
+        let workflows_directory = {
+            let config = self.config.read().unwrap();
+            config.workflows_directory.clone()
+        };
+
         match self.view.get_action() {
-            Some(ViewAction::QuitApp) => self.exit(),
             Some(ViewAction::CreateWorkflow) => {
-                let mut workflow_view = WorkflowView::new(self.workflows.clone());
+                let mut workflow_view = WorkflowView::new_with_directory(
+                    self.workflows.clone(),
+                    workflows_directory.clone(),
+                );
                 workflow_view.create_workflow();
                 self.view = Box::new(workflow_view);
             }
@@ -160,16 +178,20 @@ impl TuiApp {
                 self.view = Box::new(ConfigView::new(self.config.clone()));
             }
             Some(ViewAction::GoToWorkflows) => {
-                self.go_to_starting_view();
+                self.go_to_starting_view(workflows_directory);
             }
             None => (),
+            Some(ViewAction::QuitApp) => unreachable!(), // Already handled above
         }
     }
 
-    fn go_to_starting_view(&mut self) {
+    fn go_to_starting_view(&mut self, workflows_directory: std::path::PathBuf) {
         match macros::workflows_count!(&self.workflows) {
             0 => self.view = Box::new(NoWorkflowsView::new(self.config.clone())),
-            _ => self.view = Box::new(WorkflowView::new(self.workflows.clone())),
+            _ => self.view = Box::new(WorkflowView::new_with_directory(
+                self.workflows.clone(),
+                workflows_directory,
+            )),
         }
     }
 
@@ -258,6 +280,10 @@ mod tests {
         view
     }
 
+    fn test_workflows_directory() -> PathBuf {
+        PathBuf::from("/tmp/test-workflows")
+    }
+
     #[tokio::test]
     async fn test_tui_app_new_with_empty_config() {
         let config = empty_config();
@@ -312,7 +338,7 @@ mod tests {
         let config = empty_config();
         let mut app = TuiApp::new(config).await;
         assert!(view_is::<EmptyView>(&app));
-        app.go_to_starting_view();
+        app.go_to_starting_view(test_workflows_directory());
         assert!(view_is::<NoWorkflowsView>(&app));
     }
 
@@ -327,7 +353,7 @@ mod tests {
         );
         let workflow = Workflow::new(json);
         app.workflows = Arc::new(RwLock::new(vec![workflow]));
-        app.go_to_starting_view();
+        app.go_to_starting_view(test_workflows_directory());
         assert!(view_is::<WorkflowView>(&app));
     }
 
@@ -384,7 +410,7 @@ mod tests {
         let workflow = Workflow::new(json);
         let mut app2 = TuiApp::new(Config::default()).await;
         app2.workflows = Arc::new(RwLock::new(vec![workflow]));
-        app2.go_to_starting_view();
+        app2.go_to_starting_view(test_workflows_directory());
         assert!(view_is::<WorkflowView>(&app2));
     }
 
@@ -395,7 +421,7 @@ mod tests {
         let mut app = TuiApp::new(config).await;
         app.is_running = true;
         let workflows = Arc::new(RwLock::new(Vec::new()));
-        app.view = Box::new(WorkflowView::new(workflows));
+        app.view = Box::new(WorkflowView::new_with_directory(workflows, test_workflows_directory()));
         app.post_update();
         assert!(app.is_running);
     }

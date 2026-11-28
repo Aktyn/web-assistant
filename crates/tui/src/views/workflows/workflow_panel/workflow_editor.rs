@@ -127,7 +127,7 @@ impl WorkflowEditor {
         }
     }
 
-    fn build_workflow_data(&self) -> WorkflowData {
+    pub(crate) fn build_workflow_data(&self) -> WorkflowData {
         let steps = if let Some(editor) = &self.json_editor {
             editor.get_steps()
         } else {
@@ -437,7 +437,7 @@ impl WorkflowPanelModeView for WorkflowEditor {
         {
             match action {
                 WorkflowEditorAction::Save(_data) => {
-                    return Some(WorkflowAction::BackToPreview);
+                    return Some(WorkflowAction::Save);
                 }
                 WorkflowEditorAction::Cancel => {
                     return Some(WorkflowAction::BackToPreview);
