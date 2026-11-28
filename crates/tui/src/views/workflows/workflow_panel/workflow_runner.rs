@@ -1,10 +1,12 @@
 use std::{
     path::PathBuf,
-    sync::{Arc, RwLock},
+    sync::{
+        Arc, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
-use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
@@ -17,15 +19,11 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget},
 };
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 
 use super::super::super::common::palette;
 use super::super::super::common::widgets::{Button, ButtonData, Separator};
-use super::{WorkflowAction, WorkflowPanelModeView, WorkflowSelection};
-use workflow::{SuccessfullWorkflow, Workflow, WorkflowState};
-
-/// The default config file path
-const DEFAULT_CONFIG_FILE: &str = "config.jsonc";
+use super::{PanelEventOutcome, WorkflowAction, WorkflowPanelModeView, WorkflowSelection};
+use workflow::{FailedWorkflow, StepProgress, SuccessfullWorkflow, Workflow, WorkflowState};
 
 /// Represents a step execution status
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,7 +37,6 @@ enum StepStatus {
 /// State for a running workflow step
 #[derive(Debug, Clone)]
 struct RunningStep {
-    // index: usize,
     description: String,
     status: StepStatus,
     start_time: Option<Instant>,
@@ -57,6 +54,7 @@ pub(crate) enum WorkflowRunnerAction {
 #[allow(clippy::struct_excessive_bools)]
 pub(crate) struct WorkflowRunner {
     workflows: Arc<RwLock<Vec<Workflow>>>,
+    config: Arc<RwLock<config::Config>>,
     workflow_index: usize,
     workflow_file: Option<PathBuf>,
     workflow_name: String,
@@ -69,6 +67,7 @@ pub(crate) struct WorkflowRunner {
     is_running: bool,
     is_completed: bool,
     is_stopped: bool,
+    is_stopping: bool,
     error: Option<String>,
 
     // Timing
@@ -80,33 +79,28 @@ pub(crate) struct WorkflowRunner {
     buttons_list_state: ListState,
     focus_buttons: bool,
 
-    // Channel for receiving step updates from the background task
-    rx: Option<mpsc::UnboundedReceiver<StepUpdate>>,
-    runner_handle: Option<JoinHandle<()>>,
+    // Channel for receiving updates from the background task
+    rx: Option<mpsc::UnboundedReceiver<RunnerUpdate>>,
+    runner_handle: Option<std::thread::JoinHandle<()>>,
+    stop_requested: Option<Arc<AtomicBool>>,
 }
 
 /// Updates sent from the background runner task
 #[derive(Debug, Clone)]
-enum StepUpdate {
-    StepStarted {
-        index: usize,
-    },
-    StepCompleted {
-        index: usize,
-    },
-    StepFailed {
-        index: usize,
-        error: String,
-    },
-    WorkflowCompleted {
+enum RunnerUpdate {
+    Step(StepProgress),
+    Finished {
+        stopped: bool,
         success: bool,
         error: Option<String>,
     },
+    FailedToStart(String),
 }
 
 impl WorkflowRunner {
     pub(crate) fn new(
         workflows: Arc<RwLock<Vec<Workflow>>>,
+        config: Arc<RwLock<config::Config>>,
         workflow_index: usize,
         workflow_data: Option<workflow::workflow_data::WorkflowData>,
         workflow_file: Option<PathBuf>,
@@ -119,9 +113,7 @@ impl WorkflowRunner {
 
         let running_steps: Vec<RunningStep> = steps
             .iter()
-            // .enumerate()
             .map(|step| RunningStep {
-                // index: i,
                 description: format_step_description(step),
                 status: StepStatus::Pending,
                 start_time: None,
@@ -133,6 +125,7 @@ impl WorkflowRunner {
 
         Self {
             workflows,
+            config,
             workflow_index,
             workflow_file,
             workflow_name,
@@ -143,6 +136,7 @@ impl WorkflowRunner {
             is_running: false,
             is_completed: false,
             is_stopped: false,
+            is_stopping: false,
             error: None,
             start_time: None,
             elapsed_time: Duration::default(),
@@ -154,122 +148,156 @@ impl WorkflowRunner {
             focus_buttons: false,
             rx: None,
             runner_handle: None,
+            stop_requested: None,
         }
     }
 
     /// Start running the workflow
     fn start_run(&mut self) {
-        if self.is_running {
+        if self.is_running || self.is_completed || self.is_stopped {
             return;
         }
 
-        let Some(_workflow_data) = self.workflow_data.clone() else {
+        let Some(data) = self.workflow_data.clone() else {
             self.error = Some("No workflow data to run".to_string());
             return;
         };
+        let Some(file_path) = self.workflow_file.clone() else {
+            self.error = Some("Cannot run a draft workflow. Save it first.".to_string());
+            return;
+        };
+        let (running_box, exec_box) = {
+            let Ok(guard) = self.config.read() else {
+                self.error = Some("Failed to read config".to_string());
+                return;
+            };
+            (Box::new(guard.clone()), Box::new(guard.clone()))
+        };
 
-        let _workflows = self.workflows.clone();
-        // let _workflow_index = self.workflow_index;
-        let _workflow_file = self.workflow_file.clone();
+        // Mark the shared entry as running
+        if let Ok(mut wfs) = self.workflows.write()
+            && let Some(wf) = wfs.get_mut(self.workflow_index)
+        {
+            *wf = Workflow::new_running(data.clone(), running_box, file_path.clone());
+        }
 
+        let thread_data = data;
+        let thread_file = file_path;
+
+        let stop = Arc::new(AtomicBool::new(false));
         let (tx, rx) = mpsc::unbounded_channel();
         self.rx = Some(rx);
+        self.stop_requested = Some(stop.clone());
+
         self.is_running = true;
+        self.is_stopping = false;
+        self.error = None;
         self.start_time = Some(Instant::now());
         self.current_step = None;
-
-        // Reset all steps to pending
         for step in &mut self.steps {
             step.status = StepStatus::Pending;
             step.start_time = None;
             step.end_time = None;
         }
 
-        // Clone the workflow data we need before spawning
-        let workflow_data = self.workflow_data.clone();
-        let Some(workflow_data) = workflow_data else {
-            let _ = tx.send(StepUpdate::WorkflowCompleted {
-                success: false,
-                error: Some("No workflow data to run".to_string()),
-            });
-            return;
-        };
-
-        let handle = tokio::spawn(async move {
-            // Load config
-            let config_path = std::path::Path::new(DEFAULT_CONFIG_FILE);
-            let config = match config::load_config(config_path).await {
-                Ok(c) => c,
+        // The workflow future is not `Send` (and neither is the shared workflow list),
+        // so it runs on a dedicated thread with its own single-threaded runtime. Only
+        // `Send` data crosses the thread boundary; the shared list is updated from
+        // `process_updates` on the UI thread.
+        let handle = std::thread::spawn(move || {
+            let runtime = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(runtime) => runtime,
                 Err(e) => {
-                    let _ = tx.send(StepUpdate::WorkflowCompleted {
-                        success: false,
-                        error: Some(format!("Failed to load config: {e}")),
-                    });
+                    let _ = tx.send(RunnerUpdate::FailedToStart(format!(
+                        "Failed to create runtime: {e}"
+                    )));
                     return;
                 }
             };
 
-            // Run the workflow with step-by-step updates
-            let steps = workflow_data.steps.clone();
-            for (i, step) in steps.iter().enumerate() {
-                // Send step started update
-                let _ = tx.send(StepUpdate::StepStarted { index: i });
-
-                // Run the step
-                let result = run_single_step(&workflow_data, step, &config, i).await;
-
-                match result {
-                    Ok(()) => {
-                        let _ = tx.send(StepUpdate::StepCompleted { index: i });
-                    }
-                    Err(e) => {
-                        let _ = tx.send(StepUpdate::StepFailed {
-                            index: i,
-                            error: e.to_string(),
-                        });
-                        let _ = tx.send(StepUpdate::WorkflowCompleted {
-                            success: false,
-                            error: Some(e.to_string()),
-                        });
-                        return;
-                    }
+            let mut exec = Workflow {
+                state: WorkflowState::Valid(thread_data),
+                file_path: Some(thread_file),
+            };
+            let mut on_step = |update: StepProgress| -> std::ops::ControlFlow<()> {
+                let _ = tx.send(RunnerUpdate::Step(update));
+                if stop.load(Ordering::Relaxed) {
+                    std::ops::ControlFlow::Break(())
+                } else {
+                    std::ops::ControlFlow::Continue(())
                 }
-            }
-
-            // Send success
-            let _ = tx.send(StepUpdate::WorkflowCompleted {
-                success: true,
-                error: None,
-            });
+            };
+            let result = runtime.block_on(exec.run_with_progress(exec_box, &mut on_step));
+            let stopped = stop.load(Ordering::Relaxed);
+            let (success, error) = match &exec.state {
+                WorkflowState::SuccessfulRun(_) => (true, None),
+                WorkflowState::FailedRun(failed) => (false, Some(failed.error.to_string())),
+                _ => (false, None),
+            };
+            let _ = match result {
+                Ok(()) => tx.send(RunnerUpdate::Finished {
+                    stopped,
+                    success,
+                    error,
+                }),
+                Err(e) => tx.send(RunnerUpdate::FailedToStart(e.to_string())),
+            };
         });
 
         self.runner_handle = Some(handle);
     }
 
-    /// Update the workflow state to successful in shared workflows
-    fn mark_as_successful(&mut self) {
-        if let Some(workflow_data) = &self.workflow_data {
-            let new_workflow = Workflow {
-                state: WorkflowState::SuccessfulRun(SuccessfullWorkflow {
-                    data: workflow_data.clone(),
-                }),
-                file_path: self.workflow_file.clone(),
-            };
-            if let Ok(mut wfs) = self.workflows.write()
-                && let Some(wf) = wfs.get_mut(self.workflow_index)
-            {
-                *wf = new_workflow;
+    /// Ask the running workflow to stop at the next step boundary
+    fn request_stop(&mut self) {
+        if self.is_running {
+            if let Some(stop) = &self.stop_requested {
+                stop.store(true, Ordering::Relaxed);
             }
+            self.is_stopping = true;
         }
     }
 
-    /// Stop the running workflow
+    /// Request a stop when leaving the run view. The channel is kept so the final
+    /// state can still be applied to the shared list (see `is_active`).
     fn stop_run(&mut self) {
-        if let Some(handle) = self.runner_handle.take() {
-            handle.abort();
+        self.request_stop();
+    }
+
+    /// Whether a background run is still in flight (its final state has not been applied yet)
+    pub(super) fn is_active(&self) -> bool {
+        self.rx.is_some()
+    }
+
+    /// Write the final state of the workflow into the shared list
+    fn set_shared_state(&self, state: WorkflowState) {
+        if let Ok(mut wfs) = self.workflows.write()
+            && let Some(wf) = wfs.get_mut(self.workflow_index)
+        {
+            *wf = Workflow {
+                state,
+                file_path: self.workflow_file.clone(),
+            };
         }
+    }
+
+    /// Stop the run if it is in progress, otherwise start it (unless already finished)
+    fn toggle_run(&mut self) {
+        if self.is_running {
+            self.request_stop();
+        } else if !self.is_completed && !self.is_stopped {
+            self.start_run();
+        }
+    }
+
+    fn clear_run_handles(&mut self) {
+        self.runner_handle = None;
+        self.rx = None;
+        self.stop_requested = None;
         self.is_running = false;
-        self.is_stopped = true;
+        self.is_stopping = false;
     }
 
     /// Process any pending updates from the background task
@@ -283,41 +311,71 @@ impl WorkflowRunner {
 
         for update in updates {
             match update {
-                StepUpdate::StepStarted { index } => {
+                RunnerUpdate::Step(StepProgress::StepStarted { index }) => {
                     if index < self.steps.len() {
                         self.steps[index].status = StepStatus::Running;
                         self.steps[index].start_time = Some(Instant::now());
                         self.current_step = Some(index);
                     }
                 }
-                StepUpdate::StepCompleted { index } => {
+                RunnerUpdate::Step(StepProgress::StepCompleted { index }) => {
                     if index < self.steps.len() {
                         self.steps[index].status = StepStatus::Completed;
                         self.steps[index].end_time = Some(Instant::now());
                     }
                 }
-                StepUpdate::StepFailed { index, error } => {
-                    if index < self.steps.len() {
-                        self.steps[index].status = StepStatus::Failed(error);
-                        self.steps[index].end_time = Some(Instant::now());
+                RunnerUpdate::Finished {
+                    stopped,
+                    success,
+                    error,
+                } => {
+                    self.clear_run_handles();
+                    if let Some(data) = self.workflow_data.clone() {
+                        self.set_shared_state(if stopped {
+                            WorkflowState::Valid(data)
+                        } else if success {
+                            WorkflowState::SuccessfulRun(SuccessfullWorkflow { data })
+                        } else {
+                            WorkflowState::FailedRun(FailedWorkflow {
+                                data,
+                                error: anyhow::anyhow!(
+                                    error.clone().unwrap_or_else(|| "Unknown error".to_string())
+                                ),
+                            })
+                        });
+                    }
+                    if stopped {
+                        self.is_stopped = true;
+                    } else {
+                        self.is_completed = true;
+                        if success {
+                            self.error = None;
+                        } else {
+                            if let (Some(message), Some(index)) = (&error, self.current_step)
+                                && let Some(step) = self.steps.get_mut(index)
+                                && step.status == StepStatus::Running
+                            {
+                                step.status = StepStatus::Failed(message.clone());
+                                step.end_time = Some(Instant::now());
+                            }
+                            self.error = error;
+                        }
                     }
                 }
-                StepUpdate::WorkflowCompleted { success, error } => {
-                    self.is_running = false;
-                    self.is_completed = true;
-                    if success {
-                        self.mark_as_successful();
-                    } else {
-                        self.error = error;
+                RunnerUpdate::FailedToStart(message) => {
+                    self.clear_run_handles();
+                    if let Some(data) = self.workflow_data.clone() {
+                        self.set_shared_state(WorkflowState::Valid(data));
                     }
-                    self.runner_handle = None;
-                    self.rx = None;
+                    self.error = Some(message);
                 }
             }
         }
 
         // Update elapsed time
-        if let Some(start) = self.start_time {
+        if self.is_running
+            && let Some(start) = self.start_time
+        {
             self.elapsed_time = start.elapsed();
         }
     }
@@ -359,6 +417,10 @@ impl WorkflowRunner {
             }
         }
     }
+
+    fn is_start_stop_disabled(&self) -> bool {
+        (self.is_completed && !self.is_stopped) || self.workflow_file.is_none()
+    }
 }
 
 impl WorkflowPanelModeView for WorkflowRunner {
@@ -369,11 +431,13 @@ impl WorkflowPanelModeView for WorkflowRunner {
             Length(3),
             Length(1),
             Fill(1),
-            Length(3),
+            Length(if self.workflow_file.is_none() { 4 } else { 3 }),
         ]));
 
         // Header with workflow name and status
-        let status_text = if self.is_running {
+        let status_text = if self.is_stopping {
+            " ■ STOPPING".bold().fg(palette().accent)
+        } else if self.is_running {
             " ● RUNNING".bold().fg(palette().accent)
         } else if self.is_completed {
             if self.error.is_some() {
@@ -501,6 +565,15 @@ impl WorkflowPanelModeView for WorkflowRunner {
         }
 
         // Buttons
+        let buttons_area = if self.workflow_file.is_none() {
+            let [hint_area, rest] = buttons_area.layout(&Layout::vertical([Length(1), Fill(1)]));
+            Paragraph::new("Save the workflow to run it")
+                .style(palette().muted_foreground)
+                .render(hint_area, buf);
+            rest
+        } else {
+            buttons_area
+        };
         let [stop_area, back_area] = buttons_area.layout(&Layout::horizontal([
             Length((buttons_area.width / 2).max(1)),
             Length((buttons_area.width / 2).max(1)),
@@ -509,10 +582,16 @@ impl WorkflowPanelModeView for WorkflowRunner {
         let stop_selected = self.focus_buttons && self.buttons_list_state.selected() == Some(0);
         let back_selected = self.focus_buttons && self.buttons_list_state.selected() == Some(1);
 
-        let stop_label = if self.is_running { "Stop" } else { "Start" };
+        let stop_label = if self.is_stopping {
+            "Stopping…"
+        } else if self.is_running {
+            "Stop"
+        } else {
+            "Start"
+        };
         Button::new(stop_label)
             .set_selected(stop_selected)
-            .set_disabled(self.is_completed && !self.is_stopped)
+            .set_disabled(self.is_start_stop_disabled())
             .render(stop_area, buf);
         Button::new("Back")
             .set_selected(back_selected)
@@ -524,66 +603,45 @@ impl WorkflowPanelModeView for WorkflowRunner {
         event: &Event,
         _terminal: &mut ratatui::DefaultTerminal,
         _selection: &WorkflowSelection,
-    ) -> Option<WorkflowAction> {
+    ) -> PanelEventOutcome {
         // Process any updates from the background task
         self.process_updates();
 
-        if let Some(key) = event.as_key_event() {
-            // Handle Stop/Start button when focused on steps list
-            if !self.focus_buttons && key.code == KeyCode::Enter {
-                if self.is_running {
-                    self.stop_run();
-                } else if !self.is_completed && !self.is_stopped {
-                    self.start_run();
-                }
-                return None;
-            }
+        let Some(key) = event.as_key_event() else {
+            return PanelEventOutcome::Ignored;
+        };
 
-            if let Some(action) = self.handle_key_event(key) {
-                match action {
-                    WorkflowRunnerAction::Stop => {
-                        if self.is_running {
-                            self.stop_run();
-                        } else if !self.is_completed && !self.is_stopped {
-                            self.start_run();
-                        }
-                        return None;
-                    }
-                    WorkflowRunnerAction::BackToPreview => {
-                        if self.is_running {
-                            self.stop_run();
-                        }
-                        return Some(WorkflowAction::BackToPreview);
-                    }
-                }
-            }
+        // Handle Stop/Start button when focused on steps list
+        if !self.focus_buttons && key.code == KeyCode::Enter {
+            self.toggle_run();
+            return PanelEventOutcome::Consumed;
         }
-        None
+
+        if let Some(action) = self.handle_key_event(key) {
+            return match action {
+                WorkflowRunnerAction::Stop => {
+                    self.toggle_run();
+                    PanelEventOutcome::Consumed
+                }
+                WorkflowRunnerAction::BackToPreview => {
+                    if self.is_running {
+                        self.stop_run();
+                    }
+                    PanelEventOutcome::Action(WorkflowAction::BackToPreview)
+                }
+            };
+        }
+
+        match key.code {
+            KeyCode::Tab | KeyCode::BackTab => PanelEventOutcome::Consumed,
+            KeyCode::Left | KeyCode::Right if self.focus_buttons => PanelEventOutcome::Consumed,
+            _ => PanelEventOutcome::Ignored,
+        }
     }
-}
 
-/// Run a single workflow step
-async fn run_single_step(
-    _workflow_data: &workflow::workflow_data::WorkflowData,
-    _step: &workflow::workflow_data::step::WorkflowStepType,
-    _config: &config::Config,
-    _step_index: usize,
-) -> Result<()> {
-    // We need to run individual steps. This is a simplified version that
-    // uses the existing workflow.run() but we need step-by-step.
-    // For now, we'll run the workflow but track steps externally.
-    // In a full implementation, we'd call the step runners directly.
-
-    // This is a placeholder - in reality we'd use the runners directly
-    // For now we just simulate
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    // Simulate some steps failing for testing
-    // if step_index == 2 {
-    //     return Err(anyhow::anyhow!("Simulated step failure"));
-    // }
-
-    Ok(())
+    fn tick(&mut self) {
+        self.process_updates();
+    }
 }
 
 /// Format a step description for display
@@ -651,5 +709,132 @@ fn format_condition(condition: &workflow::workflow_data::step::Condition) -> Str
         workflow::workflow_data::step::Condition::HasElement(a) => {
             format!("has-element -> {}", a.selector)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_config() -> Arc<RwLock<config::Config>> {
+        Arc::new(RwLock::new(config::Config::default()))
+    }
+
+    fn data_from(json: &str) -> workflow::workflow_data::WorkflowData {
+        serde_json::from_str(json).unwrap()
+    }
+
+    fn simple_runner(file: Option<PathBuf>) -> WorkflowRunner {
+        let data = data_from(r#"{"name":"W","steps":[{"type":"wait","duration":10}]}"#);
+        let workflows = Arc::new(RwLock::new(Vec::new()));
+        WorkflowRunner::new(workflows, test_config(), 0, Some(data), file)
+    }
+
+    #[tokio::test]
+    async fn test_start_run_executes_real_workflow() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("run-me.json");
+        let json = r#"{"name":"RunMe","steps":[{"type":"wait","duration":100}],"networkConnectionTimeout":0}"#;
+        std::fs::write(&path, json).unwrap();
+        let workflows = Arc::new(RwLock::new(vec![Workflow::new(
+            workflow::JsonFile::from_raw(path.clone(), json.to_string()),
+        )]));
+        let data = match &workflows.read().unwrap()[0].state {
+            WorkflowState::Valid(data) => data.clone(),
+            _ => panic!("workflow should be valid"),
+        };
+        let mut config = config::Config::default();
+        config.browser.headless = true;
+        let mut runner = WorkflowRunner::new(
+            workflows.clone(),
+            Arc::new(RwLock::new(config)),
+            0,
+            Some(data),
+            Some(path),
+        );
+
+        runner.start_run();
+        assert!(runner.is_running);
+        assert!(matches!(
+            workflows.read().unwrap()[0].state,
+            WorkflowState::Running(..)
+        ));
+
+        for _ in 0..100 {
+            runner.process_updates();
+            if runner.is_completed {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        assert!(runner.is_completed);
+        assert!(runner.error.is_none());
+        assert!(!runner.is_running);
+        assert_eq!(runner.steps[0].status, StepStatus::Completed);
+        assert!(matches!(
+            workflows.read().unwrap()[0].state,
+            WorkflowState::SuccessfulRun(_)
+        ));
+    }
+
+    #[test]
+    fn test_finished_stopped_updates_state() {
+        let mut runner = simple_runner(Some(PathBuf::from("/tmp/x.json")));
+        let (tx, rx) = mpsc::unbounded_channel();
+        runner.rx = Some(rx);
+        runner.is_running = true;
+        runner.is_stopping = true;
+        tx.send(RunnerUpdate::Finished {
+            stopped: true,
+            success: false,
+            error: None,
+        })
+        .unwrap();
+        runner.process_updates();
+        assert!(runner.is_stopped);
+        assert!(!runner.is_running);
+        assert!(!runner.is_stopping);
+        assert!(runner.error.is_none());
+    }
+
+    #[test]
+    fn test_failed_to_start_sets_error_and_allows_retry() {
+        let mut runner = simple_runner(Some(PathBuf::from("/tmp/x.json")));
+        let (tx, rx) = mpsc::unbounded_channel();
+        runner.rx = Some(rx);
+        runner.is_running = true;
+        tx.send(RunnerUpdate::FailedToStart("boom".into())).unwrap();
+        runner.process_updates();
+        assert_eq!(runner.error.as_deref(), Some("boom"));
+        assert!(!runner.is_running);
+        assert!(!runner.is_completed && !runner.is_stopped);
+        assert!(!runner.is_start_stop_disabled());
+    }
+
+    #[test]
+    fn test_draft_cannot_start() {
+        let mut runner = simple_runner(None);
+        runner.start_run();
+        assert!(!runner.is_running);
+        assert!(
+            runner
+                .error
+                .as_deref()
+                .is_some_and(|e| e.contains("Save it first"))
+        );
+        assert!(runner.is_start_stop_disabled());
+        let area = Rect::new(0, 0, 60, 20);
+        let mut buf = Buffer::empty(area);
+        runner.render(
+            &super::super::WorkflowSelection {
+                index: 0,
+                workflow_file: None,
+                is_running: false,
+                state: super::super::WorkflowSelectionState::Error(String::new()),
+            },
+            area,
+            &mut buf,
+        );
     }
 }

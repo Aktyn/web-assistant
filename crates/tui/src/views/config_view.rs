@@ -1,10 +1,11 @@
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     DefaultTerminal,
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::Stylize as _,
-    text::{Line, Text},
-    widgets::{ListState, Paragraph, Widget},
+    text::{Line, Span, Text},
+    widgets::{Block, BorderType, Borders, ListState, Paragraph, Widget},
 };
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -26,14 +27,220 @@ pub(crate) enum InitConfigOutcome {
     Failed(String),
 }
 
+/// In-view JSONC editor for the config file
+#[derive(Debug, Clone)]
+struct ConfigEditor {
+    content: String,
+    /// Byte offset of the cursor in `content` (always on a char boundary)
+    cursor: usize,
+    /// Parse or I/O error shown in red
+    error: Option<String>,
+    /// Success message shown in the accent color
+    status: Option<String>,
+}
+
+impl ConfigEditor {
+    fn new(content: String) -> Self {
+        let cursor = content.len();
+        Self {
+            content,
+            cursor,
+            error: None,
+            status: None,
+        }
+    }
+
+    fn prev_boundary(&self) -> usize {
+        self.content[..self.cursor]
+            .char_indices()
+            .next_back()
+            .map_or(0, |(index, _)| index)
+    }
+
+    fn next_boundary(&self) -> usize {
+        self.content[self.cursor..]
+            .chars()
+            .next()
+            .map_or(self.cursor, |c| self.cursor + c.len_utf8())
+    }
+
+    fn line_start(&self, position: usize) -> usize {
+        self.content[..position]
+            .rfind('\n')
+            .map_or(0, |pos| pos + 1)
+    }
+
+    fn line_end(&self, position: usize) -> usize {
+        self.content[position..]
+            .find('\n')
+            .map_or(self.content.len(), |pos| position + pos)
+    }
+
+    fn column(&self) -> usize {
+        self.content[self.line_start(self.cursor)..self.cursor]
+            .chars()
+            .count()
+    }
+
+    /// Moves the cursor to `column` of the line starting at `start`, clamped to the line length
+    fn move_to_column(&mut self, start: usize, column: usize) {
+        let end = self.line_end(start);
+        let offset = self.content[start..end]
+            .char_indices()
+            .nth(column)
+            .map_or(end - start, |(index, _)| index);
+        self.cursor = start + offset;
+    }
+
+    fn handle_key(&mut self, key: KeyEvent) {
+        let edited = match key.code {
+            KeyCode::Char(c)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                self.content.insert(self.cursor, c);
+                self.cursor += c.len_utf8();
+                true
+            }
+            KeyCode::Enter => {
+                self.content.insert(self.cursor, '\n');
+                self.cursor += 1;
+                true
+            }
+            KeyCode::Tab => {
+                self.content.insert_str(self.cursor, "  ");
+                self.cursor += 2;
+                true
+            }
+            KeyCode::Backspace => {
+                if self.cursor > 0 {
+                    self.cursor = self.prev_boundary();
+                    self.content.remove(self.cursor);
+                }
+                true
+            }
+            KeyCode::Delete => {
+                if self.cursor < self.content.len() {
+                    self.content.remove(self.cursor);
+                }
+                true
+            }
+            KeyCode::Left => {
+                self.cursor = self.prev_boundary();
+                false
+            }
+            KeyCode::Right => {
+                self.cursor = self.next_boundary();
+                false
+            }
+            KeyCode::Home => {
+                self.cursor = self.line_start(self.cursor);
+                false
+            }
+            KeyCode::End => {
+                self.cursor = self.line_end(self.cursor);
+                false
+            }
+            KeyCode::Up => {
+                let start = self.line_start(self.cursor);
+                if start > 0 {
+                    let column = self.column();
+                    let previous_start = self.line_start(start - 1);
+                    self.move_to_column(previous_start, column);
+                }
+                false
+            }
+            KeyCode::Down => {
+                let end = self.line_end(self.cursor);
+                if end < self.content.len() {
+                    let column = self.column();
+                    self.move_to_column(end + 1, column);
+                }
+                false
+            }
+            _ => false,
+        };
+        if edited {
+            self.status = None;
+        }
+    }
+
+    fn render(&self, area: Rect, buf: &mut Buffer) {
+        let [title_area, editor_area, status_area] = area.layout(&Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Fill(1),
+            Constraint::Length(1),
+        ]));
+
+        Paragraph::new("Config Editor (JSONC) - Ctrl+S to save, Esc to close without saving")
+            .style(palette().muted_foreground)
+            .render(title_area, buf);
+
+        let cursor_line = self.content[..self.cursor].matches('\n').count();
+        let cursor_column = self.column();
+        let mut lines: Vec<Line> = self
+            .content
+            .split('\n')
+            .enumerate()
+            .map(|(index, line)| {
+                if index != cursor_line {
+                    return Line::from(line.to_string());
+                }
+                let chars: Vec<char> = line.chars().collect();
+                let before: String = chars.iter().take(cursor_column).collect();
+                let under: String = chars
+                    .get(cursor_column)
+                    .map_or_else(|| " ".to_string(), ToString::to_string);
+                let after: String = chars.iter().skip(cursor_column + 1).collect();
+                Line::from(vec![
+                    Span::raw(before),
+                    Span::raw(under).reversed(),
+                    Span::raw(after),
+                ])
+            })
+            .collect();
+        if lines.is_empty() {
+            lines.push(Line::default());
+        }
+        let inner_height = usize::from(editor_area.height.saturating_sub(2)).max(1);
+        let scroll = u16::try_from((cursor_line + 1).saturating_sub(inner_height)).unwrap_or(0);
+        Paragraph::new(lines)
+            .style(palette().style)
+            .scroll((scroll, 0))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(palette().accent),
+            )
+            .render(editor_area, buf);
+
+        if let Some(error) = &self.error {
+            Paragraph::new(format!("Error: {error}"))
+                .style(palette().error_foreground)
+                .render(status_area, buf);
+        } else if let Some(status) = &self.status {
+            Paragraph::new(status.as_str())
+                .style(palette().accent)
+                .bold()
+                .render(status_area, buf);
+        }
+    }
+}
+
 pub(crate) struct ConfigView {
     config: Arc<RwLock<Config>>,
+    /// Path of the config file edited by the in-view editor
+    config_path: Option<PathBuf>,
+    /// Open config editor, if any. While open it consumes every key event.
+    editor: Option<ConfigEditor>,
     /// Output path for the "initialize default config" task.
     /// If `None`, the file is created in the current working directory.
     init_path: Option<PathBuf>,
     /// Used for navigating over option buttons
     list_state: ListState,
-    buttons: [ThisButtonData; 3],
+    buttons: [ThisButtonData; 4],
     /// Whether the config details panel is visible
     show_details: bool,
     /// Channel receiving the outcome of the running init task
@@ -53,17 +260,91 @@ impl ConfigView {
     pub(crate) fn with_init_path(config: Arc<RwLock<Config>>, init_path: Option<PathBuf>) -> Self {
         Self {
             config,
+            config_path: Some(PathBuf::from(config::DEFAULT_CONFIG_FILE)),
+            editor: None,
             init_path,
             list_state: ListState::default().with_selected(Some(0)),
             buttons: [
                 ThisButtonData::new("Show config details", ViewAction::GoToWorkflows),
                 ThisButtonData::new("Initialize default config", ViewAction::GoToWorkflows),
                 ThisButtonData::new("Return to workflows", ViewAction::GoToWorkflows),
+                ThisButtonData::new("Edit config file", ViewAction::GoToWorkflows),
             ],
             show_details: true,
             init_task: None,
             init_outcome: None,
             pending_action: None,
+        }
+    }
+
+    /// Sets the path of the config file used by the in-view editor
+    pub(crate) fn with_config_path(mut self, config_path: PathBuf) -> Self {
+        self.config_path = Some(config_path);
+        self
+    }
+
+    fn resolved_config_path(&self) -> PathBuf {
+        self.config_path
+            .clone()
+            .unwrap_or_else(|| PathBuf::from(config::DEFAULT_CONFIG_FILE))
+    }
+
+    /// Opens the editor pre-filled with the config file contents
+    /// (or the default config when the file does not exist)
+    fn open_editor(&mut self) {
+        let path = self.resolved_config_path();
+        let mut editor = match std::fs::read_to_string(&path) {
+            Ok(content) => ConfigEditor::new(content),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => ConfigEditor::new(
+                serde_json::to_string_pretty(&Config::default()).unwrap_or_default(),
+            ),
+            Err(error) => {
+                let mut editor = ConfigEditor::new(String::new());
+                editor.error = Some(format!("Failed to read {}: {error}", path.display()));
+                editor
+            }
+        };
+        editor.cursor = 0;
+        self.editor = Some(editor);
+    }
+
+    /// Validates the editor content and, if valid, saves it and updates the shared config
+    fn save_editor(&mut self) {
+        let path = self.resolved_config_path();
+        let Some(editor) = self.editor.as_mut() else {
+            return;
+        };
+        editor.status = None;
+        let parsed = match config::parse_jsonc(&editor.content) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                editor.error = Some(error.to_string());
+                return;
+            }
+        };
+        if let Err(error) = std::fs::write(&path, &editor.content) {
+            editor.error = Some(format!("Failed to write {}: {error}", path.display()));
+            return;
+        }
+        match self.config.write() {
+            Ok(mut shared) => {
+                *shared = parsed;
+                editor.error = None;
+                editor.status = Some("Config saved".to_string());
+            }
+            Err(error) => {
+                editor.error = Some(format!("Failed to update config: {error}"));
+            }
+        }
+    }
+
+    fn handle_editor_key(&mut self, key: KeyEvent) {
+        if key.code == KeyCode::Esc {
+            self.editor = None;
+        } else if key.code == KeyCode::Char('s') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.save_editor();
+        } else if let Some(editor) = self.editor.as_mut() {
+            editor.handle_key(key);
         }
     }
 
@@ -117,6 +398,11 @@ impl ConfigView {
     }
 
     fn render(&self, config: &Config, area: Rect, buf: &mut Buffer) {
+        if let Some(editor) = &self.editor {
+            editor.render(area, buf);
+            return;
+        }
+
         let [_, info_area, details_area, status_area, buttons_area, _] =
             area.layout(&Layout::vertical([
                 Constraint::Fill(1),
@@ -190,12 +476,13 @@ impl ConfigView {
         }
 
         // Buttons
-        let button_areas: [Rect; 3] = buttons_area
-            .centered_horizontally(Constraint::Max(84))
+        let button_areas: [Rect; 4] = buttons_area
+            .centered_horizontally(Constraint::Max(112))
             .layout(&Layout::horizontal([
-                Constraint::Ratio(1, 3),
-                Constraint::Ratio(1, 3),
-                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 4),
+                Constraint::Ratio(1, 4),
+                Constraint::Ratio(1, 4),
+                Constraint::Ratio(1, 4),
             ]));
 
         assert!(
@@ -226,6 +513,7 @@ impl ConfigView {
             0 => self.show_details = !self.show_details,
             1 => self.start_init_task(),
             2 => self.pending_action = Some(ViewAction::GoToWorkflows),
+            3 => self.open_editor(),
             _ => unreachable!(),
         }
     }
@@ -259,12 +547,22 @@ impl View for ConfigView {
         _terminal: &mut DefaultTerminal,
     ) -> bool {
         if let Some(key) = event.as_key_event() {
+            // While the editor is open every key is consumed so that global
+            // shortcuts (quit, logs toggle) never fire while typing
+            if self.editor.is_some() {
+                self.handle_editor_key(key);
+                return true;
+            }
+
             let navigation =
                 utils::handle_navigation_event(key, &mut self.list_state, self.buttons.len() - 1);
             if let Some(event) = navigation
                 && let utils::NavigationEvent::Select(selected) = event
             {
                 self.run_button_action(selected);
+                if self.editor.is_some() {
+                    return true;
+                }
             }
 
             // 'q' or ESC returns to the workflows view instead of quitting the app
@@ -356,7 +654,7 @@ mod tests {
     #[should_panic(expected = "selected >= self.buttons.len()")]
     fn test_run_button_action_out_of_bounds_panics() {
         let mut view = ConfigView::new(config_arc());
-        view.run_button_action(3);
+        view.run_button_action(4);
     }
 
     #[test]
@@ -383,6 +681,86 @@ mod tests {
         let handled = view.handle_event(&event, unsafe { &mut *no_read_term() });
         assert!(handled);
         assert_eq!(view.get_action(), Some(ViewAction::GoToWorkflows));
+    }
+
+    fn key(code: KeyCode, modifiers: KeyModifiers) -> Event {
+        Event::Key(KeyEvent::new(code, modifiers))
+    }
+
+    #[test]
+    fn test_ctrl_s_with_invalid_json_keeps_editor_open_and_sets_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("config.jsonc");
+        let mut view = ConfigView::new(config_arc()).with_config_path(path.clone());
+        view.editor = Some(ConfigEditor::new("{ not valid".to_string()));
+
+        let handled = view.handle_event(&key(KeyCode::Char('s'), KeyModifiers::CONTROL), unsafe {
+            &mut *no_read_term()
+        });
+
+        assert!(handled);
+        let editor = view.editor.as_ref().expect("editor should stay open");
+        assert!(editor.error.is_some());
+        assert!(editor.status.is_none());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn test_ctrl_s_with_valid_json_writes_file_and_updates_shared_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("config.jsonc");
+        let shared = config_arc();
+        let mut view = ConfigView::new(shared.clone()).with_config_path(path.clone());
+
+        let mut new_config = Config::default();
+        new_config.agent.model = "edited-model".to_string();
+        let text = serde_json::to_string_pretty(&new_config).unwrap();
+        view.editor = Some(ConfigEditor::new(text.clone()));
+
+        let handled = view.handle_event(&key(KeyCode::Char('s'), KeyModifiers::CONTROL), unsafe {
+            &mut *no_read_term()
+        });
+
+        assert!(handled);
+        let editor = view.editor.as_ref().expect("editor should stay open");
+        assert!(editor.error.is_none());
+        assert_eq!(editor.status.as_deref(), Some("Config saved"));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
+        assert_eq!(shared.read().unwrap().agent.model, "edited-model");
+    }
+
+    #[test]
+    fn test_typing_q_in_editor_does_not_go_to_workflows() {
+        let mut view = ConfigView::new(config_arc());
+        view.editor = Some(ConfigEditor::new(String::new()));
+
+        for c in ['q', 'l', 'L'] {
+            let handled = view.handle_event(&key(KeyCode::Char(c), KeyModifiers::NONE), unsafe {
+                &mut *no_read_term()
+            });
+            assert!(handled);
+        }
+
+        assert_eq!(view.get_action(), None);
+        let editor = view.editor.as_ref().expect("editor should stay open");
+        assert_eq!(editor.content, "qlL");
+    }
+
+    #[test]
+    fn test_open_editor_prefills_default_when_file_missing_and_esc_closes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut view =
+            ConfigView::new(config_arc()).with_config_path(tmp.path().join("missing.jsonc"));
+        view.run_button_action(3);
+        let expected = serde_json::to_string_pretty(&Config::default()).unwrap();
+        assert_eq!(view.editor.as_ref().unwrap().content, expected);
+
+        let handled = view.handle_event(&key(KeyCode::Esc, KeyModifiers::NONE), unsafe {
+            &mut *no_read_term()
+        });
+        assert!(handled);
+        assert!(view.editor.is_none());
+        assert_eq!(view.get_action(), None);
     }
 
     #[tokio::test]

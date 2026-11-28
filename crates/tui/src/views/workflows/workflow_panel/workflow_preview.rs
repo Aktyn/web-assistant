@@ -1,4 +1,4 @@
-use crossterm::event::Event;
+use crossterm::event::{Event, KeyCode};
 use ratatui::DefaultTerminal;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint::{Fill, Length, Ratio};
@@ -8,7 +8,7 @@ use ratatui::widgets::{ListState, Widget as _};
 
 use super::super::super::common::utils::{NavigationEvent, handle_navigation_event};
 use super::super::widgets::{Button, ButtonData, ErrorAlert, Separator};
-use super::{WorkflowAction, WorkflowPanelModeView};
+use super::{PanelEventOutcome, WorkflowAction, WorkflowPanelModeView};
 
 const OPTIONS_HEIGHT: u16 = 3;
 
@@ -56,9 +56,11 @@ impl WorkflowPreview {
                 Button::new(button_data.label.to_line())
                     .set_selected(self.list_state.selected() == Some(index))
                     .set_disabled(
-                        (button_data.action == WorkflowAction::Execution
+                        ((button_data.action == WorkflowAction::Execution
                             || button_data.action == WorkflowAction::Edit)
-                            && is_invalid,
+                            && is_invalid)
+                            || (button_data.action == WorkflowAction::Execution
+                                && selection.is_running),
                     )
                     .render(button_areas[index], buf);
             });
@@ -72,11 +74,12 @@ impl WorkflowPreview {
         let button_data = self.buttons.get(selected)?;
         let is_invalid = matches!(selection.state, super::WorkflowSelectionState::Error(_));
 
-        if is_invalid
+        if (is_invalid
             && matches!(
                 button_data.action,
                 WorkflowAction::Edit | WorkflowAction::Execution
-            )
+            ))
+            || (selection.is_running && button_data.action == WorkflowAction::Execution)
         {
             None
         } else {
@@ -105,18 +108,28 @@ impl WorkflowPanelModeView for WorkflowPreview {
         event: &Event,
         _terminal: &mut DefaultTerminal,
         selection: &super::WorkflowSelection,
-    ) -> Option<WorkflowAction> {
-        if let Some(key) = event.as_key_event() {
-            let navigation =
-                handle_navigation_event(key, &mut self.list_state, self.buttons.len() - 1);
-            if let Some(event) = navigation
-                && let NavigationEvent::Select(selected) = event
-            {
-                return self.get_button_action(selected, selection);
-            }
+    ) -> PanelEventOutcome {
+        let Some(key) = event.as_key_event() else {
+            return PanelEventOutcome::Ignored;
+        };
+
+        // These keys bubble up to the view/app level
+        if matches!(key.code, KeyCode::Tab | KeyCode::BackTab | KeyCode::Esc) {
+            return PanelEventOutcome::Ignored;
         }
 
-        None
+        match handle_navigation_event(key, &mut self.list_state, self.buttons.len() - 1) {
+            Some(NavigationEvent::Previous(_) | NavigationEvent::Next(_)) => {
+                PanelEventOutcome::Consumed
+            }
+            Some(NavigationEvent::Select(selected)) => {
+                match self.get_button_action(selected, selection) {
+                    Some(action) => PanelEventOutcome::Action(action),
+                    None => PanelEventOutcome::Consumed,
+                }
+            }
+            None => PanelEventOutcome::Ignored,
+        }
     }
 }
 
@@ -167,13 +180,13 @@ fn render_valid_workflow(workflow: &super::ValidWorkflowState, area: Rect, buf: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crossterm::event::KeyCode;
 
     /// Build a valid selection using an already-constructed `ValidWorkflowState`.
     fn valid_selection() -> super::super::WorkflowSelection {
         super::super::WorkflowSelection {
             index: 0,
             workflow_file: None,
+            is_running: false,
             state: super::super::WorkflowSelectionState::Valid(super::super::ValidWorkflowState {
                 name_field: super::super::super::super::common::widgets::TextField::new(
                     "Name".to_string(),
@@ -189,6 +202,7 @@ mod tests {
         super::super::WorkflowSelection {
             index: 0,
             workflow_file: None,
+            is_running: false,
             state: super::super::WorkflowSelectionState::Error("file is bad".to_string()),
         }
     }
@@ -245,6 +259,14 @@ mod tests {
     }
 
     #[test]
+    fn test_execution_disabled_when_running() {
+        let preview = WorkflowPreview::new();
+        let mut selection = valid_selection();
+        selection.is_running = true;
+        assert!(preview.get_button_action(3, &selection).is_none());
+    }
+
+    #[test]
     fn test_execution_enabled_when_valid() {
         let preview = WorkflowPreview::new();
         let selection = valid_selection();
@@ -259,8 +281,8 @@ mod tests {
         // ListState defaults to `None`; select index 0 so Enter resolves to OpenFile.
         preview.list_state.select(Some(0));
         let event = Event::Key(KeyCode::Enter.into());
-        let action = unsafe { preview.handle_event(&event, &mut *no_read_term(), &selection) };
-        assert_eq!(action, Some(WorkflowAction::OpenFile));
+        let outcome = unsafe { preview.handle_event(&event, &mut *no_read_term(), &selection) };
+        assert_eq!(outcome, PanelEventOutcome::Action(WorkflowAction::OpenFile));
     }
 
     #[test]
@@ -302,6 +324,36 @@ mod tests {
         let event = Event::Key(crossterm::event::KeyCode::Up.into());
         let _action = unsafe { preview.handle_event(&event, &mut *no_read_term(), &selection) };
         assert_eq!(preview.list_state.selected(), Some(1));
+    }
+
+    #[test]
+    fn test_tab_esc_are_ignored() {
+        let mut preview = WorkflowPreview::new();
+        let selection = valid_selection();
+        for code in [KeyCode::Tab, KeyCode::BackTab, KeyCode::Esc] {
+            let event = Event::Key(code.into());
+            let outcome = unsafe { preview.handle_event(&event, &mut *no_read_term(), &selection) };
+            assert_eq!(outcome, PanelEventOutcome::Ignored);
+        }
+    }
+
+    #[test]
+    fn test_disabled_button_select_is_consumed() {
+        let mut preview = WorkflowPreview::new();
+        let selection = error_selection();
+        preview.list_state.select(Some(1));
+        let event = Event::Key(KeyCode::Enter.into());
+        let outcome = unsafe { preview.handle_event(&event, &mut *no_read_term(), &selection) };
+        assert_eq!(outcome, PanelEventOutcome::Consumed);
+    }
+
+    #[test]
+    fn test_unknown_key_is_ignored() {
+        let mut preview = WorkflowPreview::new();
+        let selection = valid_selection();
+        let event = Event::Key(KeyCode::Char('z').into());
+        let outcome = unsafe { preview.handle_event(&event, &mut *no_read_term(), &selection) };
+        assert_eq!(outcome, PanelEventOutcome::Ignored);
     }
 
     #[test]

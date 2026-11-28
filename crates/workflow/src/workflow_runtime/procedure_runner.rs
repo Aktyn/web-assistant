@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::ops::ControlFlow;
 use std::path::Path;
 
 use super::step;
@@ -16,7 +17,12 @@ impl super::RunningWorkflow {
             .iter()
             .find(|p| p.name == step.procedure)
         {
-            return Box::pin(self.run_steps(&procedure.steps, workflow_file_path)).await;
+            return Box::pin(
+                self.run_steps(&procedure.steps, workflow_file_path, &mut |_| {
+                    ControlFlow::Continue(())
+                }),
+            )
+            .await;
         }
 
         Err(anyhow::anyhow!(

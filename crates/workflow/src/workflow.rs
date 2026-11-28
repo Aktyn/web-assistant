@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use crate::workflow_data::WorkflowData;
 use crate::workflow_loader;
 use crate::workflow_runtime;
+use crate::workflow_runtime::RunningWorkflow;
+use config::Config;
 
 #[derive(Debug)]
 pub enum WorkflowState {
@@ -45,6 +47,19 @@ impl Workflow {
                 state: WorkflowState::Invalid(e),
                 file_path: Some(json.path),
             },
+        }
+    }
+
+    /// Creates a `Workflow` in the `Running` state without executing any step.
+    /// Used by the TUI to track in-flight runs in a shared workflow list.
+    #[must_use]
+    pub fn new_running(data: WorkflowData, config: Box<Config>, file_path: PathBuf) -> Self {
+        Self {
+            state: WorkflowState::Running(
+                Box::new(RunningWorkflow::new(data, config)),
+                file_path.clone(),
+            ),
+            file_path: Some(file_path),
         }
     }
 

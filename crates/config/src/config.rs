@@ -18,7 +18,7 @@ use crate::browser_config::BrowserConfig;
 use crate::colors_config::HexColorsConfig;
 
 /// Config must be a json file
-#[derive(Debug, Serialize, Deserialize, DocumentedFields, Documented)]
+#[derive(Debug, Clone, Serialize, Deserialize, DocumentedFields, Documented)]
 #[documented_fields(default = "Missing documentation", rename_all = "camelCase")]
 pub struct Config {
     /// Path to directory containing workflow files.
@@ -80,6 +80,15 @@ impl Config {
 
         Ok(parsed)
     }
+}
+
+/// Parses a config from JSONC text.
+///
+/// # Errors
+/// Returns an error when the text is not valid JSONC or not a valid config.
+pub fn parse_jsonc(content: &str) -> Result<Config> {
+    parse_to_serde_value(content, &ParseOptions::default())
+        .with_context(|| "failed to parse config from JSONC")
 }
 
 fn get_default_workflows_directory() -> PathBuf {
@@ -269,6 +278,36 @@ mod tests {
         let config = Config::default();
         let debug_str = format!("{config:?}");
         assert!(debug_str.contains("workflows_directory"));
+    }
+
+    #[test]
+    fn test_parse_jsonc_valid_with_comments() {
+        let content = r#"
+        // line comment
+        {
+            /* block comment */
+            "workflowsDirectory": "/custom/workflows", // trailing
+        }
+        "#;
+        let config = parse_jsonc(content).unwrap();
+        assert_eq!(
+            config.workflows_directory,
+            PathBuf::from("/custom/workflows")
+        );
+    }
+
+    #[test]
+    fn test_parse_jsonc_invalid_input_errors() {
+        assert!(parse_jsonc("{ not valid").is_err());
+        assert!(parse_jsonc("").is_err());
+    }
+
+    #[test]
+    fn test_parse_jsonc_invalid_field_type_errors() {
+        // Every config field has a default, so a wrongly typed value is the
+        // way to produce a structurally invalid config.
+        assert!(parse_jsonc(r#"{ "workflowsDirectory": 123 }"#).is_err());
+        assert!(parse_jsonc(r#"{ "browser": "nope" }"#).is_err());
     }
 
     #[test]

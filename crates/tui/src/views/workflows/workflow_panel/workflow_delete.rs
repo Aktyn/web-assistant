@@ -1,17 +1,34 @@
 use crossterm::event::KeyCode;
-use ratatui::widgets::Widget as _;
+use ratatui::layout::Constraint::{Fill, Length, Ratio};
+use ratatui::layout::Layout;
+use ratatui::text::ToLine as _;
+use ratatui::widgets::{ListState, Widget as _};
 
-use super::super::widgets::ErrorAlert;
-use super::WorkflowPanelModeView;
+use super::super::widgets::{Button, ButtonData, ErrorAlert};
+use super::{PanelEventOutcome, WorkflowAction, WorkflowPanelModeView};
 
-#[derive(Default)]
+type ThisButtonData = ButtonData<WorkflowAction>;
+
 pub(crate) struct WorkflowDelete {
-    //
+    buttons: [ThisButtonData; 2],
+    buttons_list_state: ListState,
+}
+
+impl Default for WorkflowDelete {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl WorkflowDelete {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            buttons: [
+                ThisButtonData::new("Delete", WorkflowAction::ConfirmDelete),
+                ThisButtonData::new("Cancel", WorkflowAction::BackToPreview),
+            ],
+            buttons_list_state: ListState::default().with_selected(Some(0)),
+        }
     }
 }
 
@@ -22,8 +39,18 @@ impl WorkflowPanelModeView for WorkflowDelete {
         area: ratatui::prelude::Rect,
         buf: &mut ratatui::prelude::Buffer,
     ) {
-        ErrorAlert::new("Are you sure you want to permanently delete this workflow file?\n\nEnter -> confirm\nEscape -> cancel")
-            .render(area, buf);
+        let [text_area, buttons_area] = area.layout(&Layout::vertical([Fill(1), Length(3)]));
+
+        ErrorAlert::new("Are you sure you want to permanently delete this workflow file?")
+            .render(text_area, buf);
+
+        let button_areas: [ratatui::prelude::Rect; 2] =
+            buttons_area.layout(&Layout::horizontal([Ratio(1, 2); 2]));
+        for (index, button_data) in self.buttons.iter().enumerate() {
+            Button::new(button_data.label.to_line())
+                .set_selected(self.buttons_list_state.selected() == Some(index))
+                .render(button_areas[index], buf);
+        }
     }
 
     fn handle_event(
@@ -31,16 +58,27 @@ impl WorkflowPanelModeView for WorkflowDelete {
         event: &crossterm::event::Event,
         _terminal: &mut ratatui::DefaultTerminal,
         _selection: &super::WorkflowSelection,
-    ) -> Option<super::WorkflowAction> {
-        if let Some(key) = event.as_key_event() {
-            return match key.code {
-                KeyCode::Enter => Some(super::WorkflowAction::ConfirmDelete),
-                KeyCode::Esc => Some(super::WorkflowAction::BackToPreview),
-                _ => None,
-            };
-        }
+    ) -> PanelEventOutcome {
+        let Some(key) = event.as_key_event() else {
+            return PanelEventOutcome::Ignored;
+        };
 
-        None
+        match key.code {
+            KeyCode::Left => {
+                self.buttons_list_state.select(Some(0));
+                PanelEventOutcome::Consumed
+            }
+            KeyCode::Right => {
+                self.buttons_list_state.select(Some(1));
+                PanelEventOutcome::Consumed
+            }
+            KeyCode::Enter => match self.buttons_list_state.selected() {
+                Some(0) => PanelEventOutcome::Action(WorkflowAction::ConfirmDelete),
+                _ => PanelEventOutcome::Action(WorkflowAction::BackToPreview),
+            },
+            KeyCode::Esc => PanelEventOutcome::Action(WorkflowAction::BackToPreview),
+            _ => PanelEventOutcome::Ignored,
+        }
     }
 }
 
@@ -59,6 +97,7 @@ mod tests {
         super::super::WorkflowSelection {
             index: 0,
             workflow_file: None,
+            is_running: false,
             state: super::super::WorkflowSelectionState::Error("boom".to_string()),
         }
     }
@@ -91,8 +130,11 @@ mod tests {
         let mut delete = WorkflowDelete::new();
         let selection = selection_with_error();
         let event = Event::Key(KeyCode::Enter.into());
-        let action = unsafe { delete.handle_event(&event, &mut *no_read_term(), &selection) };
-        assert_eq!(action, Some(super::super::WorkflowAction::ConfirmDelete));
+        let outcome = unsafe { delete.handle_event(&event, &mut *no_read_term(), &selection) };
+        assert_eq!(
+            outcome,
+            PanelEventOutcome::Action(WorkflowAction::ConfirmDelete)
+        );
     }
 
     #[test]
@@ -100,8 +142,11 @@ mod tests {
         let mut delete = WorkflowDelete::new();
         let selection = selection_with_error();
         let event = Event::Key(KeyCode::Esc.into());
-        let action = unsafe { delete.handle_event(&event, &mut *no_read_term(), &selection) };
-        assert_eq!(action, Some(super::super::WorkflowAction::BackToPreview));
+        let outcome = unsafe { delete.handle_event(&event, &mut *no_read_term(), &selection) };
+        assert_eq!(
+            outcome,
+            PanelEventOutcome::Action(WorkflowAction::BackToPreview)
+        );
     }
 
     #[test]
@@ -109,8 +154,23 @@ mod tests {
         let mut delete = WorkflowDelete::new();
         let selection = selection_with_error();
         let event = Event::Key(KeyCode::Char('x').into());
-        let action = unsafe { delete.handle_event(&event, &mut *no_read_term(), &selection) };
-        assert!(action.is_none());
+        let outcome = unsafe { delete.handle_event(&event, &mut *no_read_term(), &selection) };
+        assert_eq!(outcome, PanelEventOutcome::Ignored);
+    }
+
+    #[test]
+    fn test_workflow_delete_right_then_enter_cancels() {
+        let mut delete = WorkflowDelete::new();
+        let selection = selection_with_error();
+        let right = Event::Key(KeyCode::Right.into());
+        let outcome = unsafe { delete.handle_event(&right, &mut *no_read_term(), &selection) };
+        assert_eq!(outcome, PanelEventOutcome::Consumed);
+        let enter = Event::Key(KeyCode::Enter.into());
+        let outcome = unsafe { delete.handle_event(&enter, &mut *no_read_term(), &selection) };
+        assert_eq!(
+            outcome,
+            PanelEventOutcome::Action(WorkflowAction::BackToPreview)
+        );
     }
 
     #[test]
@@ -123,7 +183,7 @@ mod tests {
             row: 0,
             modifiers: crossterm::event::KeyModifiers::NONE,
         });
-        let action = unsafe { delete.handle_event(&event, &mut *no_read_term(), &selection) };
-        assert!(action.is_none());
+        let outcome = unsafe { delete.handle_event(&event, &mut *no_read_term(), &selection) };
+        assert_eq!(outcome, PanelEventOutcome::Ignored);
     }
 }

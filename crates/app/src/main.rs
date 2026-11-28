@@ -30,7 +30,7 @@ async fn run_tui(config_path: Option<&PathBuf>) -> Result<()> {
 
     if let Some(config_path) = config_path {
         let config = config::load_config(config_path).await?;
-        tui::render_tui(config).await
+        tui::render_tui(config, config_path.clone()).await
     } else {
         anyhow::bail!("Config path is required")
     }
